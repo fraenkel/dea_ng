@@ -17,9 +17,9 @@ type LoggregatorConfig struct {
 
 type ResourcesConfig struct {
 	MemoryMb               int     "memory_mb"
-	MemoryOverCommitFactor float32 "memory_overcommit_factor"
+	MemoryOvercommitFactor float32 "memory_overcommit_factor"
 	DiskMb                 int     "disk_mb"
-	DiskOverCommitFactor   float32 "disk_overcommit_factor"
+	DiskOvercommitFactor   float32 "disk_overcommit_factor"
 }
 
 type PlatformConfig struct {
