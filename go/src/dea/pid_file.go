@@ -28,8 +28,6 @@ func NewPidFile(pidFilename string) (*PidFile, error) {
 }
 
 func (pidFile *PidFile) Release() {
-	if pidFile.file != nil {
-		syscall.Flock(int(pidFile.file.Fd()), syscall.LOCK_UN)
-	}
+	syscall.Flock(int(pidFile.file.Fd()), syscall.LOCK_UN)
 	os.Remove(pidFile.file.Name())
 }
