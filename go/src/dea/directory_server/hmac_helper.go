@@ -1,4 +1,4 @@
-package utils
+package directory_server
 
 import (
 	"crypto/hmac"

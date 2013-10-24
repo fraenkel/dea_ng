@@ -4,7 +4,6 @@ import (
 	"dea/config"
 	"dea/staging"
 	"dea/starting"
-	"dea/utils"
 	"fmt"
 	"github.com/nu7hatch/gouuid"
 	"net/url"
@@ -20,7 +19,7 @@ type DirectoryServerV2 struct {
 	domain     string
 	port       uint16
 	dirConfig  config.DirServerConfig
-	hmacHelper *utils.HMACHelper
+	hmacHelper *HMACHelper
 }
 
 func NewDirectoryServerV2(domain string, port uint16, config config.DirServerConfig) (*DirectoryServerV2, error) {
@@ -39,7 +38,7 @@ func NewDirectoryServerV2(domain string, port uint16, config config.DirServerCon
 		uuid:       dirUuid,
 		domain:     domain,
 		port:       port,
-		hmacHelper: utils.NewHMACHelper(hmacKey[:]),
+		hmacHelper: NewHMACHelper(hmacKey[:]),
 	}, nil
 }
 
