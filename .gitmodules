@@ -4,9 +4,6 @@
 [submodule "buildpacks/vendor/ruby"]
 	path = buildpacks/vendor/ruby
 	url = https://github.com/cloudfoundry/heroku-buildpack-ruby.git
-[submodule "go/vendor"]
-	path = go/vendor
-	url = https://github.com/cloudfoundry/govendor
 [submodule "buildpacks/vendor/java"]
 	path = buildpacks/vendor/java
 	url = https://github.com/cloudfoundry/java-buildpack
@@ -16,3 +13,27 @@
 [submodule "go/src/github.com/howeyc/fsnotify"]
 	path = go/src/github.com/howeyc/fsnotify
 	url = https://github.com/howeyc/fsnotify.git
+[submodule "go/src/github.com/nu7hatch/gouuid"]
+	path = go/src/github.com/nu7hatch/gouuid
+	url = https://github.com/nu7hatch/gouuid
+[submodule "go/src/github.com/stretchr/testify"]
+	path = go/src/github.com/stretchr/testify
+	url = https://github.com/stretchr/testify
+[submodule "go/src/github.com/cloudfoundry/go_cfmessagebus"]
+	path = go/src/github.com/cloudfoundry/go_cfmessagebus
+	url = https://github.com/cloudfoundry/go_cfmessagebus
+[submodule "go/src/github.com/cloudfoundry/gordon"]
+	path = go/src/github.com/cloudfoundry/gordon
+	url = https://github.com/cloudfoundry/gordon
+[submodule "go/src/github.com/cloudfoundry/gorouter"]
+	path = go/src/github.com/cloudfoundry/gorouter
+	url = https://github.com/cloudfoundry/gorouter
+[submodule "go/src/github.com/cloudfoundry/loggregatorlib"]
+	path = go/src/github.com/cloudfoundry/loggregatorlib
+	url = https://github.com/cloudfoundry/loggregatorlib
+[submodule "go/src/github.com/cloudfoundry/yagnats"]
+	path = go/src/github.com/cloudfoundry/yagnats
+	url = https://github.com/cloudfoundry/yagnats
+[submodule "go/src/code.google.com/p/gogoprotobuf"]
+	path = go/src/code.google.com/p/gogoprotobuf
+	url = https://code.google.com/p/gogoprotobuf

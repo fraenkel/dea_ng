@@ -1,26 +1,26 @@
 package dea
 
 import (
+	"dea/config"
 	"github.com/cloudfoundry/go_cfmessagebus"
-	"github.com/nu7hatch/gouuid"
 )
 
 type Nats struct {
-	messageBus cfmessagebus.MessageBus
+	MessageBus cfmessagebus.MessageBus
 }
 
 type NatsHandler interface {
 	HandleHealthManagerStart(payload []byte)
 	HandleRouterStart(payload []byte)
-	HandleDeaStatus(payload []byte)
+	HandleDeaStatus(payload []byte, replyTo cfmessagebus.ReplyTo)
 	HandleDeaDirectedStart(payload []byte)
 	HandleDeaStop(payload []byte)
 	HandleDeaUpdate(payload []byte)
-	HandleDeaFindDroplet(payload []byte)
-	UUID() uuid.UUID
+	HandleDeaFindDroplet(payload []byte, replyTo cfmessagebus.ReplyTo)
+	UUID() string
 }
 
-func NewNats(config NatsConfig) (*Nats, error) {
+func NewNats(config config.NatsConfig) (*Nats, error) {
 	messageBus, err := cfmessagebus.NewMessageBus("NATS")
 	if err != nil {
 		return nil, err
@@ -32,11 +32,11 @@ func NewNats(config NatsConfig) (*Nats, error) {
 }
 
 func newNatsMBus(mbus cfmessagebus.MessageBus) (*Nats, error) {
-	return &Nats{messageBus: mbus}, nil
+	return &Nats{MessageBus: mbus}, nil
 }
 
-func (nats *Nats) Start(handler NatsHandler) error {
-	mBus := nats.messageBus
+func (nats Nats) Start(handler NatsHandler) error {
+	mBus := nats.MessageBus
 	err := mBus.Connect()
 	if err != nil {
 		return err
@@ -50,12 +50,12 @@ func (nats *Nats) Start(handler NatsHandler) error {
 		return err
 	}
 
-	if err = mBus.Subscribe("dea.status", handler.HandleDeaStatus); err != nil {
+	if err = mBus.ReplyToChannel("dea.status", handler.HandleDeaStatus); err != nil {
 		return err
 	}
 
 	uuid := handler.UUID()
-	if err = mBus.Subscribe("dea."+uuid.String()+".start", handler.HandleDeaDirectedStart); err != nil {
+	if err = mBus.Subscribe("dea."+uuid+".start", handler.HandleDeaDirectedStart); err != nil {
 		return err
 	}
 
@@ -67,9 +67,13 @@ func (nats *Nats) Start(handler NatsHandler) error {
 		return err
 	}
 
-	if err = mBus.Subscribe("dea.find.droplet", handler.HandleDeaFindDroplet); err != nil {
+	if err = mBus.ReplyToChannel("dea.find.droplet", handler.HandleDeaFindDroplet); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (nats Nats) Stop() {
+	nats.MessageBus.Disconnect()
 }

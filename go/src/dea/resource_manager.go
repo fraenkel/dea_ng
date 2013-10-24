@@ -1,115 +1,110 @@
 package dea
 
+import (
+	"dea/config"
+	"dea/staging"
+	"dea/starting"
+	"math"
+)
+
 type ResourceManager struct {
-	memoryCapacity      float32
-	diskCapacity        float32
-	instanceRegistry    *InstanceRegistry
-	stagingTaskRegistry *StagingTaskRegistry
+	memoryCapacityMB    float64
+	diskCapacityMB      float64
+	instanceRegistry    *starting.InstanceRegistry
+	stagingTaskRegistry *staging.StagingTaskRegistry
 }
 
-var defaultConfig = &ResourcesConfig{
-	MemoryMb:               8 * 1024,
+var defaultConfig = &config.ResourcesConfig{
+	MemoryMB:               8 * 1024 * 1024,
 	MemoryOvercommitFactor: 1,
-	DiskMb:                 16 * 1024 * 1024,
+	DiskMB:                 16 * 1024 * 1024,
 	DiskOvercommitFactor:   1,
 }
 
-func getInt(configVal, defaultVal int) int {
+func getUint64(configVal, defaultVal uint64) uint64 {
 	if configVal != 0 {
 		return configVal
 	}
 	return defaultVal
 }
 
-func getFloat32(configVal, defaultVal float32) float32 {
+func getFloat64(configVal, defaultVal float64) float64 {
 	if configVal != 0 {
 		return configVal
 	}
 	return defaultVal
 }
 
-func NewResourceManager(iRegistry *InstanceRegistry,
-	stRegistry *StagingTaskRegistry,
-	config *ResourcesConfig) *ResourceManager {
+func NewResourceManager(iRegistry *starting.InstanceRegistry,
+	stRegistry *staging.StagingTaskRegistry,
+	config *config.ResourcesConfig) *ResourceManager {
 
-	memoryMb := getInt(config.MemoryMb, defaultConfig.MemoryMb)
-	memoryOvercommit := getFloat32(config.MemoryOvercommitFactor, defaultConfig.MemoryOvercommitFactor)
-	memory := float32(memoryMb) * memoryOvercommit
-	diskMb := getInt(config.DiskMb, defaultConfig.DiskMb)
-	diskOvercommit := getFloat32(config.DiskOvercommitFactor, defaultConfig.DiskOvercommitFactor)
-	disk := float32(diskMb) * diskOvercommit
+	memoryMb := getUint64(config.MemoryMB, defaultConfig.MemoryMB)
+	memoryOvercommit := getFloat64(config.MemoryOvercommitFactor, defaultConfig.MemoryOvercommitFactor)
+	memory := float64(memoryMb) * memoryOvercommit
+	diskMb := getUint64(config.DiskMB, defaultConfig.DiskMB)
+	diskOvercommit := getFloat64(config.DiskOvercommitFactor, defaultConfig.DiskOvercommitFactor)
+	disk := float64(diskMb) * diskOvercommit
 
 	return &ResourceManager{
-		memoryCapacity:      memory,
-		diskCapacity:        disk,
+		memoryCapacityMB:    memory,
+		diskCapacityMB:      disk,
 		instanceRegistry:    iRegistry,
 		stagingTaskRegistry: stRegistry,
 	}
 }
 
-func (rm *ResourceManager) MemoryCapacity() float32 {
-	return rm.memoryCapacity
+func (rm *ResourceManager) MemoryCapacity() float64 {
+	return rm.memoryCapacityMB
 }
 
-func (rm *ResourceManager) DiskCapacity() float32 {
-	return rm.diskCapacity
+func (rm *ResourceManager) DiskCapacity() float64 {
+	return rm.diskCapacityMB
 }
 
-/*
+func (rm *ResourceManager) AppIdToCount() map[string]int {
+	return rm.instanceRegistry.AppIdToCount()
+}
 
+func (rm *ResourceManager) RemainingMemory() float64 {
+	return rm.memoryCapacityMB - float64(rm.ReservedMemory())
+}
 
-    def app_id_to_count
-      @instance_registry.app_id_to_count
-    end
+func (rm *ResourceManager) ReservedMemory() config.Memory {
+	return rm.instanceRegistry.ReservedMemory() +
+		rm.stagingTaskRegistry.ReservedMemory()
+}
 
-    def could_reserve?(memory, disk)
-      (remaining_memory > memory) && (remaining_disk > disk)
-    end
+func (rm *ResourceManager) UsedMemory() config.Memory {
+	return rm.instanceRegistry.UsedMemory()
+}
 
-    def number_reservable(memory, disk)
-      return 0 if memory.zero? || disk.zero?
-      [remaining_memory / memory, remaining_disk / disk].min
-    end
+func (rm *ResourceManager) CanReserve(memory, disk uint64) bool {
+	return rm.RemainingMemory() > float64(memory) &&
+		rm.remaining_disk() > float64(disk)
+}
 
-    def available_memory_ratio
-      1.0 - (reserved_memory.to_f / memory_capacity)
-    end
+func (rm *ResourceManager) reserved_disk() config.Disk {
+	return rm.instanceRegistry.ReservedDisk() +
+		rm.stagingTaskRegistry.ReservedDisk()
+}
 
-    def available_disk_ratio
-      1.0 - (reserved_disk.to_f / disk_capacity)
-    end
+func (rm *ResourceManager) remaining_disk() float64 {
+	return rm.DiskCapacity() - float64(rm.reserved_disk())
+}
 
-    def reserved_memory
-      total_mb(@instance_registry, :reserved_memory_bytes) +
-        total_mb(@staging_task_registry, :reserved_memory_bytes)
-    end
+func (rm *ResourceManager) NumberReservable(memory, disk uint64) float64 {
+	if memory == 0 || disk == 0 {
+		return 0
+	}
 
-    def used_memory
-      total_mb(@instance_registry, :used_memory_bytes)
-    end
+	return math.Min(rm.RemainingMemory()/float64(memory), rm.remaining_disk()/float64(disk))
+}
 
-    def reserved_disk
-      total_mb(@instance_registry, :reserved_disk_bytes) +
-        total_mb(@staging_task_registry, :reserved_disk_bytes)
-    end
+func (rm *ResourceManager) AvailableMemoryRatio() float64 {
+	return 1.0 - (float64(rm.ReservedMemory()) / rm.MemoryCapacity())
+}
 
-    def remaining_memory
-      memory_capacity - reserved_memory
-    end
-
-    def remaining_disk
-      disk_capacity - reserved_disk
-    end
-
-    private
-
-    def total_mb(registry, resource_name)
-      bytes_to_mb(registry.public_send(resource_name))
-    end
-
-    def bytes_to_mb(bytes)
-      bytes / (1024 * 1024)
-    end
-  end
-end
-*/
+func (rm *ResourceManager) AvailableDiskRatio() float64 {
+	return 1.0 - (float64(rm.reserved_disk()) / rm.DiskCapacity())
+}
