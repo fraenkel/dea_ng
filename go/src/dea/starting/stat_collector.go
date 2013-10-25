@@ -62,7 +62,7 @@ func (s *StatCollector) retrieve_stats(now time.Time) {
 	info, err := s.container.Info()
 	if err != nil {
 		utils.Logger("StatCollector").Errorf("stat-collector.info-retrieval.failed handle:%s error:%s",
-			s.container.GetHandle(), err.Error())
+			s.container.Handle(), err.Error())
 		return
 	}
 

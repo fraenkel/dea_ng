@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"github.com/nu7hatch/gouuid"
+	"io"
 	"io/ioutil"
 	"launchpad.net/goyaml"
 	"os"
@@ -22,6 +24,23 @@ func Repeat(what func(), delay time.Duration) *time.Ticker {
 	}()
 
 	return ticker
+}
+
+func Timeout(what func() error, delay time.Duration) error {
+	ch := make(chan error, 1)
+	go func() {
+		ch <- what()
+	}()
+
+	var err error
+	timeout := time.After(delay)
+	select {
+	case <-timeout:
+		err = errors.New("Timed out")
+	case err = <-ch:
+	}
+
+	return err
 }
 
 func Intersection(a []string, b []string) []string {
@@ -67,6 +86,25 @@ func File_Exists(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsExist(err)
 
+}
+
+func CopyFile(src, dst string) error {
+	s, err := os.Open(src)
+	if err != nil {
+		return nil
+	}
+	defer s.Close()
+
+	d, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(d, s); err != nil {
+		d.Close()
+		return err
+	}
+	return d.Close()
 }
 
 func Yaml_Load(path string, result interface{}) error {

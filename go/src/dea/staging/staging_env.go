@@ -6,10 +6,10 @@ import (
 
 type StagingEnv struct {
 	data        map[string]interface{}
-	stagingTask StagingTask
+	stagingTask *StagingTask
 }
 
-func NewStagingEnv(data map[string]interface{}, stagingTask StagingTask) *StagingEnv {
+func NewStagingEnv(data map[string]interface{}, stagingTask *StagingTask) *StagingEnv {
 	startMessage := data["start_message"].(map[string]interface{})
 	return &StagingEnv{
 		data:        startMessage,

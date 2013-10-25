@@ -65,6 +65,11 @@ func (d *Droplet) Download(uri string) error {
 	return err
 }
 
+func (d *Droplet) Local_copy(source string) error {
+	utils.Logger("Droplet").Debug("Copying local droplet to droplet registry")
+	return utils.CopyFile(source, d.Droplet_path())
+}
+
 func (d *Droplet) Destroy() {
 	dropletName := d.Droplet_dirname()
 	dir_to_remove := dropletName + ".deleted." + strconv.FormatInt(time.Now().Unix(), 10)

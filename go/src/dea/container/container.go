@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/cloudfoundry/gordon"
 	steno "github.com/cloudfoundry/gosteno"
+	"runtime"
 	"strconv"
 )
 
@@ -23,11 +24,12 @@ func NewContainer(wardenSocket string) Container {
 	}
 }
 
-func (c *Container) RunScript(script string) error {
+func (c *Container) RunScript(script string) (*warden.RunResponse, error) {
 	response, err := c.client.Run(c.handle, script)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	if *response.ExitStatus > 0 {
 		exitStatus := strconv.FormatUint(uint64(*response.ExitStatus), 10)
 		data := map[string]string{
@@ -39,9 +41,9 @@ func (c *Container) RunScript(script string) error {
 
 		logger := steno.NewLogger("Container")
 		logger.Warnf("%s exited with status %s with data %v", script, exitStatus, data)
-		return errors.New("Script exited with status " + exitStatus)
+		return nil, errors.New("Script exited with status " + exitStatus)
 	}
-	return nil
+	return response, nil
 }
 
 func (c *Container) Stop() error {
@@ -71,6 +73,13 @@ func (c *Container) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_l
 }
 
 func (c *Container) Destroy() {
+	if c.handle == "" {
+		bytes := make([]byte, 512)
+		runtime.Stack(bytes, false)
+		utils.Logger("Container").Warnf("Container.destroy.failed: %v %s", c, bytes)
+		return
+	}
+
 	_, err := c.client.Destroy(c.handle)
 	if err != nil {
 		utils.Logger("Container").Warnf("Error destroying container: %s", err.Error())
@@ -157,26 +166,26 @@ func (c *Container) Info() (*warden.InfoResponse, error) {
 	return c.client.Info(c.handle)
 }
 
-func (c *Container) Update_path_and_ip() (*warden.InfoResponse, error) {
+func (c *Container) Update_path_and_ip() error {
 	rsp, err := c.Info()
 	if err != nil || rsp.GetContainerPath() == "" {
-		return nil, errors.New("container path is not available")
+		return errors.New("container path is not available")
 	}
 
 	c.path = rsp.GetContainerPath()
 	c.hostIp = rsp.GetHostIp()
 
-	return rsp, err
+	return err
 }
 
-func (c *Container) GetHandle() string {
+func (c *Container) Handle() string {
 	return c.handle
 }
 
-func (c *Container) GetPath() string {
+func (c *Container) Path() string {
 	return c.path
 }
 
-func (c *Container) GetHostIp() string {
+func (c *Container) HostIp() string {
 	return c.hostIp
 }

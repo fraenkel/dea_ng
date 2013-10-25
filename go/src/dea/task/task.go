@@ -30,7 +30,7 @@ func (t *Task) Start(func()) {
 	panic("Not Implemented")
 }
 
-func (t *Task) Stop() error {
+func (t *Task) Promise_stop() error {
 	return t.Container().Stop()
 }
 

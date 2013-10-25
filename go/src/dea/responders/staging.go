@@ -2,11 +2,13 @@ package responders
 
 import (
 	"dea/config"
+	"dea/droplet"
+	"dea/loggregator"
 	"dea/staging"
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/go_cfmessagebus"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
+	"reflect"
 )
 
 type AppStarter interface {
@@ -19,19 +21,21 @@ type Staging struct {
 	mbus            cfmessagebus.MessageBus
 	id              string
 	stagingRegistry *staging.StagingTaskRegistry
-	emitter         emitter.Emitter
 	config          *config.Config
+	dropletRegistry *droplet.DropletRegistry
 }
 
-func NewStaging(starter AppStarter, mbus cfmessagebus.MessageBus, id string, stagingTaskRegistry *staging.StagingTaskRegistry, emitter emitter.Emitter, config *config.Config) *Staging {
+func NewStaging(starter AppStarter, mbus cfmessagebus.MessageBus, id string,
+	stagingTaskRegistry *staging.StagingTaskRegistry,
+	config *config.Config, dropletRegistry *droplet.DropletRegistry) *Staging {
 	return &Staging{
 		enabled:         config.Staging.Enabled,
 		appStarter:      starter,
 		mbus:            mbus,
 		id:              id,
 		stagingRegistry: stagingTaskRegistry,
-		emitter:         emitter,
 		config:          config,
+		dropletRegistry: dropletRegistry,
 	}
 }
 
@@ -73,9 +77,9 @@ func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
 	data := tmpVal.(map[string]interface{})
 	appId := data["app_id"].(string)
 
-	s.emitter.Emit(appId, "Got staging request for app with id "+appId)
+	loggregator.Emit(appId, "Got staging request for app with id "+appId)
 	utils.Logger("Staging").Infof("Got staging request with %v", data)
-	task := staging.NewStagingTask(s.config, data, buildpacksInUse(s.stagingRegistry))
+	task := staging.NewStagingTask(s.config, data, buildpacksInUse(s.stagingRegistry), s.dropletRegistry)
 
 	s.stagingRegistry.Register(&task)
 
@@ -84,11 +88,11 @@ func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
 	s.notify_upload(reply, &task)
 	s.notify_stop(reply, &task)
 
-	task.Start(nil)
+	task.Start()
 }
 
 func (s Staging) notify_setup_completion(reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
-	task.After_setup_callback(func(e error) {
+	task.SetAfter_setup_callback(func(e error) {
 		data := map[string]string{
 			"task_id":           task.Id(),
 			"streaming_log_url": task.StreamingLogUrl(),
@@ -102,7 +106,7 @@ func (s Staging) notify_setup_completion(reply cfmessagebus.ReplyTo, task *stagi
 }
 
 func (s Staging) notify_completion(data map[string]interface{}, reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
-	task.After_complete_callback(func(e error) {
+	task.SetAfter_complete_callback(func(e error) {
 		if msg, exists := data["start_message"]; exists && e != nil {
 			startMsg := msg.(map[string]interface{})
 			startMsg["sha1"] = task.DropletSHA1()
@@ -112,7 +116,7 @@ func (s Staging) notify_completion(data map[string]interface{}, reply cfmessageb
 }
 
 func (s Staging) notify_upload(reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
-	task.After_upload_callback(func(e error) {
+	task.SetAfter_upload_callback(func(e error) {
 		data := map[string]string{
 			"task_id":            task.Id(),
 			"detected_buildpack": task.DetectedBuildpack(),
@@ -129,7 +133,7 @@ func (s Staging) notify_upload(reply cfmessagebus.ReplyTo, task *staging.Staging
 }
 
 func (s Staging) notify_stop(reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
-	task.After_stop_callback(func(e error) {
+	task.SetAfter_stop_callback(func(e error) {
 		data := map[string]string{
 			"task_id": task.Id(),
 		}
@@ -159,137 +163,24 @@ func respondTo(reply cfmessagebus.ReplyTo, params map[string]string) {
 	}
 }
 
-func buildpacksInUse(stagingRegistry *staging.StagingTaskRegistry) []string {
-	buildpacks := make(map[string]string)
+func buildpacksInUse(stagingRegistry *staging.StagingTaskRegistry) []map[string]string {
+	buildpacks := make([]map[string]string, 0, 10)
 	for _, t := range stagingRegistry.Tasks() {
 		for _, bp := range t.AdminBuildpacks() {
-			buildpacks[bp] = bp
+			if !buildpack_included(buildpacks, bp) {
+				buildpacks = append(buildpacks, bp)
+			}
 		}
 	}
-	bpList := make([]string, 0, len(buildpacks))
-	for k, _ := range buildpacks {
-		bpList = append(bpList, k)
-	}
-	return bpList
+
+	return buildpacks
 }
 
-/*
-require "dea/staging_task"
-require "dea/loggregator"
-
-module Dea::Responders
-  class Staging
-    attr_reader :nats
-    attr_reader :dea_id
-    attr_reader :bootstrap
-    attr_reader :staging_task_registry
-    attr_reader :dir_server
-    attr_reader :config
-
-    def initialize(nats, dea_id, bootstrap, staging_task_registry, dir_server, config)
-      @nats = nats
-      @dea_id = dea_id
-      @bootstrap = bootstrap
-      @staging_task_registry = staging_task_registry
-      @dir_server = dir_server
-      @config = config
-    end
-
-    def start
-      return unless configured_to_stage?
-      subscribe_to_staging
-      subscribe_to_dea_specific_staging
-      subscribe_to_staging_stop
-    end
-
-    def stop
-      unsubscribe_from_staging
-      unsubscribe_from_dea_specific_staging
-      unsubscribe_from_staging_stop
-    end
-
-    def handle(message)
-      app_id = message.data["app_id"]
-      logger = logger_for_app(app_id)
-      Dea::Loggregator.emit(app_id, "Got staging request for app with id #{app_id}")
-      logger.info("Got staging request with #{message.data.inspect}")
-
-      task = Dea::StagingTask.new(bootstrap, dir_server, message.data, buildpacks_in_use, logger)
-      staging_task_registry.register(task)
-
-      notify_setup_completion(message, task)
-      notify_completion(message, task)
-      notify_upload(message, task)
-      notify_stop(message, task)
-
-      task.start
-    rescue => e
-      logger.error "staging.handle.failed", :error => e, :backtrace => e.backtrace
-    end
-
-    def handle_stop(message)
-      staging_task_registry.each do |task|
-        if message.data["app_id"] == task.attributes["app_id"]
-          task.stop
-        end
-      end
-    rescue => e
-      logger.error "staging.handle_stop.failed", :error => e, :backtrace => e.backtrace
-    end
-
-    private
-
-    def configured_to_stage?
-      config["staging"] && config["staging"]["enabled"]
-    end
-
-    def subscribe_to_staging
-      options = {:do_not_track_subscription => true, :queue => "staging"}
-      @staging_sid = nats.subscribe("staging", options) { |message| handle(message) }
-    end
-
-    def unsubscribe_from_staging
-      nats.unsubscribe(@staging_sid) if @staging_sid
-    end
-
-    def subscribe_to_dea_specific_staging
-      options = {:do_not_track_subscription => true}
-      @dea_specified_staging_sid = nats.subscribe("staging.#{@dea_id}.start", options) { |message| handle(message) }
-    end
-
-    def unsubscribe_from_dea_specific_staging
-      nats.unsubscribe(@dea_specified_staging_sid) if @dea_specified_staging_sid
-    end
-
-    def subscribe_to_staging_stop
-      options = {:do_not_track_subscription => true}
-      @staging_stop_sid = nats.subscribe("staging.stop", options) { |message| handle_stop(message) }
-    end
-
-    def unsubscribe_from_staging_stop
-      nats.unsubscribe(@staging_stop_sid) if @staging_stop_sid
-    end
-
-
-    def respond_to_message(message, params)
-      message.respond(
-        "task_id" => params[:task_id],
-        "task_streaming_log_url" => params[:streaming_log_url],
-        "detected_buildpack" => params[:detected_buildpack],
-        "error" => params[:error],
-        "droplet_sha1" => params[:droplet_sha1]
-      )
-    end
-
-
-    private
-
-    def buildpacks_in_use
-      staging_task_registry.flat_map do |task|
-        task.admin_buildpacks
-      end.uniq
-    end
-  end
-end
-
-*/
+func buildpack_included(buildpacks []map[string]string, item map[string]string) bool {
+	for _, v := range buildpacks {
+		if reflect.DeepEqual(v, item) {
+			return true
+		}
+	}
+	return false
+}

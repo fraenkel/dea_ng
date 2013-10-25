@@ -5,6 +5,7 @@ import (
 	"dea/config"
 	ds "dea/directory_server"
 	"dea/droplet"
+	"dea/loggregator"
 	"dea/protocol"
 	"dea/responders"
 	"dea/staging"
@@ -52,7 +53,6 @@ type bootstrap struct {
 	stagingTaskRegistry *staging.StagingTaskRegistry
 	dropletRegistry     *droplet.DropletRegistry
 	logger              *steno.Logger
-	emitter             emitter.Emitter
 	component           *common.VcapComponent
 	signalChannel       chan<- os.Signal
 	localIp             string
@@ -98,7 +98,8 @@ func (b bootstrap) setup() error {
 		if err != nil {
 			return err
 		}
-		b.emitter = emitter
+
+		loggregator.SetEmitter(emitter)
 	}
 
 	b.dropletRegistry = droplet.NewDropletRegistry(path.Join(config.BaseDir, "droplets"))
@@ -422,7 +423,7 @@ func (b *bootstrap) startNats() {
 	b.responders = []responders.Responder{
 		responders.NewDeaLocator(b.nats.MessageBus, b.component.UUID, b.resource_manager, b.config),
 		responders.NewStagingLocator(b.nats.MessageBus, b.component.UUID, b.resource_manager, b.config),
-		responders.NewStaging(b, b.nats.MessageBus, b.component.UUID, b.stagingTaskRegistry, b.emitter, b.config),
+		responders.NewStaging(b, b.nats.MessageBus, b.component.UUID, b.stagingTaskRegistry, b.config, b.dropletRegistry),
 	}
 
 	for _, r := range b.responders {

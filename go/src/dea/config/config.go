@@ -62,7 +62,11 @@ type StagingConfig struct {
 	Environment        map[string]string "environment"
 	MemoryLimitMB      uint64            "memory_limit_mb"
 	DiskLimitMB        uint64            "disk_limit_mb"
-	MaxStagingDuration *time.Duration    "max_staging_duration"
+	MaxStagingDuration time.Duration     "max_staging_duration"
+}
+
+var defaultStagingConfig = StagingConfig{
+	MaxStagingDuration: 900 * time.Second,
 }
 
 type DirServerConfig struct {
@@ -110,11 +114,12 @@ type Config struct {
 	Status                        StatusConfig             "status"
 	CrashesPath                   string                   "crashes_path"
 	CrashLifetime                 time.Duration            "crash_lifetime_secs"
-	BindMounts                    []int                    "bind_mounts"
+	BindMounts                    []map[string]string      "bind_mounts"
 	CrashBlockUsageRatioThreshold float64                  "crash_block_usage_ratio_threshold"
 	CrashInodeUsageRatioThreshold float64                  "crash_inode_usage_ratio_threshold"
 	Domain                        string                   "domain"
 	DirectoryServer               DirServerConfig          "directory_server"
+	DeaRuby                       string                   "dea_ruby"
 	Hooks                         map[string]string        "hooks"
 }
 
@@ -131,7 +136,7 @@ func ConfigFromFile(configPath string) (*Config, error) {
 		Resources:                     ResourcesConfig{},
 		CrashLifetime:                 60 * 60,
 		EvacuationDelay:               30,
-		BindMounts:                    []int{},
+		BindMounts:                    []map[string]string{},
 		CrashBlockUsageRatioThreshold: 0.8,
 		CrashInodeUsageRatioThreshold: 0.8,
 	}

@@ -270,7 +270,7 @@ func (i *Instance) setup_crash_handler() {
 }
 
 func (i *Instance) promise_crash_handler() error {
-	if i.Container().GetHandle() != "" {
+	if i.Container().Handle() != "" {
 		err := i.promise_copy_out()
 		if err != nil {
 			return err
@@ -299,12 +299,12 @@ func (i *Instance) Start(callback func(error)) {
 		goto done
 	}
 	// Concurrently download droplet and setup container
-	err = parallel(i.promise_droplet, i.promise_container)
+	err = utils.Parallel_promises(i.promise_droplet, i.promise_container)
 	if err != nil {
 		goto done
 	}
 
-	err = sequence(i.promise_extract_droplet,
+	err = utils.Sequence_promises(i.promise_extract_droplet,
 		func() error { return i.promise_exec_hook_script("before_start") },
 		i.promise_start)
 	if err != nil {
@@ -359,7 +359,7 @@ func (i *Instance) promise_container() error {
 	return err
 }
 
-func (i *Instance) promise_stop(callback func(error)) {
+func (i *Instance) Stop() error {
 	startTime := time.Now()
 
 	i.log(steno.LOG_INFO, "droplet.stopping", nil)
@@ -371,7 +371,7 @@ func (i *Instance) promise_stop(callback func(error)) {
 	}
 
 	err = i.promise_exec_hook_script("after_stop")
-	err = i.Task.Stop()
+	err = i.Promise_stop()
 	if err != nil {
 		goto done
 	}
@@ -401,10 +401,7 @@ done:
 		i.state = STATE_CRASHED
 	}
 
-	if callback != nil {
-		callback(err)
-	}
-
+	return err
 }
 
 func (i *Instance) promise_droplet() (err error) {
@@ -468,7 +465,8 @@ func (i *Instance) promise_exec_hook_script(key string) error {
 			}
 			script = append(script, string(bytes))
 			script = append(script, "exit")
-			return i.Container().RunScript(strings.Join(script, "\n"))
+			_, err = i.Container().RunScript(strings.Join(script, "\n"))
+			return err
 		} else {
 			i.log(steno.LOG_WARN, "droplet.hook-script.missing",
 				map[string]interface{}{"hook": key, "script_path": "script_path"})
@@ -489,7 +487,8 @@ func (i *Instance) promise_state(from []State, to State) error {
 
 func (i *Instance) promise_extract_droplet() error {
 	script := fmt.Sprintf("cd /home/vcap/ && tar zxf %s", i.droplet().Droplet_path())
-	return i.Container().RunScript(script)
+	_, err := i.Container().RunScript(script)
+	return err
 }
 
 func (i *Instance) promise_droplet_download() error {
@@ -498,7 +497,8 @@ func (i *Instance) promise_droplet_download() error {
 
 func (i *Instance) promise_setup_environment() error {
 	script := "cd / && mkdir -p home/vcap/app && chown vcap:vcap home/vcap/app && ln -s home/vcap/app /app"
-	return i.Container().RunScript(script)
+	_, err := i.Container().RunScript(script)
+	return err
 }
 
 func (i *Instance) setup_stat_collector() {
@@ -595,7 +595,7 @@ func (i *Instance) cancel_health_check() {
 
 func (i *Instance) promise_health_check() (bool, error) {
 	i.logger.Debug("droplet.health-check.get-container-info")
-	_, err := i.Container().Update_path_and_ip()
+	err := i.Container().Update_path_and_ip()
 	if err != nil {
 		i.logger.Errorf("droplet.health-check.container-info-failed: %s", err.Error())
 		return false, err
@@ -603,7 +603,7 @@ func (i *Instance) promise_health_check() (bool, error) {
 	}
 	i.logger.Debug("droplet.health-check.container-info-ok")
 
-	containerPath := i.Container().GetPath()
+	containerPath := i.Container().Path()
 	manifest, err := i.promise_read_instance_manifest(containerPath)
 	if err != nil {
 		return false, err
@@ -686,8 +686,8 @@ func (i *Instance) Snapshot_attributes() map[string]interface{} {
 		"state":                   i.State,
 		"warden_job_id":           i.attributes["warden_job_id"],
 		"instance_index":          i.Index(),
-		"warden_container_path":   i.Container().GetPath(),
-		"warden_host_ip":          i.Container().GetHostIp(),
+		"warden_container_path":   i.Container().Path(),
+		"warden_host_ip":          i.Container().HostIp(),
 		"instance_host_port":      i.Container().NetworkPorts["host_port"],
 		"instance_container_port": i.ContainerPort(),
 		"instance_id":             i.Id(),
@@ -749,45 +749,6 @@ func transfer_attribute_with_existence_check(attributes map[string]interface{}, 
 		attributes[new_key] = value
 		delete(attributes, old_key)
 	}
-}
-
-func parallel(callbacks ...func() error) (result error) {
-	wg := sync.WaitGroup{}
-	wg.Add(len(callbacks) - 1)
-	lock := sync.Mutex{}
-	goCallbacks := callbacks[1:]
-	for _, cb := range goCallbacks {
-		curCB := cb
-		go func() {
-			defer wg.Done()
-			if err := curCB(); err != nil {
-				lock.Lock()
-				defer lock.Unlock()
-				if result != nil {
-					result = err
-				}
-			}
-		}()
-	}
-	err := callbacks[0]()
-	lock.Lock()
-	defer lock.Unlock()
-	if result != nil {
-		result = err
-	}
-
-	wg.Wait()
-	return
-}
-
-func sequence(callbacks ...func() error) error {
-	for _, cb := range callbacks {
-		err := cb()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func container_relative_path(root string, parts ...string) string {
