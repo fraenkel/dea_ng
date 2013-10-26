@@ -99,6 +99,7 @@ var defaultNatsConfig = NatsConfig{
 
 type Config struct {
 	BaseDir                       string                   "base_dir"
+	BuildpackDir                  string                   "buildpack_dir"
 	Logging                       LoggingConfig            "logging"
 	Loggregator                   LoggregatorConfig        "loggregator"
 	Resources                     ResourcesConfig          "resources"

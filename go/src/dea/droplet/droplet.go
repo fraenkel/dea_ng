@@ -2,9 +2,11 @@ package droplet
 
 import (
 	"dea/utils"
+	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -13,10 +15,15 @@ const droplet_basename = "droplet.tgz"
 type Droplet struct {
 	baseDir string
 	sha1    string
+	mutex   sync.Mutex
 }
 
 func NewDroplet(baseDir string, sha1 string) *Droplet {
-	d := &Droplet{baseDir, sha1}
+	d := &Droplet{
+		baseDir: baseDir,
+		sha1:    sha1,
+		mutex:   sync.Mutex{},
+	}
 
 	// Make sure the directory exists
 	os.MkdirAll(d.Droplet_dirname(), 0777)
@@ -36,9 +43,14 @@ func (d *Droplet) Droplet_path() string {
 	return path.Join(d.Droplet_dirname(), droplet_basename)
 }
 
-func (d *Droplet) Droplet_exists() bool {
+func (d *Droplet) Exists() bool {
 	_, err := os.Stat(d.Droplet_path())
-	return os.IsExist(err)
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	sha1, err := utils.SHA1Digest(d.Droplet_path())
+	return d.sha1 == string(sha1)
 }
 
 func (d *Droplet) SHA1() string {
@@ -46,20 +58,27 @@ func (d *Droplet) SHA1() string {
 }
 
 func (d *Droplet) Download(uri string) error {
-	if d.Droplet_exists() {
+	// ensure only one download is happening for a single droplet.
+	// this keeps 100 starts from causing a network storm.
+
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	if d.Exists() {
 		return nil
 	}
 
-	os.MkdirAll(d.Droplet_dirname(), 0755)
-
-	droplet, err := os.OpenFile(d.Droplet_path(), os.O_CREATE|os.O_WRONLY, 0744)
+	download_destination, err := ioutil.TempFile("", "droplet-download.tgz")
 	if err != nil {
+		utils.Logger("Droplet").Warnf("Failed to create temp file, error: %s", err.Error())
 		return err
 	}
 
-	err = utils.NewDownload(uri, droplet, d.SHA1()).Download()
+	err = utils.HttpDownload(uri, download_destination, d.SHA1())
 	if err == nil {
-		utils.Logger("Droplet").Debugf("Downloaded droplet to %s", d.Droplet_path())
+		os.MkdirAll(d.Droplet_dirname(), 0755)
+		os.Rename(download_destination.Name(), d.Droplet_path())
+		os.Chmod(d.Droplet_path(), 0744)
 	}
 
 	return err

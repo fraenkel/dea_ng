@@ -9,11 +9,11 @@ import (
 )
 
 type AdminBuildpackDownloader struct {
-	buildpacks  []map[string]string
+	buildpacks  []StagingBuildpack
 	destination string
 }
 
-func NewAdminBuildpackDownloader(buildpacks []map[string]string, destination string) AdminBuildpackDownloader {
+func NewAdminBuildpackDownloader(buildpacks []StagingBuildpack, destination string) AdminBuildpackDownloader {
 	return AdminBuildpackDownloader{buildpacks, destination}
 }
 
@@ -28,7 +28,7 @@ func (bpdl AdminBuildpackDownloader) download() {
 	download_promises := make([]func() error, 0, len(bpdl.buildpacks))
 	for _, bp := range bpdl.buildpacks {
 		buildpack := bp
-		dest := path.Join(bpdl.destination, bp["key"])
+		dest := path.Join(bpdl.destination, bp.key)
 		if !utils.File_Exists(dest) {
 			download_promises = append(download_promises, func() error { return download_buildpack(buildpack, dest) })
 		}
@@ -37,7 +37,7 @@ func (bpdl AdminBuildpackDownloader) download() {
 	utils.Parallel_promises(download_promises...)
 }
 
-func download_buildpack(buildpack map[string]string, dest_dir string) error {
+func download_buildpack(buildpack StagingBuildpack, dest_dir string) error {
 	file, err := ioutil.TempFile("", "temp_admin_buildpack")
 	if err != nil {
 		utils.Logger("AdminBuildpackDownloader").Errorf("Failed to create tempfile, error: %s", err.Error())
@@ -46,7 +46,7 @@ func download_buildpack(buildpack map[string]string, dest_dir string) error {
 
 	defer os.RemoveAll(file.Name())
 
-	err = utils.NewDownload(buildpack["url"], file, "").Download()
+	err = utils.HttpDownload(buildpack.url.String(), file, "")
 	if err != nil {
 		return err
 	}

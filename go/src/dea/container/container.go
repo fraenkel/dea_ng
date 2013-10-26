@@ -10,6 +10,11 @@ import (
 	"strconv"
 )
 
+const (
+	HOST_PORT      = "host_port"
+	CONTAINER_PORT = "container_port"
+)
+
 type Container struct {
 	client       *warden.Client
 	NetworkPorts map[string]uint32
@@ -22,6 +27,12 @@ func NewContainer(wardenSocket string) Container {
 	return Container{
 		client: warden.NewClient(&warden.ConnectionInfo{SocketPath: wardenSocket}),
 	}
+}
+
+func (c *Container) Setup(handle string, hostPort, containerPort uint32) {
+	c.handle = handle
+	c.NetworkPorts[HOST_PORT] = hostPort
+	c.NetworkPorts[CONTAINER_PORT] = containerPort
 }
 
 func (c *Container) RunScript(script string) (*warden.RunResponse, error) {
@@ -152,8 +163,8 @@ func (c *Container) setup_network() error {
 		return err
 	}
 
-	c.NetworkPorts["host_port"] = netResponse.GetHostPort()
-	c.NetworkPorts["container_port"] = netResponse.GetContainerPort()
+	c.NetworkPorts[HOST_PORT] = netResponse.GetHostPort()
+	c.NetworkPorts[CONTAINER_PORT] = netResponse.GetContainerPort()
 
 	return nil
 }

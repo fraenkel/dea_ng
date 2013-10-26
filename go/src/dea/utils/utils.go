@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nu7hatch/gouuid"
-	"io"
 	"io/ioutil"
 	"launchpad.net/goyaml"
-	"os"
 	"time"
 )
 
@@ -80,31 +78,6 @@ func UUID() string {
 
 func UUIDString(u *uuid.UUID) string {
 	return fmt.Sprintf("%x%x%x%x%x", u[0:4], u[4:6], u[6:8], u[8:10], u[10:])
-}
-
-func File_Exists(path string) bool {
-	_, err := os.Stat(path)
-	return os.IsExist(err)
-
-}
-
-func CopyFile(src, dst string) error {
-	s, err := os.Open(src)
-	if err != nil {
-		return nil
-	}
-	defer s.Close()
-
-	d, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(d, s); err != nil {
-		d.Close()
-		return err
-	}
-	return d.Close()
 }
 
 func Yaml_Load(path string, result interface{}) error {

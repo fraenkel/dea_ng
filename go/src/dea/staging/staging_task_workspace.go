@@ -17,28 +17,25 @@ const (
 
 type StagingTaskWorkspace struct {
 	baseDir               string
-	adminBuildpacks       []map[string]string
-	buildpacksInUse       []map[string]string
 	environmentProperties map[string]string
 	buildpackManager      BuildpackManager
 }
 
-func NewStagingTaskWorkspace(baseDir string, adminBuildpacks, buildpacksInUse []map[string]string, environmentProperties map[string]string) StagingTaskWorkspace {
+func NewStagingTaskWorkspace(baseDir, system_buildpack_dir string, stagingMsg StagingMessage, buildpacksInUse []StagingBuildpack) StagingTaskWorkspace {
+	adminbuildpacks := stagingMsg.AdminBuildpacks()
+
+	buildpackMgr := NewBuildpackManager(path.Join(baseDir, "admin_buildpacks"),
+		system_buildpack_dir,
+		adminbuildpacks, buildpacksInUse)
+
 	s := StagingTaskWorkspace{
 		baseDir:               baseDir,
-		adminBuildpacks:       adminBuildpacks,
-		buildpacksInUse:       buildpacksInUse,
-		environmentProperties: environmentProperties,
+		environmentProperties: stagingMsg.properties(),
+		buildpackManager:      buildpackMgr,
 	}
 
-	buildpackMgr := s.buildpackManager
-	buildpackMgr.admin_buildpacks_dir = s.admin_buildpacks_dir()
-	buildpackMgr.system_buildpacks_dir = path.Join(s.buildpack_dir(), "vendor")
-	buildpackMgr.admin_buildpacks = adminBuildpacks
-	buildpackMgr.buildpacks_in_use = buildpacksInUse
-
 	os.MkdirAll(s.tmp_dir(), 0755)
-	os.MkdirAll(s.admin_buildpacks_dir(), 0755)
+
 	os.MkdirAll(s.workspace_dir(), 0755)
 	return s
 }
@@ -66,7 +63,6 @@ func (s StagingTaskWorkspace) write_config_file() error {
 
 func (s StagingTaskWorkspace) prepare() {
 	os.MkdirAll(s.tmp_dir(), 0755)
-	os.MkdirAll(s.admin_buildpacks_dir(), 0755)
 
 	s.buildpackManager.download()
 	s.buildpackManager.clean()
@@ -78,7 +74,7 @@ func (s StagingTaskWorkspace) tmp_dir() string {
 }
 
 func (s StagingTaskWorkspace) admin_buildpacks_dir() string {
-	return path.Join(s.baseDir, "admin_buildpacks")
+	return s.buildpackManager.admin_buildpacks_dir()
 }
 
 func (s StagingTaskWorkspace) workspace_dir() string {
@@ -86,9 +82,7 @@ func (s StagingTaskWorkspace) workspace_dir() string {
 }
 
 func (s StagingTaskWorkspace) buildpack_dir() string {
-	panic("Not implemented")
-	return path.Join(s.baseDir, "xxxx")
-	//File.expand_path("../../../../buildpacks", __FILE__)
+	return s.buildpackManager.system_buildpacks_dir()
 }
 
 func (s StagingTaskWorkspace) staging_info_path() string {

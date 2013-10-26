@@ -30,15 +30,21 @@ import (
 )
 
 const (
-	DEFAULT_HEARTBEAT_INTERVAL   = 10 //# In secs
-	DROPLET_REAPER_INTERVAL_SECS = 10
-	EXIT_REASON_STOPPED          = "STOPPED"
-	EXIT_REASON_CRASHED          = "CRASHED"
-	EXIT_REASON_SHUTDOWN         = "DEA_SHUTDOWN"
-	EXIT_REASON_EVACUATION       = "DEA_EVACUATION"
+	DEFAULT_HEARTBEAT_INTERVAL = 10 * time.Second
+	DROPLET_REAPER_INTERVAL    = 60 * time.Second
+	EXIT_REASON_STOPPED        = "STOPPED"
+	EXIT_REASON_CRASHED        = "CRASHED"
+	EXIT_REASON_SHUTDOWN       = "DEA_SHUTDOWN"
+	EXIT_REASON_EVACUATION     = "DEA_EVACUATION"
 )
 
 var signalsOfInterest = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2}
+
+type snapShot struct {
+	time          int64
+	instances     []map[string]interface{}
+	staging_tasks []map[string]interface{}
+}
 
 type bootstrap struct {
 	config              *config.Config
@@ -188,20 +194,22 @@ func (bootstrap *bootstrap) setupPidFile() error {
 func (b *bootstrap) setupSweepers() {
 	// Heartbeats of instances we're managing
 	hbInterval, exist := b.config.Intervals["heartbeat"]
-	if !exist {
+	if exist {
+		hbInterval = hbInterval * time.Second
+	} else {
 		hbInterval = DEFAULT_HEARTBEAT_INTERVAL
 	}
 
 	b.heartbeatTicker = utils.Repeat(func() {
 		b.sendHeartbeat(b.instanceRegistry.Instances())
-	}, time.Duration(hbInterval)*time.Second)
+	}, hbInterval)
 
 	// Ensure we keep around only the most recent crash for short amount of time
 	b.instanceRegistry.StartReapers()
 
 	utils.Repeat(func() {
 		b.reapUnreferencedDroplets()
-	}, DROPLET_REAPER_INTERVAL_SECS*time.Second)
+	}, DROPLET_REAPER_INTERVAL)
 }
 
 func (b *bootstrap) stopSweepers() {
@@ -238,12 +246,20 @@ func (b *bootstrap) setupSignalHandlers() {
 		case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
 			b.shutdown()
 		case syscall.SIGUSR1:
-			b.terminate()
+			b.trap_usr1()
 		case syscall.SIGUSR2:
 			b.evacuate()
 		}
 	}()
 	signal.Notify(c, signalsOfInterest...)
+}
+
+func (b *bootstrap) trap_usr1() {
+	b.ignoreSignals()
+	for _, r := range b.responders {
+		r.Stop()
+	}
+	b.sendShutdownMessage()
 }
 
 func (b *bootstrap) ignoreSignals() {
@@ -365,6 +381,8 @@ func (b *bootstrap) terminate() {
 }
 
 func (b *bootstrap) start() {
+	b.load_snapshot()
+
 	b.startComponent()
 	b.routerClient = dea.NewRouterClient(b.config, b.nats, b.component.UUID, b.localIp)
 	b.startNats()
@@ -391,6 +409,12 @@ func (b *bootstrap) start() {
 		if lr, ok := r.(responders.LocatorResponder); ok {
 			lr.Advertise()
 		}
+	}
+
+	instances := b.instanceRegistry.Instances()
+	if len(instances) > 0 {
+		b.logger.Infof("Loaded %d instances from snapshot", len(instances))
+		b.sendHeartbeat(instances)
 	}
 }
 
@@ -445,11 +469,45 @@ func (b *bootstrap) setupVarz() {
 
 	b.varz = varz
 
-	utils.Repeat(b.periodic_varz_update, DEFAULT_HEARTBEAT_INTERVAL*time.Second)
+	utils.Repeat(b.periodic_varz_update, DEFAULT_HEARTBEAT_INTERVAL)
 }
 
 func (b *bootstrap) isEvacuating() bool {
 	return b.evacuationProcessed
+}
+
+func (b *bootstrap) load_snapshot() error {
+	snapshot_path := b.snapshot_path()
+	if !utils.File_Exists(snapshot_path) {
+		return nil
+	}
+
+	start := time.Now()
+	snapshot := snapShot{}
+	err := utils.Yaml_Load(snapshot_path, snapshot)
+	if err != nil {
+		return err
+	}
+
+	if len(snapshot.instances) == 0 {
+		return nil
+	}
+
+	for _, attrs := range snapshot.instances {
+		instance_state := attrs["state"].(starting.State)
+		delete(attrs, "state")
+		instance := b.create_instance(attrs)
+		if instance == nil {
+			continue
+		}
+
+		// Enter instance state via "RESUMING" to trigger the right transitions
+		instance.SetState(starting.STATE_RESUMING)
+		instance.SetState(instance_state)
+	}
+
+	b.logger.Debugf("Loading snapshot took: %.3fs", time.Now().Sub(start).Seconds())
+	return nil
 }
 
 func (b *bootstrap) reapUnreferencedDroplets() {
@@ -488,6 +546,14 @@ func (b *bootstrap) StartApp(data map[string]interface{}) {
 }
 
 func (b *bootstrap) create_instance(attributes map[string]interface{}) *starting.Instance {
+	instance := starting.NewInstance(attributes, b.config, b.dropletRegistry, b.localIp)
+
+	err := instance.Validate()
+	if err != nil {
+		b.logger.Warnf("Error validating instance: %s", err.Error())
+		return nil
+	}
+
 	limits := attributes["limits"].(map[string]uint64)
 	memory := limits["mem"]
 	disk := limits["disk"]
@@ -496,7 +562,6 @@ func (b *bootstrap) create_instance(attributes map[string]interface{}) *starting
 		return nil
 	}
 
-	instance := starting.NewInstance(attributes, b.config, b.dropletRegistry, b.localIp)
 	instance.Setup()
 
 	instance.On(starting.Transition{starting.STATE_STARTING, starting.STATE_CRASHED}, func() {
@@ -526,15 +591,15 @@ func (b *bootstrap) create_instance(attributes map[string]interface{}) *starting
 	})
 
 	instance.On(starting.Transition{starting.STATE_STARTING, starting.STATE_RUNNING}, func() {
-		b.save_snapshot()
+		b.SaveSnapshot()
 	})
 
 	instance.On(starting.Transition{starting.STATE_RUNNING, starting.STATE_STOPPING}, func() {
-		b.save_snapshot()
+		b.SaveSnapshot()
 	})
 
 	instance.On(starting.Transition{starting.STATE_RUNNING, starting.STATE_CRASHED}, func() {
-		b.save_snapshot()
+		b.SaveSnapshot()
 	})
 
 	instance.On(starting.Transition{starting.STATE_STOPPING, starting.STATE_STOPPED}, func() {
@@ -550,7 +615,7 @@ func (b *bootstrap) snapshot_path() string {
 	return path.Join(b.config.BaseDir, "db", "instances.json")
 }
 
-func (b *bootstrap) save_snapshot() {
+func (b *bootstrap) SaveSnapshot() {
 	start := time.Now()
 
 	instances := b.instanceRegistry.Instances()
@@ -562,9 +627,17 @@ func (b *bootstrap) save_snapshot() {
 		}
 	}
 
-	snapshot := make(map[string]interface{})
-	snapshot["time"] = start.Nanosecond()
-	snapshot["instances"] = iSnaps
+	stagings := b.stagingTaskRegistry.Tasks()
+	sSnaps := make([]map[string]interface{}, 0, len(stagings))
+	for _, s := range stagings {
+		sSnaps = append(sSnaps, s.StagingMessage().AsMap())
+
+	}
+
+	snapshot := snapShot{}
+	snapshot.time = start.UnixNano()
+	snapshot.instances = iSnaps
+	snapshot.staging_tasks = sSnaps
 
 	bytes, err := goyaml.Marshal(snapshot)
 	if err != nil {
@@ -674,6 +747,7 @@ func (b *bootstrap) HandleDeaUpdate(payload []byte) {
 	}
 	app_id := d["droplet"].(string)
 	uris := d["uris"].([]string)
+	app_version := d["version"].(string)
 
 	for _, i := range b.instanceRegistry.InstancesForApplication(app_id) {
 
@@ -693,6 +767,9 @@ func (b *bootstrap) HandleDeaUpdate(payload []byte) {
 		}
 
 		i.SetApplicationUris(uris)
+		if app_version != "" {
+			i.SetApplicationVersion(app_version)
+		}
 	}
 }
 

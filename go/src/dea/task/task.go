@@ -35,8 +35,9 @@ func (t *Task) Promise_stop() error {
 }
 
 func (t *Task) Destroy() {
-	utils.Logger("Task").Info("Destroying instance")
+	utils.Logger("Task").Info("task.destroying")
 	t.Promise_destroy()
+	utils.Logger("Task").Info("task.destroy.completed")
 }
 
 func (t *Task) Copy_out_request(source_path, destination_path string) error {

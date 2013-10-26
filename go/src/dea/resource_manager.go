@@ -15,7 +15,7 @@ type ResourceManager struct {
 }
 
 var defaultConfig = &config.ResourcesConfig{
-	MemoryMB:               8 * 1024 * 1024,
+	MemoryMB:               8 * 1024,
 	MemoryOvercommitFactor: 1,
 	DiskMB:                 16 * 1024 * 1024,
 	DiskOvercommitFactor:   1,

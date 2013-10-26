@@ -40,7 +40,7 @@ func (s byTimestamp) Len() int {
 	return len(s.instances)
 }
 func (s byTimestamp) Less(i, j int) bool {
-	return s.instances[i].StateTime().Before(s.instances[j].StateTime())
+	return s.instances[i].StateTimestamp().Before(s.instances[j].StateTimestamp())
 }
 
 func (s byTimestamp) Swap(i, j int) {
@@ -176,7 +176,7 @@ func (r *InstanceRegistry) reapCrashes() {
 		sort.Sort(byTimestamp{crashedInstances})
 		// Remove if not most recent, or too old
 		for idx, instance := range crashedInstances {
-			if idx > 0 || now.Sub(instance.StateTime()) > r.crashLifetime {
+			if idx > 0 || now.Sub(instance.StateTimestamp()) > r.crashLifetime {
 				r.reapCrash(instance.Id(), "stale", nil)
 			}
 		}

@@ -8,16 +8,16 @@ import (
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/go_cfmessagebus"
-	"reflect"
 )
 
-type AppStarter interface {
+type AppManager interface {
 	StartApp(map[string]interface{})
+	SaveSnapshot()
 }
 
 type Staging struct {
 	enabled         bool
-	appStarter      AppStarter
+	appManager      AppManager
 	mbus            cfmessagebus.MessageBus
 	id              string
 	stagingRegistry *staging.StagingTaskRegistry
@@ -25,12 +25,12 @@ type Staging struct {
 	dropletRegistry *droplet.DropletRegistry
 }
 
-func NewStaging(starter AppStarter, mbus cfmessagebus.MessageBus, id string,
+func NewStaging(appManager AppManager, mbus cfmessagebus.MessageBus, id string,
 	stagingTaskRegistry *staging.StagingTaskRegistry,
 	config *config.Config, dropletRegistry *droplet.DropletRegistry) *Staging {
 	return &Staging{
 		enabled:         config.Staging.Enabled,
-		appStarter:      starter,
+		appManager:      appManager,
 		mbus:            mbus,
 		id:              id,
 		stagingRegistry: stagingTaskRegistry,
@@ -75,13 +75,16 @@ func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
 	}
 
 	data := tmpVal.(map[string]interface{})
+	msg := staging.NewStagingMessage(data)
 	appId := data["app_id"].(string)
 
-	loggregator.Emit(appId, "Got staging request for app with id "+appId)
-	utils.Logger("Staging").Infof("Got staging request with %v", data)
-	task := staging.NewStagingTask(s.config, data, buildpacksInUse(s.stagingRegistry), s.dropletRegistry)
+	loggregator.Emit(appId, "staging.handle.start "+appId)
+	utils.Logger("Staging").Infof("staging.handle.start %v", msg)
+	task := staging.NewStagingTask(s.config, msg, buildpacksInUse(s.stagingRegistry), s.dropletRegistry)
 
 	s.stagingRegistry.Register(&task)
+
+	s.appManager.SaveSnapshot()
 
 	s.notify_setup_completion(reply, &task)
 	s.notify_completion(data, reply, &task)
@@ -110,7 +113,7 @@ func (s Staging) notify_completion(data map[string]interface{}, reply cfmessageb
 		if msg, exists := data["start_message"]; exists && e != nil {
 			startMsg := msg.(map[string]interface{})
 			startMsg["sha1"] = task.DropletSHA1()
-			s.appStarter.StartApp(startMsg)
+			s.appManager.StartApp(startMsg)
 		}
 	})
 }
@@ -129,6 +132,8 @@ func (s Staging) notify_upload(reply cfmessagebus.ReplyTo, task *staging.Staging
 		respondTo(reply, data)
 
 		s.stagingRegistry.Unregister(task)
+
+		s.appManager.SaveSnapshot()
 	})
 }
 
@@ -144,6 +149,8 @@ func (s Staging) notify_stop(reply cfmessagebus.ReplyTo, task *staging.StagingTa
 		respondTo(reply, data)
 
 		s.stagingRegistry.Unregister(task)
+
+		s.appManager.SaveSnapshot()
 	})
 }
 
@@ -163,24 +170,19 @@ func respondTo(reply cfmessagebus.ReplyTo, params map[string]string) {
 	}
 }
 
-func buildpacksInUse(stagingRegistry *staging.StagingTaskRegistry) []map[string]string {
-	buildpacks := make([]map[string]string, 0, 10)
+func buildpacksInUse(stagingRegistry *staging.StagingTaskRegistry) []staging.StagingBuildpack {
+	inuse := make(map[staging.StagingBuildpack]bool)
+
 	for _, t := range stagingRegistry.Tasks() {
-		for _, bp := range t.AdminBuildpacks() {
-			if !buildpack_included(buildpacks, bp) {
-				buildpacks = append(buildpacks, bp)
-			}
+		for _, bp := range t.StagingMessage().AdminBuildpacks() {
+			inuse[bp] = true
 		}
+	}
+
+	buildpacks := make([]staging.StagingBuildpack, 0, len(inuse))
+	for bp, _ := range inuse {
+		buildpacks = append(buildpacks, bp)
 	}
 
 	return buildpacks
-}
-
-func buildpack_included(buildpacks []map[string]string, item map[string]string) bool {
-	for _, v := range buildpacks {
-		if reflect.DeepEqual(v, item) {
-			return true
-		}
-	}
-	return false
 }

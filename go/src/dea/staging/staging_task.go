@@ -1,7 +1,6 @@
 package staging
 
 import (
-	"crypto/sha1"
 	"dea/config"
 	"dea/droplet"
 	"dea/env"
@@ -10,7 +9,6 @@ import (
 	"dea/utils"
 	"fmt"
 	"github.com/cloudfoundry/gordon"
-	"io"
 	"io/ioutil"
 	"launchpad.net/goyaml"
 	"os"
@@ -24,8 +22,8 @@ type StagingTask struct {
 	warden          string
 	stagingConfig   *config.StagingConfig
 	bindMounts      []map[string]string
-	staging_message map[string]interface{}
-	buildpacksInUse []map[string]string
+	staging_message StagingMessage
+	buildpacksInUse []StagingBuildpack
 	workspace       StagingTaskWorkspace
 	dropletRegistry *droplet.DropletRegistry
 	deaRuby         string
@@ -38,10 +36,10 @@ type StagingTask struct {
 	after_stop_callback     func(e error)
 }
 
-func NewStagingTask(config *config.Config, staging_message map[string]interface{},
-	buildpacksInUse []map[string]string, dropletRegistry *droplet.DropletRegistry) StagingTask {
+func NewStagingTask(config *config.Config, staging_message StagingMessage,
+	buildpacksInUse []StagingBuildpack, dropletRegistry *droplet.DropletRegistry) StagingTask {
 	s := StagingTask{
-		id:              staging_message["task_id"].(string),
+		id:              staging_message.task_id(),
 		bindMounts:      config.BindMounts,
 		staging_message: staging_message,
 		warden:          config.WardenSocket,
@@ -52,9 +50,7 @@ func NewStagingTask(config *config.Config, staging_message map[string]interface{
 		stagingTimeout:  config.Staging.MaxStagingDuration,
 	}
 
-	envProps := staging_message["properties"].(map[string]string)
-	s.workspace = NewStagingTaskWorkspace(config.BaseDir, s.AdminBuildpacks(), buildpacksInUse,
-		envProps)
+	s.workspace = NewStagingTaskWorkspace(config.BaseDir, config.BuildpackDir, staging_message, buildpacksInUse)
 
 	return s
 }
@@ -67,16 +63,16 @@ func (s *StagingTask) wardenSocket() string {
 	return s.warden
 }
 
+func (s *StagingTask) StagingMessage() StagingMessage {
+	return s.staging_message
+}
+
 func (s *StagingTask) MemoryLimit() config.Memory {
 	return config.Memory(s.stagingConfig.MemoryLimitMB) * config.Mebi
 }
 
 func (s *StagingTask) DiskLimit() config.Disk {
 	return config.Disk(s.stagingConfig.DiskLimitMB) * config.MB
-}
-
-func (s *StagingTask) AdminBuildpacks() []map[string]string {
-	return s.staging_message["admin_buildpacks"].([]map[string]string)
 }
 
 func (s *StagingTask) Start() error {
@@ -148,7 +144,7 @@ func (s *StagingTask) resolve_staging_setup() error {
 
 	promises := make([]func() error, 1, 2)
 	promises[0] = s.promise_app_download
-	if _, exists := s.staging_message["buildpack_cache_download_uri"]; exists {
+	if s.staging_message.buildpack_cache_download_uri() != nil {
 		promises = append(promises, s.promise_buildpack_cache_download)
 	}
 
@@ -200,14 +196,14 @@ func (s *StagingTask) promise_log_upload_started() error {
 }
 
 func (s *StagingTask) promise_app_upload() error {
-	uploadUri := s.staging_message["upload_uri"].(string)
+	uploadUri := s.staging_message.upload_uri()
 	utils.Logger("StagingTask").Infod(map[string]interface{}{
 		"source":      s.workspace.staged_droplet_path(),
 		"destination": uploadUri},
 		"staging.droplet-upload.starting")
 
 	start := time.Now()
-	err := utils.HttpUpload("upload[droplet]", s.workspace.staged_droplet_path(), uploadUri)
+	err := utils.HttpUpload("upload[droplet]", s.workspace.staged_droplet_path(), uploadUri.String())
 
 	if err != nil {
 		utils.Logger("StagingTask").Infod(map[string]interface{}{
@@ -226,7 +222,7 @@ func (s *StagingTask) promise_app_upload() error {
 }
 
 func (s *StagingTask) promise_app_download() error {
-	downloadUri := s.staging_message["download_uri"].(string)
+	downloadUri := s.staging_message.download_uri()
 	utils.Logger("StagingTask").Infod(map[string]interface{}{"uri": downloadUri},
 		"staging.app-download.starting uri")
 	download_destination, err := ioutil.TempFile(s.workspace.tmp_dir(), "app-package-download.tgz")
@@ -235,11 +231,13 @@ func (s *StagingTask) promise_app_download() error {
 	}
 
 	startTime := time.Now()
-	err = utils.NewDownload(downloadUri, download_destination, "").Download()
+	err = utils.HttpDownload(downloadUri.String(), download_destination, "")
 	if err != nil {
-		utils.Logger("StagingTask").Debugd(map[string]interface{}{"duration": time.Now().Sub(startTime),
-			"uri":   downloadUri,
-			"error": err},
+		utils.Logger("StagingTask").Debugd(
+			map[string]interface{}{
+				"duration": time.Now().Sub(startTime),
+				"uri":      downloadUri,
+				"error":    err},
 			"staging.app-download.failed")
 		return err
 	}
@@ -248,23 +246,24 @@ func (s *StagingTask) promise_app_download() error {
 	os.Rename(download_destination.Name(), downloadedAppPath)
 	os.Chmod(downloadedAppPath, 0744)
 
-	utils.Logger("StagingTask").Debugd(map[string]interface{}{
-		"duration":    time.Now().Sub(startTime),
-		"destination": downloadedAppPath},
+	utils.Logger("StagingTask").Debugd(
+		map[string]interface{}{
+			"duration":    time.Now().Sub(startTime),
+			"destination": downloadedAppPath},
 		"staging.app-download.completed")
 
 	return nil
 }
 
 func (s *StagingTask) promise_buildpack_cache_upload() error {
-	uploadUri := s.staging_message["buildpack_cache_upload_uri"].(string)
+	uploadUri := s.staging_message.buildpack_cache_upload_uri()
 	utils.Logger("StagingTask").Infod(map[string]interface{}{
 		"source":      s.workspace.staged_buildpack_cache_path(),
 		"destination": uploadUri},
 		"staging.buildpack-cache-upload.starting")
 
 	start := time.Now()
-	err := utils.HttpUpload("upload[buildpack]", s.workspace.staged_buildpack_cache_path(), uploadUri)
+	err := utils.HttpUpload("upload[buildpack]", s.workspace.staged_buildpack_cache_path(), uploadUri.String())
 
 	if err != nil {
 		utils.Logger("StagingTask").Infod(map[string]interface{}{
@@ -283,7 +282,7 @@ func (s *StagingTask) promise_buildpack_cache_upload() error {
 }
 
 func (s *StagingTask) promise_buildpack_cache_download() error {
-	downloadUri := s.staging_message["buildpack_cache_download_uri"].(string)
+	downloadUri := s.staging_message.buildpack_cache_download_uri()
 	utils.Logger("StagingTask").Infod(map[string]interface{}{
 		"uri": downloadUri},
 		"staging.buildpack-cache-download.starting")
@@ -294,7 +293,7 @@ func (s *StagingTask) promise_buildpack_cache_download() error {
 	}
 
 	startTime := time.Now()
-	err = utils.NewDownload(downloadUri, download_destination, "").Download()
+	err = utils.HttpDownload(downloadUri.String(), download_destination, "")
 	if err != nil {
 		utils.Logger("StagingTask").Debugd(map[string]interface{}{
 			"duration": time.Now().Sub(startTime),
@@ -351,15 +350,12 @@ func (s *StagingTask) promise_save_buildpack_cache() error {
 }
 
 func (s *StagingTask) promise_save_droplet() error {
-	shaDigest := sha1.New()
-	file, err := os.Open(s.workspace.staged_droplet_path())
+	sha1, err := utils.SHA1Digest(s.workspace.staged_droplet_path())
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	_, err = io.Copy(shaDigest, file)
-	s.dropletSha1 = string(shaDigest.Sum(nil))
+	s.dropletSha1 = string(sha1)
 
 	err = s.dropletRegistry.Get(s.dropletSha1).Local_copy(s.workspace.staged_droplet_path())
 	if err != nil {
@@ -589,7 +585,7 @@ func (s *StagingTask) staging_timeout_grace_period() time.Duration {
 
 func (s *StagingTask) loggregator_emit_result(result *warden.RunResponse) *warden.RunResponse {
 	if result != nil {
-		appId := s.staging_message["app_id"].(string)
+		appId := s.staging_message.app_id()
 		loggregator.Emit(appId, result.GetStdout())
 		loggregator.Emit(appId, result.GetStderr())
 	}

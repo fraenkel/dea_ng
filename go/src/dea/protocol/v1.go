@@ -66,7 +66,7 @@ func NewHeartbeatResponseV1(uuid string, instances []*starting.Instance) *Heartb
 			Id:          instance.Id(),
 			Index:       instance.Index(),
 			State:       string(instance.State()),
-			Timestamp:   instance.StateTime(),
+			Timestamp:   instance.StateTimestamp(),
 		}
 	}
 	response := HeartbeatResponseV1{
@@ -102,7 +102,7 @@ func NewExitMessage(i starting.Instance, reason string) *ExitMessage {
 	}
 
 	if i.State() == starting.STATE_CRASHED {
-		sTime := i.StateTime()
+		sTime := i.StateTimestamp()
 		exitm.CrashTimestamp = &sTime
 	}
 
@@ -188,7 +188,7 @@ func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
 		Instance:       i.Id(),
 		Index:          i.Index(),
 		State:          string(i.State()),
-		StateTimestamp: i.StateTimestamp(i.State()),
+		StateTimestamp: i.StateTime(i.State()),
 		FileUri:        dirServerV1.Uri,
 		Credentials:    dirServerV1.Credentials,
 		Staged:         "/" + i.Id(),
@@ -205,7 +205,7 @@ func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
 			Uris:        i.ApplicationUris(),
 			Host:        localIp,
 			Port:        i.HostPort(),
-			Uptime:      time.Now().Sub(i.StateTimestamp(starting.STATE_STARTING)).Seconds(),
+			Uptime:      time.Now().Sub(i.StateTime(starting.STATE_STARTING)).Seconds(),
 			MemoryQuota: i.MemoryLimit(),
 			DiskQuota:   i.DiskLimit(),
 			FdsQuota:    i.FileDescriptorLimit(),
