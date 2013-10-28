@@ -86,6 +86,27 @@ func (r *InstanceRegistry) Register(instance *Instance) {
 	r.emitter.Emit(applicationId, "Registering instance")
 	r.logger.Debug2f("Registering instance %s", instance.Id())
 
+	r.add_instance(instance)
+}
+
+func (r *InstanceRegistry) Unregister(instance *Instance) {
+	applicationId := instance.ApplicationId()
+
+	r.emitter.Emit(applicationId, "Removing instance")
+	r.logger.Debug2f("Removing instance %s", instance.Id())
+
+	r.remove_instance(instance)
+}
+
+func (r *InstanceRegistry) ChangeInstanceId(instance *Instance) {
+	r.remove_instance(instance)
+	instance.SetId()
+	r.add_instance(instance)
+}
+
+func (r *InstanceRegistry) add_instance(instance *Instance) {
+	applicationId := instance.ApplicationId()
+
 	r.Lock()
 	defer r.Unlock()
 
@@ -99,12 +120,8 @@ func (r *InstanceRegistry) Register(instance *Instance) {
 	instances[instance.Id()] = instance
 }
 
-func (r *InstanceRegistry) Unregister(instance *Instance) {
+func (r *InstanceRegistry) remove_instance(instance *Instance) {
 	applicationId := instance.ApplicationId()
-
-	r.emitter.Emit(applicationId, "Removing instance")
-	r.logger.Debug2f("Removing instance %s", instance.Id())
-
 	r.Lock()
 	defer r.Unlock()
 
@@ -317,7 +334,7 @@ func (r *InstanceRegistry) ToHash() map[string]map[string]interface{} {
 			apps = make(map[string]interface{})
 			result[i.ApplicationId()] = apps
 		}
-		apps[i.Id()] = i.attributes
+		apps[i.Id()] = i.attributes_and_stats()
 	}
 	return result
 }

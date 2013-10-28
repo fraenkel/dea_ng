@@ -156,6 +156,10 @@ func (i *Instance) CCPartition() string {
 	return i.attributes["cc_partition"].(string)
 }
 
+func (i *Instance) SetId() {
+	i.attributes["instance_id"] = utils.UUID()
+}
+
 func (i *Instance) Id() string {
 	return i.attributes["instance_id"].(string)
 }
@@ -272,11 +276,24 @@ func (i *Instance) IsAlive() bool {
 	return false
 }
 
-func (i *Instance) Used_memory_in_bytes() config.Memory {
+func (i *Instance) attributes_and_stats() map[string]interface{} {
+	retVal := make(map[string]interface{})
+	for k, v := range i.attributes {
+		retVal[k] = v
+	}
+
+	retVal["used_memory_in_bytes"] = i.UsedMemory()
+	retVal["used_disk_in_bytes"] = i.UsedDisk()
+	retVal["computed_pcpu"] = i.Computed_pcpu
+
+	return retVal
+}
+
+func (i *Instance) UsedMemory() config.Memory {
 	return i.statCollector.UsedMemory
 }
 
-func (i *Instance) Used_disk_in_bytes() config.Disk {
+func (i *Instance) UsedDisk() config.Disk {
 	return i.statCollector.UsedDisk
 }
 
@@ -679,10 +696,6 @@ func (i Instance) ContainerPort() uint32 {
 
 func (i Instance) HostPort() uint32 {
 	return i.Container().NetworkPorts[container.HOST_PORT]
-}
-
-func (i Instance) UsedMemory() config.Memory {
-	return i.statCollector.UsedMemory
 }
 
 func (i *Instance) staged_info() *map[string]interface{} {

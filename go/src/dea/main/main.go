@@ -769,6 +769,7 @@ func (b *bootstrap) HandleDeaUpdate(payload []byte) {
 		i.SetApplicationUris(uris)
 		if app_version != "" {
 			i.SetApplicationVersion(app_version)
+			b.instanceRegistry.ChangeInstanceId(i)
 		}
 	}
 }
