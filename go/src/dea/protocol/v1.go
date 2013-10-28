@@ -212,8 +212,8 @@ func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
 			Usage: FindDropletUsage{
 				Time:     time.Now().Format(time.RFC3339),
 				CPU:      i.Computed_pcpu(),
-				MemoryKB: uint64(i.Used_memory_in_bytes() / config.Kibi),
-				Disk:     i.Used_disk_in_bytes(),
+				MemoryKB: uint64(i.UsedMemory() / config.Kibi),
+				Disk:     i.UsedDisk(),
 			},
 		}
 

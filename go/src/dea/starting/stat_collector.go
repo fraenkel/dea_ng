@@ -14,6 +14,8 @@ type cpu_stat struct {
 	usage     uint64
 }
 
+var logger = utils.Logger("StatCollector", nil)
+
 type StatCollector struct {
 	container    *container.Container
 	ticker       *time.Ticker
@@ -61,7 +63,7 @@ func (s *StatCollector) run_stat_collector() {
 func (s *StatCollector) retrieve_stats(now time.Time) {
 	info, err := s.container.Info()
 	if err != nil {
-		utils.Logger("StatCollector").Errorf("stat-collector.info-retrieval.failed handle:%s error:%s",
+		logger.Errorf("stat-collector.info-retrieval.failed handle:%s error:%s",
 			s.container.Handle(), err.Error())
 		return
 	}

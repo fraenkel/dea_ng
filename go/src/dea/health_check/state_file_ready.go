@@ -39,7 +39,7 @@ func (s StateFileReady) check_state_file() {
 				return
 			}
 		} else {
-			utils.Logger("StateFileReady").Errorf("Failed parsing state file: ", err.Error())
+			utils.Logger("StateFileReady", nil).Errorf("Failed parsing state file: ", err.Error())
 		}
 	}
 

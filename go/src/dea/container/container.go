@@ -15,6 +15,8 @@ const (
 	CONTAINER_PORT = "container_port"
 )
 
+var logger = utils.Logger("Container", nil)
+
 type Container struct {
 	client       *warden.Client
 	NetworkPorts map[string]uint32
@@ -23,8 +25,8 @@ type Container struct {
 	hostIp       string
 }
 
-func NewContainer(wardenSocket string) Container {
-	return Container{
+func NewContainer(wardenSocket string) *Container {
+	return &Container{
 		client: warden.NewClient(&warden.ConnectionInfo{SocketPath: wardenSocket}),
 	}
 }
@@ -87,13 +89,13 @@ func (c *Container) Destroy() {
 	if c.handle == "" {
 		bytes := make([]byte, 512)
 		runtime.Stack(bytes, false)
-		utils.Logger("Container").Warnf("Container.destroy.failed: %v %s", c, bytes)
+		logger.Warnf("Container.destroy.failed: %v %s", c, bytes)
 		return
 	}
 
 	_, err := c.client.Destroy(c.handle)
 	if err != nil {
-		utils.Logger("Container").Warnf("Error destroying container: %s", err.Error())
+		logger.Warnf("Error destroying container: %s", err.Error())
 	}
 	c.handle = ""
 }
@@ -111,7 +113,7 @@ func (c *Container) Spawn(script string, file_descriptor_limit, nproc_limit uint
 		Rlimits: &resourceLimits}
 	rsp, err := c.client.SpawnWithRequest(&req)
 	if err != nil {
-		utils.Logger("Container").Warnf("Error spawning container: %s", err.Error())
+		logger.Warnf("Error spawning container: %s", err.Error())
 		return nil, err
 	}
 	return rsp, nil
@@ -120,7 +122,7 @@ func (c *Container) Spawn(script string, file_descriptor_limit, nproc_limit uint
 func (c *Container) Link(jobId uint32) (*warden.LinkResponse, error) {
 	rsp, err := c.client.Link(c.handle, jobId)
 	if err != nil {
-		utils.Logger("Container").Warnf("Error linking container: %s", err.Error())
+		logger.Warnf("Error linking container: %s", err.Error())
 		return nil, err
 	}
 	return rsp, nil
@@ -129,7 +131,7 @@ func (c *Container) Link(jobId uint32) (*warden.LinkResponse, error) {
 func (c *Container) CopyOut(sourcePath, destinationPath string, uid int) error {
 	_, err := c.client.CopyOut(c.handle, sourcePath, destinationPath, fmt.Sprintf("%d", uid))
 	if err != nil {
-		utils.Logger("Container").Warnf("Error CopyOut container: %s", err.Error())
+		logger.Warnf("Error CopyOut container: %s", err.Error())
 	}
 	return err
 }

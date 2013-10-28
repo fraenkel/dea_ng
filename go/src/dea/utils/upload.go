@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	steno "github.com/cloudfoundry/gosteno"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -21,7 +22,7 @@ func newHttpClient() *http.Client {
 	}
 }
 
-func HttpUpload(fieldName, srcFile, uri string) error {
+func HttpUpload(fieldName, srcFile, uri string, logger *steno.Logger) error {
 	file, err := os.Open(srcFile)
 	if err != nil {
 		return err
@@ -60,13 +61,13 @@ func HttpUpload(fieldName, srcFile, uri string) error {
 
 	if rsp.StatusCode != 200 {
 		err = errors.New(fmt.Sprintf("HTTP status (%s) : %d - %s", uri, rsp.StatusCode, rsp.Status))
-		Logger("Upload").Warnd(map[string]interface{}{"destination": uri, "error": err},
+		logger.Warnd(map[string]interface{}{"destination": uri, "error": err},
 			"upload.failed")
 
 		return err
 	}
 
-	Logger("Upload").Warnd(map[string]interface{}{"destination": uri},
+	logger.Warnd(map[string]interface{}{"destination": uri},
 		"upload.completion")
 
 	return nil

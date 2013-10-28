@@ -4,12 +4,13 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	steno "github.com/cloudfoundry/gosteno"
 	"io"
 	"net/http"
 	"os"
 )
 
-func HttpDownload(uri string, destination *os.File, sha1_expected string) error {
+func HttpDownload(uri string, destination *os.File, sha1_expected string, logger *steno.Logger) error {
 	defer destination.Close()
 
 	resp, err := http.Get(uri)
@@ -18,7 +19,6 @@ func HttpDownload(uri string, destination *os.File, sha1_expected string) error 
 	shaDigest := sha1.New()
 	_, err = io.Copy(io.MultiWriter(shaDigest, destination), resp.Body)
 
-	logger := Logger("Download")
 	if err != nil {
 		logger.Warnf("Error downloading: %s (Response status: unknown)", uri)
 		return err

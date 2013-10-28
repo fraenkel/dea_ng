@@ -15,6 +15,8 @@ const (
 	STAGING_INFO         = "staging_info.yml"
 )
 
+var stwLogger = utils.Logger("StagingTaskWorkspace", nil)
+
 type StagingTaskWorkspace struct {
 	baseDir               string
 	environmentProperties map[string]string
@@ -50,7 +52,7 @@ func (s StagingTaskWorkspace) write_config_file() error {
 		"buildpack_dirs":    s.buildpackManager.list(),
 	}
 
-	utils.Logger("StagingTaskWorkspace").Infod(plugin_config, "write_config_file.starting")
+	stwLogger.Infod(plugin_config, "write_config_file.starting")
 
 	bytes, err := goyaml.Marshal(plugin_config)
 	if err != nil {

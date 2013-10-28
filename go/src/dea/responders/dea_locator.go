@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var dealocatorLogger = utils.Logger("DeaLocator", nil)
+
 type DeaLocator struct {
 	mbus               cfmessagebus.MessageBus
 	id                 string
@@ -36,7 +38,7 @@ func NewDeaLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *dea.Res
 
 func (d DeaLocator) Start() {
 	if err := d.mbus.Subscribe("dea.locate", d.handleIt); err != nil {
-		utils.Logger("DeaLocator").Error(err.Error())
+		dealocatorLogger.Error(err.Error())
 		return
 	}
 
@@ -56,7 +58,7 @@ func (d DeaLocator) Advertise() {
 		d.resourceMgr.RemainingMemory(), d.resourceMgr.AppIdToCount())
 	bytes, err := json.Marshal(am)
 	if err != nil {
-		utils.Logger("DeaLocator").Error(err.Error())
+		dealocatorLogger.Error(err.Error())
 		return
 	}
 	d.mbus.Publish("dea.advertise", bytes)

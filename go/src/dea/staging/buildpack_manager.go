@@ -7,23 +7,25 @@ import (
 	"path"
 )
 
+var bpMgrLogger = utils.Logger("BuildpackManager", nil)
+
 type BuildpackManager struct {
 	adminBuildpacks_dir  string
 	systemBuildpacks_dir string
-	admin_buildpacks      []StagingBuildpack
-	buildpacks_in_use     []StagingBuildpack
+	admin_buildpacks     []StagingBuildpack
+	buildpacks_in_use    []StagingBuildpack
 }
 
 func NewBuildpackManager(admin_buildpacks_dir, system_buildpacks_dir string, admin_buildpacks, buildpacks_in_use []StagingBuildpack) BuildpackManager {
 	bpMgr := BuildpackManager{
 		adminBuildpacks_dir:  admin_buildpacks_dir,
 		systemBuildpacks_dir: system_buildpacks_dir,
-		admin_buildpacks:      admin_buildpacks,
-		buildpacks_in_use:     buildpacks_in_use,
+		admin_buildpacks:     admin_buildpacks,
+		buildpacks_in_use:    buildpacks_in_use,
 	}
-	
+
 	os.MkdirAll(bpMgr.admin_buildpacks_dir(), 0755)
-	
+
 	return bpMgr
 }
 
@@ -42,7 +44,7 @@ func (bpMgr BuildpackManager) download() {
 func (bpMgr BuildpackManager) clean() {
 	for _, bp := range bpMgr.buildpacks_needing_deletion() {
 		if err := os.RemoveAll(bp); err != nil {
-			utils.Logger("BuildpackManager").Errorf("Delete failed for %s, err: %s", bp, err.Error())
+			bpMgrLogger.Errorf("Delete failed for %s, err: %s", bp, err.Error())
 		}
 	}
 }
@@ -95,7 +97,7 @@ func (bpMgr BuildpackManager) system_buildpack_paths() []string {
 func collectChildrenDirs(path string) []string {
 	children, err := ioutil.ReadDir(path)
 	if err != nil {
-		utils.Logger("BuildpackManager").Errorf("Enumerating children for %s, error: %s", path, err.Error())
+		bpMgrLogger.Errorf("Enumerating children for %s, error: %s", path, err.Error())
 		return []string{}
 	}
 

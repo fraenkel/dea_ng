@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var logger = Logger("Utils", nil)
+
 func Repeat(what func(), delay time.Duration) *time.Ticker {
 	ticker := time.NewTicker(delay)
 
@@ -84,13 +86,13 @@ func Yaml_Load(path string, result interface{}) error {
 	if File_Exists(path) {
 		bytes, err := ioutil.ReadFile(path)
 		if err != nil {
-			Logger("Utils").Warnf("Failed to read %s: %s", path, err.Error())
+			logger.Warnf("Failed to read %s: %s", path, err.Error())
 			return err
 		}
 
 		err = goyaml.Unmarshal(bytes, result)
 		if err != nil {
-			Logger("Utils").Warnf("Failed to unmarshal %s: %s", path, err.Error())
+			logger.Warnf("Failed to unmarshal %s: %s", path, err.Error())
 			return err
 		}
 	}

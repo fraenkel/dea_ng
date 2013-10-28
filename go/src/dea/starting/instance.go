@@ -125,23 +125,21 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		attributes:  attributes,
 		state:       STATE_BORN,
 		exitStatus:  -1,
-		logger:      steno.NewLogger("Instance"),
 		localIp:     localIp,
 		crashesPath: config.CrashesPath,
+		Task:        task.NewTask(config.WardenSocket, nil),
 	}
 
 	if config != nil {
 		instance.hooks = config.Hooks
 	}
 
-	for k, v := range instance.attributes {
-		instance.logger.Set(k, v)
-	}
+	instance.Logger = utils.Logger("Instance", instance.attributes)
 
 	handle := instance.attributes["warden_handle"].(string)
 	hostPort := instance.attributes["instance_host_port"].(uint32)
 	containerPort := instance.attributes["instance_container_port"].(uint32)
-	instance.Container().Setup(handle, hostPort, containerPort)
+	instance.Container.Setup(handle, hostPort, containerPort)
 
 	return instance
 }
@@ -328,14 +326,14 @@ func (i *Instance) setup_crash_handler() {
 }
 
 func (i *Instance) promise_crash_handler() error {
-	if i.Container().Handle() != "" {
+	if i.Container.Handle() != "" {
 		err := i.promise_copy_out()
 		if err != nil {
 			return err
 		}
 		i.Promise_destroy()
 
-		i.Container().CloseAllConnections()
+		i.Container.CloseAllConnections()
 	}
 
 	return nil
@@ -412,9 +410,9 @@ func (i *Instance) promise_container() error {
 	bindMount := warden.CreateRequest_BindMount{SrcPath: &bindPath, DstPath: &bindPath}
 	bindMounts := []*warden.CreateRequest_BindMount{&bindMount}
 
-	err := i.Container().Create(bindMounts, uint64(i.DiskLimit()), uint64(i.MemoryLimit()), true)
+	err := i.Container.Create(bindMounts, uint64(i.DiskLimit()), uint64(i.MemoryLimit()), true)
 	if err == nil {
-		i.attributes["warden_handle"] = i.Container().Handle()
+		i.attributes["warden_handle"] = i.Container.Handle()
 		err = i.promise_setup_environment()
 	}
 
@@ -508,7 +506,7 @@ func (i *Instance) promise_start() error {
 		start_script = start_script + "./startup;\nexit"
 	}
 
-	response, err := i.Container().Spawn(start_script, i.FileDescriptorLimit(), nproc_LIMIT, true)
+	response, err := i.Container.Spawn(start_script, i.FileDescriptorLimit(), nproc_LIMIT, true)
 	if err != nil {
 		return err
 	}
@@ -533,7 +531,7 @@ func (i *Instance) promise_exec_hook_script(key string) error {
 			}
 			script = append(script, string(bytes))
 			script = append(script, "exit")
-			_, err = i.Container().RunScript(strings.Join(script, "\n"))
+			_, err = i.Container.RunScript(strings.Join(script, "\n"))
 			return err
 		} else {
 			i.logger.Warnd(map[string]interface{}{"hook": key, "script_path": "script_path"},
@@ -555,7 +553,7 @@ func (i *Instance) promise_state(from []State, to State) error {
 
 func (i *Instance) promise_extract_droplet() error {
 	script := fmt.Sprintf("cd /home/vcap/ && tar zxf %s", i.droplet().Droplet_path())
-	_, err := i.Container().RunScript(script)
+	_, err := i.Container.RunScript(script)
 	return err
 }
 
@@ -565,7 +563,7 @@ func (i *Instance) promise_droplet_download() error {
 
 func (i *Instance) promise_setup_environment() error {
 	script := "cd / && mkdir -p home/vcap/app && chown vcap:vcap home/vcap/app && ln -s home/vcap/app /app"
-	_, err := i.Container().RunScript(script)
+	_, err := i.Container.RunScript(script)
 	return err
 }
 
@@ -595,7 +593,7 @@ func (i *Instance) setup_link() {
 }
 
 func (i *Instance) promise_link() (*warden.LinkResponse, error) {
-	rsp, err := i.Container().Link(i.attributes["warden_job_id"].(uint32))
+	rsp, err := i.Container.Link(i.attributes["warden_job_id"].(uint32))
 	if err == nil {
 		i.logger.Infod(map[string]interface{}{"exit_status": rsp.GetExitStatus()},
 			"droplet.warden.link.completed")
@@ -667,7 +665,7 @@ func (i *Instance) cancel_health_check() {
 
 func (i *Instance) promise_health_check() (bool, error) {
 	i.logger.Debug("droplet.health-check.get-container-info")
-	err := i.Container().Update_path_and_ip()
+	err := i.Container.Update_path_and_ip()
 	if err != nil {
 		i.logger.Errorf("droplet.health-check.container-info-failed: %s", err.Error())
 		return false, err
@@ -675,7 +673,7 @@ func (i *Instance) promise_health_check() (bool, error) {
 	}
 	i.logger.Debug("droplet.health-check.container-info-ok")
 
-	containerPath := i.Container().Path()
+	containerPath := i.Container.Path()
 	manifest, err := i.promise_read_instance_manifest(containerPath)
 	if err != nil {
 		return false, err
@@ -691,18 +689,18 @@ func (i *Instance) promise_health_check() (bool, error) {
 }
 
 func (i Instance) ContainerPort() uint32 {
-	return i.Container().NetworkPorts[container.CONTAINER_PORT]
+	return i.Container.NetworkPorts[container.CONTAINER_PORT]
 }
 
 func (i Instance) HostPort() uint32 {
-	return i.Container().NetworkPorts[container.HOST_PORT]
+	return i.Container.NetworkPorts[container.HOST_PORT]
 }
 
 func (i *Instance) staged_info() *map[string]interface{} {
 	if i.stagedInfo == nil {
 		tmpdir, err := ioutil.TempDir("", "instance")
 		if err != nil {
-			utils.Logger("Instance").Warnf("Failed to create a temporary directory: %s", err.Error())
+			i.Logger.Warnf("Failed to create a temporary directory: %s", err.Error())
 			return nil
 		}
 		defer os.RemoveAll(tmpdir)
@@ -757,8 +755,8 @@ func (i *Instance) Snapshot_attributes() map[string]interface{} {
 		"state": i.State(),
 
 		"warden_job_id":           i.attributes["warden_job_id"],
-		"warden_container_path":   i.Container().Path(),
-		"warden_host_ip":          i.Container().HostIp(),
+		"warden_container_path":   i.Container.Path(),
+		"warden_host_ip":          i.Container.HostIp(),
 		"instance_host_port":      i.HostPort(),
 		"instance_container_port": i.ContainerPort(),
 

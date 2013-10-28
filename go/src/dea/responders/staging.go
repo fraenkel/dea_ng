@@ -8,7 +8,10 @@ import (
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/go_cfmessagebus"
+	steno "github.com/cloudfoundry/gosteno"
 )
+
+var stagingLogger = utils.Logger("Staging", nil)
 
 type AppManager interface {
 	StartApp(map[string]interface{})
@@ -44,17 +47,17 @@ func (s Staging) Start() {
 		return
 	}
 	if err := s.mbus.ReplyToChannel("staging", s.handle); err != nil {
-		utils.Logger("Staging").Error(err.Error())
+		stagingLogger.Error(err.Error())
 		return
 	}
 
 	if err := s.mbus.ReplyToChannel("staging."+s.id+".start", s.handle); err != nil {
-		utils.Logger("Staging").Error(err.Error())
+		stagingLogger.Error(err.Error())
 		return
 	}
 
 	if err := s.mbus.ReplyToChannel("staging.stop", s.handle); err != nil {
-		utils.Logger("Staging").Error(err.Error())
+		stagingLogger.Error(err.Error())
 		return
 	}
 }
@@ -70,7 +73,7 @@ func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
 	var tmpVal interface{}
 	err := json.Unmarshal(payload, &tmpVal)
 	if err != nil {
-		utils.Logger("Staging").Errorf("Parsing failed: %s", err.Error)
+		stagingLogger.Errorf("Parsing failed: %s", err.Error)
 		return
 	}
 
@@ -78,9 +81,11 @@ func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
 	msg := staging.NewStagingMessage(data)
 	appId := data["app_id"].(string)
 
+	logger := logger_for_app(appId)
+
 	loggregator.Emit(appId, "staging.handle.start "+appId)
-	utils.Logger("Staging").Infof("staging.handle.start %v", msg)
-	task := staging.NewStagingTask(s.config, msg, buildpacksInUse(s.stagingRegistry), s.dropletRegistry)
+	logger.Infof("staging.handle.start %v", msg)
+	task := staging.NewStagingTask(s.config, msg, buildpacksInUse(s.stagingRegistry), s.dropletRegistry, logger)
 
 	s.stagingRegistry.Register(&task)
 
@@ -164,7 +169,7 @@ func respondTo(reply cfmessagebus.ReplyTo, params map[string]string) {
 	}
 
 	if bytes, err := json.Marshal(&data); err != nil {
-		utils.Logger("Staging").Errorf("Marshal failed with %v", data)
+		stagingLogger.Errorf("Marshal failed with %v", data)
 	} else {
 		reply.Respond(bytes)
 	}
@@ -185,4 +190,8 @@ func buildpacksInUse(stagingRegistry *staging.StagingTaskRegistry) []staging.Sta
 	}
 
 	return buildpacks
+}
+
+func logger_for_app(app_id string) *steno.Logger {
+	return utils.Logger("Staging", map[string]interface{}{"app_guid": app_id})
 }

@@ -9,6 +9,8 @@ import (
 	"strconv"
 )
 
+var rcLogger = utils.Logger("RouterClient", nil)
+
 type RouterClient struct {
 	config   *config.Config
 	mbus     cfmessagebus.MessageBus
@@ -52,7 +54,7 @@ func (r *RouterClient) UnregisterInstance(i *starting.Instance, opts map[string]
 func (r *RouterClient) Greet(callback func(response []byte)) error {
 	err := r.mbus.Request("router.greet", []byte{'{', '}'}, callback)
 	if err != nil {
-		utils.Logger("RouterClient").Errorf("greet error: %s", err.Error())
+		rcLogger.Errorf("greet error: %s", err.Error())
 	}
 	return err
 }
@@ -80,7 +82,7 @@ func (r *RouterClient) generate_directory_server_request(host string, port uint1
 func (r *RouterClient) publish(subject string, message interface{}) error {
 	bytes, err := json.Marshal(message)
 	if err != nil {
-		utils.Logger("RouterClient").Errorf("%s error: %s", subject, err.Error())
+		rcLogger.Errorf("%s error: %s", subject, err.Error())
 		return err
 	}
 

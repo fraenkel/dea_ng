@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var stagingLocatorLogger = utils.Logger("StagingLocator", nil)
+
 type StagingLocator struct {
 	mbus               cfmessagebus.MessageBus
 	id                 string
@@ -36,7 +38,7 @@ func NewStagingLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *dea
 
 func (s StagingLocator) Start() {
 	if err := s.mbus.Subscribe("staging.locate", s.handleIt); err != nil {
-		utils.Logger("StagingLocator").Error(err.Error())
+		stagingLocatorLogger.Error(err.Error())
 		return
 	}
 	s.advertiseTicker = utils.Repeat(s.Advertise, s.advertiseIntervals*time.Second)
@@ -56,7 +58,7 @@ func (s StagingLocator) Advertise() {
 		s.resourceMgr.RemainingMemory(), nil)
 	bytes, err := json.Marshal(am)
 	if err != nil {
-		utils.Logger("StagingLocator").Error(err.Error())
+		stagingLocatorLogger.Error(err.Error())
 		return
 	}
 	s.mbus.Publish("staging.advertise", bytes)

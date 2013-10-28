@@ -2,6 +2,7 @@ package droplet
 
 import (
 	"dea/utils"
+	steno "github.com/cloudfoundry/gosteno"
 	"io/ioutil"
 	"os"
 	"path"
@@ -15,6 +16,7 @@ const droplet_basename = "droplet.tgz"
 type Droplet struct {
 	baseDir string
 	sha1    string
+	logger  *steno.Logger
 	mutex   sync.Mutex
 }
 
@@ -22,6 +24,7 @@ func NewDroplet(baseDir string, sha1 string) *Droplet {
 	d := &Droplet{
 		baseDir: baseDir,
 		sha1:    sha1,
+		logger:  utils.Logger("Droplet", map[string]interface{}{"sha1": sha1}),
 		mutex:   sync.Mutex{},
 	}
 
@@ -70,11 +73,11 @@ func (d *Droplet) Download(uri string) error {
 
 	download_destination, err := ioutil.TempFile("", "droplet-download.tgz")
 	if err != nil {
-		utils.Logger("Droplet").Warnf("Failed to create temp file, error: %s", err.Error())
+		d.logger.Warnf("Failed to create temp file, error: %s", err.Error())
 		return err
 	}
 
-	err = utils.HttpDownload(uri, download_destination, d.SHA1())
+	err = utils.HttpDownload(uri, download_destination, d.SHA1(), d.logger)
 	if err == nil {
 		os.MkdirAll(d.Droplet_dirname(), 0755)
 		os.Rename(download_destination.Name(), d.Droplet_path())
@@ -85,7 +88,7 @@ func (d *Droplet) Download(uri string) error {
 }
 
 func (d *Droplet) Local_copy(source string) error {
-	utils.Logger("Droplet").Debug("Copying local droplet to droplet registry")
+	d.logger.Debug("Copying local droplet to droplet registry")
 	return utils.CopyFile(source, d.Droplet_path())
 }
 
@@ -96,11 +99,11 @@ func (d *Droplet) Destroy() {
 	// Rename first to both prevent a new instance from referencing a file
 	// that is about to be deleted and to avoid doing a potentially expensive
 	// operation on the reactor thread.
-	utils.Logger("Droplet").Debugf("Renaming %s to %s", dropletName, dir_to_remove)
+	d.logger.Debugf("Renaming %s to %s", dropletName, dir_to_remove)
 	os.Rename(dropletName, dir_to_remove)
 
 	go func() {
-		utils.Logger("Droplet").Debugf("Removing %s", dir_to_remove)
+		d.logger.Debugf("Removing %s", dir_to_remove)
 		os.RemoveAll(dir_to_remove)
 	}()
 }
