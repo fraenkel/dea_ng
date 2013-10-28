@@ -48,7 +48,7 @@ func (bpdl AdminBuildpackDownloader) download_buildpack(buildpack StagingBuildpa
 
 	defer os.RemoveAll(file.Name())
 
-	err = utils.HttpDownload(buildpack.url.String(), file, "", bpdlLogger)
+	err = utils.HttpDownload(buildpack.url.String(), file, nil, bpdlLogger)
 	if err != nil {
 		return err
 	}

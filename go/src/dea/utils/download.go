@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"errors"
 	"fmt"
@@ -10,10 +11,14 @@ import (
 	"os"
 )
 
-func HttpDownload(uri string, destination *os.File, sha1_expected string, logger *steno.Logger) error {
+func HttpDownload(uri string, destination *os.File, sha1_expected []byte, logger *steno.Logger) error {
 	defer destination.Close()
 
 	resp, err := http.Get(uri)
+	if err != nil {
+		logger.Warnf("Get error: %s %s", uri, err.Error())
+		return err
+	}
 	defer resp.Body.Close()
 
 	shaDigest := sha1.New()
@@ -27,13 +32,12 @@ func HttpDownload(uri string, destination *os.File, sha1_expected string, logger
 	context := make(map[string]interface{})
 	context["droplet_uri"] = uri
 
-	destination.Close()
 	http_status := resp.StatusCode
 	context["droplet_http_status"] = http_status
 
 	if http_status == http.StatusOK {
-		sha1_actual := fmt.Sprintf("%x", shaDigest.Sum(nil))
-		if sha1_expected == "" || sha1_expected == sha1_actual {
+		sha1_actual := shaDigest.Sum(nil)
+		if sha1_expected == nil || bytes.Equal(sha1_expected, sha1_actual) {
 			logger.Info("Download succeeded")
 			return nil
 		}

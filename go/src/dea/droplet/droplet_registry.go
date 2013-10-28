@@ -58,7 +58,10 @@ func (d *DropletRegistry) Put(sha1 string) {
 	d.Lock()
 	defer d.Unlock()
 
-	d.m[sha1] = NewDroplet(d.baseDir, sha1)
+	droplet, err := NewDroplet(d.baseDir, sha1)
+	if err == nil {
+		d.m[sha1] = droplet
+	}
 }
 
 func (d *DropletRegistry) Size() int {

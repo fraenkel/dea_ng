@@ -1,7 +1,9 @@
 package droplet
 
 import (
+	"bytes"
 	"dea/utils"
+	"encoding/hex"
 	steno "github.com/cloudfoundry/gosteno"
 	"io/ioutil"
 	"os"
@@ -15,15 +17,20 @@ const droplet_basename = "droplet.tgz"
 
 type Droplet struct {
 	baseDir string
-	sha1    string
+	sha1    []byte
 	logger  *steno.Logger
 	mutex   sync.Mutex
 }
 
-func NewDroplet(baseDir string, sha1 string) *Droplet {
+func NewDroplet(baseDir string, sha1 string) (*Droplet, error) {
+	shaBytes, err := hex.DecodeString(sha1)
+	if err != nil {
+		return nil, err
+	}
+	
 	d := &Droplet{
 		baseDir: baseDir,
-		sha1:    sha1,
+		sha1:    shaBytes,
 		logger:  utils.Logger("Droplet", map[string]interface{}{"sha1": sha1}),
 		mutex:   sync.Mutex{},
 	}
@@ -31,7 +38,7 @@ func NewDroplet(baseDir string, sha1 string) *Droplet {
 	// Make sure the directory exists
 	os.MkdirAll(d.Droplet_dirname(), 0777)
 
-	return d
+	return d, nil
 }
 
 func (d *Droplet) BaseDir() string {
@@ -39,7 +46,7 @@ func (d *Droplet) BaseDir() string {
 }
 
 func (d *Droplet) Droplet_dirname() string {
-	return path.Join(d.baseDir, d.sha1)
+	return path.Join(d.baseDir, hex.EncodeToString(d.sha1))
 }
 
 func (d *Droplet) Droplet_path() string {
@@ -53,12 +60,12 @@ func (d *Droplet) Exists() bool {
 	}
 
 	sha1, err := utils.SHA1Digest(d.Droplet_path())
-	return d.sha1 == string(sha1)
+	return bytes.Equal(d.sha1, sha1)
 }
 
-func (d *Droplet) SHA1() string {
-	return d.sha1
-}
+//func (d *Droplet) SHA1() []byte {
+//	return d.sha1
+//}
 
 func (d *Droplet) Download(uri string) error {
 	// ensure only one download is happening for a single droplet.
@@ -77,7 +84,7 @@ func (d *Droplet) Download(uri string) error {
 		return err
 	}
 
-	err = utils.HttpDownload(uri, download_destination, d.SHA1(), d.logger)
+	err = utils.HttpDownload(uri, download_destination, d.sha1, d.logger)
 	if err == nil {
 		os.MkdirAll(d.Droplet_dirname(), 0755)
 		os.Rename(download_destination.Name(), d.Droplet_path())

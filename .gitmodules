@@ -37,3 +37,9 @@
 [submodule "go/src/code.google.com/p/gogoprotobuf"]
 	path = go/src/code.google.com/p/gogoprotobuf
 	url = https://code.google.com/p/gogoprotobuf
+[submodule "go/src/github.com/onsi/ginkgo"]
+	path = go/src/github.com/onsi/ginkgo
+	url = https://github.com/onsi/ginkgo
+[submodule "go/src/github.com/onsi/gomega"]
+	path = go/src/github.com/onsi/gomega
+	url = https://github.com/onsi/gomega
