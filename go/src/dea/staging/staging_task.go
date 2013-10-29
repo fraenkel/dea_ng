@@ -407,11 +407,12 @@ func (s *StagingTask) promise_stage() error {
 	s.Logger.Debugd(map[string]interface{}{"script": script},
 		"staging.task.execute-staging")
 
-	err = utils.Timeout(func() error {
-		rsp, err := s.Container.RunScript(script)
-		s.loggregator_emit_result(rsp)
-		return err
-	}, s.stagingTimeout+s.staging_timeout_grace_period())
+	err = utils.Timeout(s.stagingTimeout+s.staging_timeout_grace_period(),
+		func() error {
+			rsp, err := s.Container.RunScript(script)
+			s.loggregator_emit_result(rsp)
+			return err
+		})
 
 	return err
 }

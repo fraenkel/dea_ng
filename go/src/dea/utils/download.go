@@ -8,21 +8,27 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 )
 
 func HttpDownload(uri string, destination *os.File, sha1_expected []byte, logger *steno.Logger) error {
 	defer destination.Close()
 
-	resp, err := http.Get(uri)
+	client := newHttpClient()
+	rsp, err := client.Get(uri)
 	if err != nil {
+		if urlErr, ok := err.(*url.Error); ok {
+			return urlErr.Err
+		}
+
 		logger.Warnf("Get error: %s %s", uri, err.Error())
 		return err
 	}
-	defer resp.Body.Close()
+	defer rsp.Body.Close()
 
 	shaDigest := sha1.New()
-	_, err = io.Copy(io.MultiWriter(shaDigest, destination), resp.Body)
+	_, err = io.Copy(io.MultiWriter(shaDigest, destination), rsp.Body)
 
 	if err != nil {
 		logger.Warnf("Error downloading: %s (Response status: unknown)", uri)
@@ -32,7 +38,7 @@ func HttpDownload(uri string, destination *os.File, sha1_expected []byte, logger
 	context := make(map[string]interface{})
 	context["droplet_uri"] = uri
 
-	http_status := resp.StatusCode
+	http_status := rsp.StatusCode
 	context["droplet_http_status"] = http_status
 
 	if http_status == http.StatusOK {

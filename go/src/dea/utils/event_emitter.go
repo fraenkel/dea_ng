@@ -4,6 +4,10 @@ type EventEmitter struct {
 	listeners map[interface{}][]func()
 }
 
+func NewEventEmitter() EventEmitter {
+	return EventEmitter{listeners: make(map[interface{}][]func())}
+}
+
 func (e EventEmitter) On(event interface{}, callback func()) {
 	cbs := e.listeners[event]
 	if cbs == nil {

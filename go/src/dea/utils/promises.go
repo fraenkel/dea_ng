@@ -16,20 +16,20 @@ func Parallel_promises(callbacks ...func() error) (result error) {
 			if err := curCB(); err != nil {
 				lock.Lock()
 				defer lock.Unlock()
-				if result != nil {
+				if result == nil {
 					result = err
 				}
 			}
 		}()
 	}
 	err := callbacks[0]()
-	lock.Lock()
-	defer lock.Unlock()
-	if result != nil {
+	
+	wg.Wait()
+	
+	if result == nil {
 		result = err
 	}
-
-	wg.Wait()
+		
 	return
 }
 

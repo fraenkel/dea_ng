@@ -142,11 +142,11 @@ func (r *InstanceRegistry) lookupInstance(instanceId string) *Instance {
 }
 
 func (r *InstanceRegistry) StartReapers() {
-	utils.Repeat(func() {
+	utils.Repeat(CRASHES_REAPER_INTERVAL_SECS, func() {
 		r.reapOrphanedCrashes()
 		r.reapCrashes()
 		r.reapCrashesUnderDiskPressure()
-	}, CRASHES_REAPER_INTERVAL_SECS)
+	})
 }
 
 func (r *InstanceRegistry) reapOrphanedCrashes() {

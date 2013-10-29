@@ -20,13 +20,13 @@ func SHA1Digest(src string) ([]byte, error) {
 
 func File_Exists(path string) bool {
 	_, err := os.Stat(path)
-	return os.IsExist(err)
+	return !os.IsNotExist(err)
 }
 
 func CopyFile(src, dst string) error {
 	s, err := os.Open(src)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer s.Close()
 

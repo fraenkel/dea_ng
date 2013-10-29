@@ -41,7 +41,7 @@ func (s StagingLocator) Start() {
 		stagingLocatorLogger.Error(err.Error())
 		return
 	}
-	s.advertiseTicker = utils.Repeat(s.Advertise, s.advertiseIntervals*time.Second)
+	s.advertiseTicker = utils.RepeatFixed(s.advertiseIntervals*time.Second, s.Advertise)
 }
 
 func (s StagingLocator) Stop() {

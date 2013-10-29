@@ -6,16 +6,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"time"
 )
 
-type BodyResponder struct {
+type DownloadResponder struct {
 	response []byte
 }
 
-func (br BodyResponder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (br DownloadResponder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(br.response)
 }
 
@@ -37,25 +39,9 @@ var _ = Describe("Download", func() {
 		os.RemoveAll(to_file.Name())
 	})
 
-	It("fails when the file isn't found", func() {
-		server := httptest.NewServer(http.NotFoundHandler())
-		defer server.Close()
-
-		err := HttpDownload(server.URL+"/droplet", to_file, sha, logger)
-		Expect(err.Error()).To(ContainSubstring("HTTP status: 404"))
-	})
-
-	It("should fail when response payload has invalid SHA1", func() {
-		server := httptest.NewServer(BodyResponder{[]byte("fooz")})
-		defer server.Close()
-
-		err := HttpDownload(server.URL+"/droplet", to_file, sha, logger)
-		Expect(err.Error()).To(ContainSubstring("SHA1 mismatch"))
-	})
-
 	It("should download the file if the sha1 matches", func() {
 		body := []byte("The Body")
-		server := httptest.NewServer(BodyResponder{body})
+		server := httptest.NewServer(DownloadResponder{body})
 		defer server.Close()
 
 		shaDigest := sha1.New()
@@ -72,7 +58,7 @@ var _ = Describe("Download", func() {
 	Context("when the sha is not given", func() {
 		It("does not verify the sha1", func() {
 			body := []byte("The Body")
-			server := httptest.NewServer(BodyResponder{body})
+			server := httptest.NewServer(DownloadResponder{body})
 			defer server.Close()
 
 			err := HttpDownload(server.URL+"/droplet", to_file, nil, logger)
@@ -82,5 +68,41 @@ var _ = Describe("Download", func() {
 			Expect(err).To(BeNil())
 			Expect(body).To(Equal(actualBody))
 		})
+	})
+
+	It("fails when the file isn't found", func() {
+		server := httptest.NewServer(http.NotFoundHandler())
+		defer server.Close()
+
+		err := HttpDownload(server.URL+"/droplet", to_file, sha, logger)
+		Expect(err.Error()).To(ContainSubstring("HTTP status: 404"))
+	})
+
+	It("should fail when response payload has invalid SHA1", func() {
+		server := httptest.NewServer(DownloadResponder{[]byte("fooz")})
+		defer server.Close()
+
+		err := HttpDownload(server.URL+"/droplet", to_file, sha, logger)
+		Expect(err.Error()).To(ContainSubstring("SHA1 mismatch"))
+	})
+
+	It("should fail when the destination is invalid", func() {
+		server := httptest.NewServer(DownloadResponder{[]byte("fooz")})
+		defer server.Close()
+
+		to_file.Close()
+		err := HttpDownload(server.URL+"/droplet", to_file, sha, logger)
+		Expect(err.Error()).To(ContainSubstring("bad file descriptor"))
+	})
+
+	It("should time out if the server is down", func() {
+		oldTimeouts := GetHttpTimeouts()
+		SetHttpTimeouts(HttpTimeouts{1 * time.Second, 1 * time.Second})
+		defer SetHttpTimeouts(oldTimeouts)
+
+		err := HttpDownload("http://1.2.3.4", to_file, sha, logger)
+		Expect(err).NotTo(BeNil())
+		netErr := err.(net.Error)
+		Expect(netErr.Timeout()).To(BeTrue())
 	})
 })

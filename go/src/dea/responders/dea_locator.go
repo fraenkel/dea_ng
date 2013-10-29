@@ -42,7 +42,7 @@ func (d DeaLocator) Start() {
 		return
 	}
 
-	d.advertiseTicker = utils.Repeat(d.Advertise, d.advertiseIntervals*time.Second)
+	d.advertiseTicker = utils.RepeatFixed(d.advertiseIntervals*time.Second, d.Advertise)
 }
 func (d DeaLocator) Stop() {
 	//nats.unsubscribe(@dea_locate_sid) if @dea_locate_sid

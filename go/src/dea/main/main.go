@@ -200,16 +200,16 @@ func (b *bootstrap) setupSweepers() {
 		hbInterval = DEFAULT_HEARTBEAT_INTERVAL
 	}
 
-	b.heartbeatTicker = utils.Repeat(func() {
+	b.heartbeatTicker = utils.RepeatFixed(hbInterval, func() {
 		b.sendHeartbeat(b.instanceRegistry.Instances())
-	}, hbInterval)
+	})
 
 	// Ensure we keep around only the most recent crash for short amount of time
 	b.instanceRegistry.StartReapers()
 
-	utils.Repeat(func() {
+	utils.Repeat(DROPLET_REAPER_INTERVAL, func() {
 		b.reapUnreferencedDroplets()
-	}, DROPLET_REAPER_INTERVAL)
+	})
 }
 
 func (b *bootstrap) stopSweepers() {
@@ -469,7 +469,7 @@ func (b *bootstrap) setupVarz() {
 
 	b.varz = varz
 
-	utils.Repeat(b.periodic_varz_update, DEFAULT_HEARTBEAT_INTERVAL)
+	utils.Repeat(DEFAULT_HEARTBEAT_INTERVAL, b.periodic_varz_update)
 }
 
 func (b *bootstrap) isEvacuating() bool {
@@ -691,7 +691,7 @@ func (b *bootstrap) HandleRouterStart(payload []byte) {
 		if b.registrationTicker != nil {
 			b.registrationTicker.Stop()
 		}
-		utils.Repeat(func() { b.register_routes() }, interval*time.Second)
+		utils.RepeatFixed(interval*time.Second, func() { b.register_routes() })
 	}
 
 }

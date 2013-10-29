@@ -18,7 +18,7 @@ var logger = utils.Logger("StatCollector", nil)
 
 type StatCollector struct {
 	container    *container.Container
-	ticker       *time.Ticker
+	timer        *time.Timer
 	UsedMemory   config.Memory
 	UsedDisk     config.Disk
 	ComputedPCPU float32
@@ -33,12 +33,11 @@ func NewStatCollector(container *container.Container) *StatCollector {
 }
 
 func (s *StatCollector) start() bool {
-	if s.ticker != nil {
+	if s.timer != nil {
 		return false
 	}
 
-	s.ticker = utils.Repeat(func() { s.run_stat_collector() },
-		StatCollector_INTERVAL)
+	s.timer = utils.Repeat(StatCollector_INTERVAL, func() { s.run_stat_collector() })
 
 	s.run_stat_collector()
 
@@ -47,15 +46,15 @@ func (s *StatCollector) start() bool {
 }
 
 func (s *StatCollector) stop() {
-	if s.ticker != nil {
-		s.ticker.Stop()
-		s.ticker = nil
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
 	}
 }
 
 func (s *StatCollector) run_stat_collector() {
 	s.retrieve_stats(time.Now())
-	if s.ticker == nil {
+	if s.timer == nil {
 		s.start()
 	}
 }

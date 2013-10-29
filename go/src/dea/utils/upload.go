@@ -1,26 +1,16 @@
 package utils
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	steno "github.com/cloudfoundry/gosteno"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 )
-
-func newHttpClient() *http.Client {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	return &http.Client{
-		Transport: tr,
-	}
-}
 
 func HttpUpload(fieldName, srcFile, uri string, logger *steno.Logger) error {
 	file, err := os.Open(srcFile)
@@ -34,6 +24,7 @@ func HttpUpload(fieldName, srcFile, uri string, logger *steno.Logger) error {
 	go func() {
 		defer bodyWriter.Close()
 		defer file.Close()
+		
 		part, err := multiWriter.CreateFormFile(fieldName, filepath.Base(srcFile))
 		if err != nil {
 			errChan <- err
@@ -52,10 +43,15 @@ func HttpUpload(fieldName, srcFile, uri string, logger *steno.Logger) error {
 	client := newHttpClient()
 	rsp, err := client.Do(req)
 	if err != nil {
+		if urlErr, ok := err.(*url.Error); ok {
+			return urlErr.Err
+		}
+
 		bodyErr := <-errChan
 		if bodyErr != nil {
 			return bodyErr
 		}
+		
 		return err
 	}
 

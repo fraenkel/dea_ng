@@ -11,7 +11,17 @@ import (
 
 var logger = Logger("Utils", nil)
 
-func Repeat(what func(), delay time.Duration) *time.Ticker {
+func Repeat(delay time.Duration, what func()) *time.Timer {
+	var timer *time.Timer
+	timer = time.AfterFunc(delay, func() {
+		what()
+		timer.Reset(delay)
+	})
+
+	return timer
+}
+
+func RepeatFixed(delay time.Duration, what func()) *time.Ticker {
 	ticker := time.NewTicker(delay)
 
 	go func() {
@@ -26,7 +36,7 @@ func Repeat(what func(), delay time.Duration) *time.Ticker {
 	return ticker
 }
 
-func Timeout(what func() error, delay time.Duration) error {
+func Timeout(delay time.Duration, what func() error) error {
 	ch := make(chan error, 1)
 	go func() {
 		ch <- what()
@@ -41,33 +51,6 @@ func Timeout(what func() error, delay time.Duration) error {
 	}
 
 	return err
-}
-
-func Intersection(a []string, b []string) []string {
-	max := len(a)
-	big, small := a, b
-	if len(b) > len(a) {
-		max = len(b)
-		big, small = b, a
-	}
-
-	intersection := make([]string, 0, max)
-	// loop over smaller set
-	for _, elem := range big {
-		if Contains(small, elem) {
-			intersection = append(intersection, elem)
-		}
-	}
-	return intersection
-}
-
-func Contains(a []string, e string) bool {
-	for _, elem := range a {
-		if e == elem {
-			return true
-		}
-	}
-	return false
 }
 
 func UUID() string {
