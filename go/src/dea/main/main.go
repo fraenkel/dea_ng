@@ -122,7 +122,7 @@ func (b bootstrap) setup() error {
 	b.localIp = localIp
 
 	b.directoryServer, err = ds.NewDirectoryServerV1(localIp, config.DirectoryServer.V1Port,
-		b.instanceRegistry)
+		ds.NewDirectory(b.instanceRegistry))
 	if err != nil {
 		return err
 	}

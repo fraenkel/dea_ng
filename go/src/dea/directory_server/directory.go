@@ -15,7 +15,7 @@ func NewDirectory(instanceRegistry *starting.InstanceRegistry) *Directory {
 	}
 }
 
-func (dir *Directory) Handle(w http.ResponseWriter) {
+func (dir *Directory) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Not Implemented", http.StatusNotImplemented)
 }
 

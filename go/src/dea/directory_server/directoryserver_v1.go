@@ -1,52 +1,50 @@
 package directory_server
 
 import (
-	"dea/starting"
 	"encoding/base64"
 	"github.com/nu7hatch/gouuid"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 )
 
 type DirectoryServerV1 struct {
-	host             string
-	Port             uint16
-	Uri              string
-	Credentials      []string
-	instanceRegistry *starting.InstanceRegistry
-	uuid             *uuid.UUID
+	host        string
+	Port        uint16
+	Uri         string
+	Credentials []string
+	handler     http.Handler
+	listener    net.Listener
+	uuid        *uuid.UUID
 }
 
-func NewDirectoryServerV1(localIp string, port uint16, instanceRegistry *starting.InstanceRegistry) (*DirectoryServerV1, error) {
-	address := localIp + ":" + strconv.Itoa(int(port))
+func NewDirectoryServerV1(localIp string, port uint16, handler http.Handler) (*DirectoryServerV1, error) {
 	dirServer := &DirectoryServerV1{
-		host:             localIp,
-		Port:             port,
-		Uri:              "http://" + address + "/instances",
-		Credentials:      []string{},
-		instanceRegistry: instanceRegistry,
+		host:    localIp,
+		Port:    port,
+		handler: handler,
 	}
 
+	creds := make([]string, 2)
 	u, err := uuid.NewV4()
 	if err != nil {
 		return nil, err
 	}
-	dirServer.Credentials[0] = u.String()
+	creds[0] = u.String()
 
 	u, err = uuid.NewV4()
 	if err != nil {
 		return nil, err
 	}
-	dirServer.Credentials[1] = u.String()
+	creds[1] = u.String()
 
 	dirServer.uuid, err = uuid.NewV4()
 	if err != nil {
 		return nil, err
 	}
 
+	dirServer.Credentials = creds
 	return dirServer, nil
 }
 
@@ -57,15 +55,29 @@ func (d *DirectoryServerV1) Start() error {
 		return err
 	}
 
-	err = http.Serve(listener, d)
-	if err != nil {
-		return err
+	d.listener = listener
+	listenAddr := listener.Addr().String()
+	d.Uri = "http://" + listenAddr + "/instances"
+	if d.Port == 0 {
+		_, listenerPort, err := net.SplitHostPort(listenAddr)
+		if err == nil {
+			port, err := strconv.ParseUint(listenerPort, 10, 16)
+			if err == nil {
+				d.Port = uint16(port)
+			}
+		}
 	}
+
+	go http.Serve(d.listener, d)
 
 	return nil
 }
 
-var instancesPath, _ = url.Parse("/instances")
+func (d *DirectoryServerV1) Stop() {
+	d.listener.Close()
+}
+
+const instancesPath = "/instances"
 
 func (dirServer *DirectoryServerV1) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
@@ -79,6 +91,7 @@ func (dirServer *DirectoryServerV1) ServeHTTP(w http.ResponseWriter, r *http.Req
 		unauthorized(w)
 		return
 	}
+
 	pair := strings.SplitN(string(b), ":", 2)
 	if len(pair) != 2 {
 		unauthorized(w)
@@ -88,8 +101,8 @@ func (dirServer *DirectoryServerV1) ServeHTTP(w http.ResponseWriter, r *http.Req
 	if len(pair) != len(dirServer.Credentials) {
 		unauthorized(w)
 		return
-
 	}
+
 	for i, v := range dirServer.Credentials {
 		if pair[i] != v {
 			unauthorized(w)
@@ -97,8 +110,8 @@ func (dirServer *DirectoryServerV1) ServeHTTP(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if r.Method == "GET" && r.URL == instancesPath {
-		NewDirectory(dirServer.instanceRegistry).Handle(w)
+	if r.Method == "GET" && r.URL.String() == instancesPath {
+		dirServer.handler.ServeHTTP(w, r)
 	} else {
 		http.Error(w, "Not Found", http.StatusNotFound)
 	}
