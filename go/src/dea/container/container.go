@@ -26,8 +26,23 @@ type Container struct {
 }
 
 func NewContainer(wardenSocket string) *Container {
+	return New(&warden.ConnectionInfo{SocketPath: wardenSocket})
+}
+
+func New(cp warden.ConnectionProvider) *Container {
+	client := warden.NewClient(cp)
+	if client == nil {
+		return nil
+	}
+
+	if err := client.Connect(); err != nil {
+		logger.Errorf("Connect failed: %s", err.Error())
+		return nil
+	}
+
 	return &Container{
-		client: warden.NewClient(&warden.ConnectionInfo{SocketPath: wardenSocket}),
+		client:       client,
+		NetworkPorts: make(map[string]uint32),
 	}
 }
 
@@ -40,7 +55,7 @@ func (c *Container) Setup(handle string, hostPort, containerPort uint32) {
 func (c *Container) RunScript(script string) (*warden.RunResponse, error) {
 	response, err := c.client.Run(c.handle, script)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
 
 	if *response.ExitStatus > 0 {
@@ -48,13 +63,18 @@ func (c *Container) RunScript(script string) (*warden.RunResponse, error) {
 		data := map[string]string{
 			"script":      script,
 			"exit_status": exitStatus,
-			"stdout":      *response.Stdout,
-			"stderr":      *response.Stderr,
+		}
+
+		if response.Stdout != nil {
+			data["stdout"] = *response.Stdout
+		}
+		if response.Stderr != nil {
+			data["stderr"] = *response.Stderr
 		}
 
 		logger := steno.NewLogger("Container")
 		logger.Warnf("%s exited with status %s with data %v", script, exitStatus, data)
-		return nil, errors.New("Script exited with status " + exitStatus)
+		return response, errors.New("Script exited with status " + exitStatus)
 	}
 	return response, nil
 }
@@ -77,6 +97,7 @@ func (c *Container) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_l
 			err = c.setup_network()
 		}
 	}
+
 	if err != nil {
 		c.Destroy()
 		return err
@@ -105,27 +126,27 @@ func (c *Container) CloseAllConnections() {
 }
 
 func (c *Container) Spawn(script string, file_descriptor_limit, nproc_limit uint64, discard_output bool) (*warden.SpawnResponse, error) {
-	panic("Regenerate protobufs for discard output")
 
 	resourceLimits := warden.ResourceLimits{Nproc: &nproc_limit,
 		Nofile: &file_descriptor_limit}
 	req := warden.SpawnRequest{Handle: &c.handle, Script: &script,
-		Rlimits: &resourceLimits}
+		Rlimits:       &resourceLimits,
+		DiscardOutput: &discard_output}
 	rsp, err := c.client.SpawnWithRequest(&req)
 	if err != nil {
 		logger.Warnf("Error spawning container: %s", err.Error())
-		return nil, err
 	}
-	return rsp, nil
+
+	return rsp, err
 }
 
 func (c *Container) Link(jobId uint32) (*warden.LinkResponse, error) {
 	rsp, err := c.client.Link(c.handle, jobId)
 	if err != nil {
 		logger.Warnf("Error linking container: %s", err.Error())
-		return nil, err
 	}
-	return rsp, nil
+
+	return rsp, err
 }
 
 func (c *Container) CopyOut(sourcePath, destinationPath string, uid int) error {
