@@ -2,9 +2,9 @@ package starting
 
 import (
 	"dea/config"
+	emitter "dea/loggregator"
 	"dea/utils"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,8 +26,7 @@ type InstanceRegistry struct {
 	crashBlockUsageRatioThreshold float64
 	crashInodeUsageRatioThreshold float64
 	sync.Mutex
-	emitter emitter.Emitter
-	logger  *steno.Logger
+	logger *steno.Logger
 }
 
 type instances []*Instance
@@ -49,6 +48,8 @@ func (s byTimestamp) Swap(i, j int) {
 
 func NewInstanceRegistry(config *config.Config) *InstanceRegistry {
 	registry := &InstanceRegistry{
+		instances:                     make(map[string]*Instance),
+		instancesByAppId:              make(map[string]map[string]*Instance),
 		crashesPath:                   config.CrashesPath,
 		crashBlockUsageRatioThreshold: config.CrashBlockUsageRatioThreshold,
 		crashInodeUsageRatioThreshold: config.CrashInodeUsageRatioThreshold,
@@ -83,7 +84,7 @@ func (r *InstanceRegistry) InstancesForApplication(app_id string) map[string]*In
 
 func (r *InstanceRegistry) Register(instance *Instance) {
 	applicationId := instance.ApplicationId()
-	r.emitter.Emit(applicationId, "Registering instance")
+	emitter.Emit(applicationId, "Registering instance")
 	r.logger.Debug2f("Registering instance %s", instance.Id())
 
 	r.add_instance(instance)
@@ -92,7 +93,7 @@ func (r *InstanceRegistry) Register(instance *Instance) {
 func (r *InstanceRegistry) Unregister(instance *Instance) {
 	applicationId := instance.ApplicationId()
 
-	r.emitter.Emit(applicationId, "Removing instance")
+	emitter.Emit(applicationId, "Removing instance")
 	r.logger.Debug2f("Removing instance %s", instance.Id())
 
 	r.remove_instance(instance)
@@ -135,7 +136,7 @@ func (r *InstanceRegistry) remove_instance(instance *Instance) {
 	}
 }
 
-func (r *InstanceRegistry) lookupInstance(instanceId string) *Instance {
+func (r *InstanceRegistry) LookupInstance(instanceId string) *Instance {
 	r.Lock()
 	defer r.Unlock()
 	return r.instances[instanceId]
@@ -153,21 +154,18 @@ func (r *InstanceRegistry) reapOrphanedCrashes() {
 	r.logger.Debug2("Reaping orphaned crashes")
 
 	crashes := make([]string, 0)
-	filepath.Walk(r.crashesPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	if file, err := os.Open(r.crashesPath); err == nil {
+		fileInfos, _ := file.Readdir(-1)
+		file.Close()
+		for _, fileInfo := range fileInfos {
+			if fileInfo.IsDir() {
+				crashes = append(crashes, fileInfo.Name())
+			}
 		}
-		if path == r.crashesPath {
-			return nil
-		}
-		if info.IsDir() {
-			crashes = append(crashes, filepath.Base(path))
-		}
-		return filepath.SkipDir
-	})
+	}
 
 	for _, instanceId := range crashes {
-		instance := r.lookupInstance(instanceId)
+		instance := r.LookupInstance(instanceId)
 		if instance != nil {
 			r.reapCrash(instanceId, "orphaned", nil)
 		}
@@ -245,7 +243,7 @@ func (r *InstanceRegistry) hasDiskPressure() bool {
 }
 
 func (r *InstanceRegistry) reapCrash(instanceId string, reason string, callback func()) {
-	instance := r.lookupInstance(instanceId)
+	instance := r.LookupInstance(instanceId)
 
 	data := map[string]string{
 		"instance_id": instanceId,
@@ -258,7 +256,7 @@ func (r *InstanceRegistry) reapCrash(instanceId string, reason string, callback 
 		data["application_version"] = instance.ApplicationVersion()
 		data["application_name"] = instance.ApplicationName()
 
-		r.emitter.Emit(applicationId, "Removing crash for app with id "+applicationId)
+		emitter.Emit(applicationId, "Removing crash for app with id "+applicationId)
 	}
 
 	message := "Removing crash " + instanceId

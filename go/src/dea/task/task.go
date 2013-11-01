@@ -7,7 +7,7 @@ import (
 )
 
 type Task struct {
-	Container *container.Container
+	Container container.Container
 	Logger    *steno.Logger
 }
 

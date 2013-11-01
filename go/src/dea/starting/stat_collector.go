@@ -17,7 +17,7 @@ type cpu_stat struct {
 var logger = utils.Logger("StatCollector", nil)
 
 type StatCollector struct {
-	container    *container.Container
+	container    container.Container
 	timer        *time.Timer
 	UsedMemory   config.Memory
 	UsedDisk     config.Disk
@@ -26,7 +26,7 @@ type StatCollector struct {
 	cpu_samples []cpu_stat
 }
 
-func NewStatCollector(container *container.Container) *StatCollector {
+func NewStatCollector(container container.Container) *StatCollector {
 	collector := &StatCollector{container: container, cpu_samples: make([]cpu_stat, 0, 3)}
 
 	return collector

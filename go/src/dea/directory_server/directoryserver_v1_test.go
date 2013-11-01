@@ -59,7 +59,7 @@ var _ = Describe("Directory", func() {
 
 	It("should return a 200 for a valid request", func() {
 		client := http.Client{}
-		req, err := http.NewRequest("GET", server.Uri, nil)
+		req, err := http.NewRequest("GET", server.Uri+"/", nil)
 		req.SetBasicAuth(server.Credentials[0], server.Credentials[1])
 		rsp, err := client.Do(req)
 		Expect(err).To(BeNil())

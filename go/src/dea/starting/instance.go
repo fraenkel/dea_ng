@@ -56,7 +56,6 @@ type Transition struct {
 
 type Instance struct {
 	attributes      map[string]interface{}
-	state           State
 	exitStatus      int64
 	exitDescription string
 	logger          *steno.Logger
@@ -121,9 +120,10 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		attributes["private_instance_id"] = utils.UUID() + utils.UUID()
 	}
 
+	attributes["state"] = STATE_BORN
+
 	instance := &Instance{
 		attributes:  attributes,
-		state:       STATE_BORN,
 		exitStatus:  -1,
 		localIp:     localIp,
 		crashesPath: config.CrashesPath,
@@ -136,10 +136,14 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 
 	instance.Logger = utils.Logger("Instance", instance.attributes)
 
-	handle := instance.attributes["warden_handle"].(string)
-	hostPort := instance.attributes["instance_host_port"].(uint32)
-	containerPort := instance.attributes["instance_container_port"].(uint32)
-	instance.Container.Setup(handle, hostPort, containerPort)
+	handle, valid := instance.attributes["warden_handle"].(string)
+	hostPort, v := instance.attributes["instance_host_port"].(uint32)
+	valid = valid && v
+	containerPort, v := instance.attributes["instance_container_port"].(uint32)
+	valid = valid && v
+	if valid {
+		instance.Container.Setup(handle, hostPort, containerPort)
+	}
 
 	return instance
 }
@@ -267,11 +271,35 @@ func (i *Instance) ExitDescription() string {
 }
 
 func (i *Instance) IsAlive() bool {
-	switch i.state {
+	switch i.State() {
 	case STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING:
 		return true
 	}
 	return false
+}
+
+func (i *Instance) IsPathAvailable() bool {
+	switch i.State() {
+	case STATE_RUNNING, STATE_CRASHED:
+		return true
+	}
+	return false
+}
+
+func (i *Instance) Path() (string, error) {
+	ipath, exists := i.attributes["instance_path"].(string)
+	if exists {
+		return ipath, nil
+	}
+
+	if !i.IsPathAvailable() {
+		return "", errors.New("Instance path unavailable")
+	}
+	if i.Container.Path() == "" {
+		return "", errors.New("Warden container path not present")
+	}
+
+	return path.Clean(container_relative_path(i.Container.Path())), nil
 }
 
 func (i *Instance) attributes_and_stats() map[string]interface{} {
@@ -543,12 +571,12 @@ func (i *Instance) promise_exec_hook_script(key string) error {
 
 func (i *Instance) promise_state(from []State, to State) error {
 	for _, s := range from {
-		if i.state == s {
+		if i.State() == s {
 			i.SetState(to)
 			return nil
 		}
 	}
-	return errors.New("Cannot tranistion from " + string(i.state) + " to " + string(to))
+	return errors.New("Cannot tranistion from " + string(i.State()) + " to " + string(to))
 }
 
 func (i *Instance) promise_extract_droplet() error {
@@ -689,11 +717,11 @@ func (i *Instance) promise_health_check() (bool, error) {
 }
 
 func (i Instance) ContainerPort() uint32 {
-	return i.Container.NetworkPorts[container.CONTAINER_PORT]
+	return i.Container.NetworkPort(container.CONTAINER_PORT)
 }
 
 func (i Instance) HostPort() uint32 {
-	return i.Container.NetworkPorts[container.HOST_PORT]
+	return i.Container.NetworkPort(container.HOST_PORT)
 }
 
 func (i *Instance) staged_info() *map[string]interface{} {

@@ -2,7 +2,7 @@ package droplet
 
 import (
 	"os"
-	"path/filepath"
+
 	"sync"
 )
 
@@ -14,22 +14,15 @@ type DropletRegistry struct {
 
 func NewDropletRegistry(baseDir string) *DropletRegistry {
 	registry := &DropletRegistry{baseDir, sync.Mutex{}, make(map[string]*Droplet)}
-	baseName := filepath.Base(baseDir)
 
 	// Seed registry with available droplets
-	filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
-		if err == nil {
-			if info.IsDir() {
-				if info.Name() == baseName {
-					return nil
-				}
-
-				return filepath.SkipDir
-			}
-			registry.Put(filepath.Base(path))
+	if file, err := os.Open(baseDir); err == nil {
+		names, _ := file.Readdirnames(-1)
+		file.Close()
+		for _, name := range names {
+			registry.Put(name)
 		}
-		return nil
-	})
+	}
 
 	return registry
 }

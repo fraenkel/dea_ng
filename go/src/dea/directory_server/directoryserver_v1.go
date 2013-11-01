@@ -77,7 +77,7 @@ func (d *DirectoryServerV1) Stop() {
 	d.listener.Close()
 }
 
-const instancesPath = "/instances"
+const instancesPath = "/instances/"
 
 func (dirServer *DirectoryServerV1) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cloudfoundry/gordon"
-	steno "github.com/cloudfoundry/gosteno"
 	"runtime"
 	"strconv"
 )
@@ -15,21 +14,39 @@ const (
 	CONTAINER_PORT = "container_port"
 )
 
-var logger = utils.Logger("Container", nil)
+var logger = utils.Logger("sContainer", nil)
 
-type Container struct {
+type Container interface {
+	Setup(handle string, hostPort, containerPort uint32)
+	Create(bind_mounts []*warden.CreateRequest_BindMount, disk_limit uint64, memory_limit uint64, network bool) error
+	Stop() error
+	CloseAllConnections()
+	Destroy()
+	RunScript(script string) (*warden.RunResponse, error)
+	Spawn(script string, file_descriptor_limit, nproc_limit uint64, discard_output bool) (*warden.SpawnResponse, error)
+	Link(jobId uint32) (*warden.LinkResponse, error)
+	CopyOut(sourcePath, destinationPath string, uid int) error
+	Info() (*warden.InfoResponse, error)
+	Update_path_and_ip() error
+	Handle() string
+	Path() string
+	HostIp() string
+	NetworkPort(string) uint32
+}
+
+type sContainer struct {
 	client       *warden.Client
-	NetworkPorts map[string]uint32
+	networkPorts map[string]uint32
 	handle       string
 	path         string
 	hostIp       string
 }
 
-func NewContainer(wardenSocket string) *Container {
+func NewContainer(wardenSocket string) Container {
 	return New(&warden.ConnectionInfo{SocketPath: wardenSocket})
 }
 
-func New(cp warden.ConnectionProvider) *Container {
+func New(cp warden.ConnectionProvider) Container {
 	client := warden.NewClient(cp)
 	if client == nil {
 		return nil
@@ -40,19 +57,19 @@ func New(cp warden.ConnectionProvider) *Container {
 		return nil
 	}
 
-	return &Container{
+	return &sContainer{
 		client:       client,
-		NetworkPorts: make(map[string]uint32),
+		networkPorts: make(map[string]uint32),
 	}
 }
 
-func (c *Container) Setup(handle string, hostPort, containerPort uint32) {
+func (c *sContainer) Setup(handle string, hostPort, containerPort uint32) {
 	c.handle = handle
-	c.NetworkPorts[HOST_PORT] = hostPort
-	c.NetworkPorts[CONTAINER_PORT] = containerPort
+	c.networkPorts[HOST_PORT] = hostPort
+	c.networkPorts[CONTAINER_PORT] = containerPort
 }
 
-func (c *Container) RunScript(script string) (*warden.RunResponse, error) {
+func (c *sContainer) RunScript(script string) (*warden.RunResponse, error) {
 	response, err := c.client.Run(c.handle, script)
 	if err != nil {
 		return response, err
@@ -72,19 +89,18 @@ func (c *Container) RunScript(script string) (*warden.RunResponse, error) {
 			data["stderr"] = *response.Stderr
 		}
 
-		logger := steno.NewLogger("Container")
 		logger.Warnf("%s exited with status %s with data %v", script, exitStatus, data)
 		return response, errors.New("Script exited with status " + exitStatus)
 	}
 	return response, nil
 }
 
-func (c *Container) Stop() error {
+func (c *sContainer) Stop() error {
 	_, err := c.client.Stop(c.handle)
 	return err
 }
 
-func (c *Container) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_limit uint64, memory_limit uint64, network bool) error {
+func (c *sContainer) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_limit uint64, memory_limit uint64, network bool) error {
 	err := c.new_container_with_bind_mounts(bind_mounts)
 	if err != nil {
 		return err
@@ -106,11 +122,11 @@ func (c *Container) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_l
 	return nil
 }
 
-func (c *Container) Destroy() {
+func (c *sContainer) Destroy() {
 	if c.handle == "" {
 		bytes := make([]byte, 512)
 		runtime.Stack(bytes, false)
-		logger.Warnf("Container.destroy.failed: %v %s", c, bytes)
+		logger.Warnf("sContainer.destroy.failed: %v %s", c, bytes)
 		return
 	}
 
@@ -121,11 +137,11 @@ func (c *Container) Destroy() {
 	c.handle = ""
 }
 
-func (c *Container) CloseAllConnections() {
+func (c *sContainer) CloseAllConnections() {
 	c.client.Disconnect()
 }
 
-func (c *Container) Spawn(script string, file_descriptor_limit, nproc_limit uint64, discard_output bool) (*warden.SpawnResponse, error) {
+func (c *sContainer) Spawn(script string, file_descriptor_limit, nproc_limit uint64, discard_output bool) (*warden.SpawnResponse, error) {
 
 	resourceLimits := warden.ResourceLimits{Nproc: &nproc_limit,
 		Nofile: &file_descriptor_limit}
@@ -140,7 +156,7 @@ func (c *Container) Spawn(script string, file_descriptor_limit, nproc_limit uint
 	return rsp, err
 }
 
-func (c *Container) Link(jobId uint32) (*warden.LinkResponse, error) {
+func (c *sContainer) Link(jobId uint32) (*warden.LinkResponse, error) {
 	rsp, err := c.client.Link(c.handle, jobId)
 	if err != nil {
 		logger.Warnf("Error linking container: %s", err.Error())
@@ -149,7 +165,7 @@ func (c *Container) Link(jobId uint32) (*warden.LinkResponse, error) {
 	return rsp, err
 }
 
-func (c *Container) CopyOut(sourcePath, destinationPath string, uid int) error {
+func (c *sContainer) CopyOut(sourcePath, destinationPath string, uid int) error {
 	_, err := c.client.CopyOut(c.handle, sourcePath, destinationPath, fmt.Sprintf("%d", uid))
 	if err != nil {
 		logger.Warnf("Error CopyOut container: %s", err.Error())
@@ -157,7 +173,7 @@ func (c *Container) CopyOut(sourcePath, destinationPath string, uid int) error {
 	return err
 }
 
-func (c *Container) new_container_with_bind_mounts(bind_mounts []*warden.CreateRequest_BindMount) error {
+func (c *sContainer) new_container_with_bind_mounts(bind_mounts []*warden.CreateRequest_BindMount) error {
 	createRequest := warden.CreateRequest{BindMounts: bind_mounts}
 	response, err := c.client.CreateByRequest(&createRequest)
 	if err != nil {
@@ -168,31 +184,31 @@ func (c *Container) new_container_with_bind_mounts(bind_mounts []*warden.CreateR
 	return nil
 }
 
-func (c *Container) limit_disk(disk uint64) error {
+func (c *sContainer) limit_disk(disk uint64) error {
 	disk = disk * 1024 * 1024 // convert to bytes
 	_, err := c.client.LimitDisk(c.handle, disk)
 	return err
 }
 
-func (c *Container) limit_memory(mem uint64) error {
+func (c *sContainer) limit_memory(mem uint64) error {
 	mem = mem * 1024 * 1024 // convert to bytes
 	_, err := c.client.LimitMemory(c.handle, mem)
 	return err
 }
 
-func (c *Container) setup_network() error {
+func (c *sContainer) setup_network() error {
 	netResponse, err := c.client.NetIn(c.handle)
 	if err != nil {
 		return err
 	}
 
-	c.NetworkPorts[HOST_PORT] = netResponse.GetHostPort()
-	c.NetworkPorts[CONTAINER_PORT] = netResponse.GetContainerPort()
+	c.networkPorts[HOST_PORT] = netResponse.GetHostPort()
+	c.networkPorts[CONTAINER_PORT] = netResponse.GetContainerPort()
 
 	return nil
 }
 
-func (c *Container) Info() (*warden.InfoResponse, error) {
+func (c *sContainer) Info() (*warden.InfoResponse, error) {
 	if c.handle == "" {
 		return nil, errors.New("container handle must not be nil")
 	}
@@ -200,7 +216,7 @@ func (c *Container) Info() (*warden.InfoResponse, error) {
 	return c.client.Info(c.handle)
 }
 
-func (c *Container) Update_path_and_ip() error {
+func (c *sContainer) Update_path_and_ip() error {
 	rsp, err := c.Info()
 	if err != nil || rsp.GetContainerPath() == "" {
 		return errors.New("container path is not available")
@@ -212,14 +228,18 @@ func (c *Container) Update_path_and_ip() error {
 	return err
 }
 
-func (c *Container) Handle() string {
+func (c *sContainer) Handle() string {
 	return c.handle
 }
 
-func (c *Container) Path() string {
+func (c *sContainer) Path() string {
 	return c.path
 }
 
-func (c *Container) HostIp() string {
+func (c *sContainer) HostIp() string {
 	return c.hostIp
+}
+
+func (c *sContainer) NetworkPort(portName string) uint32 {
+	return c.networkPorts[portName]
 }
