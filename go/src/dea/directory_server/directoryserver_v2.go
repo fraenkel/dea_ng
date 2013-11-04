@@ -6,6 +6,7 @@ import (
 	"dea/starting"
 	"dea/utils"
 	"directoryserver"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	steno "github.com/cloudfoundry/gosteno"
@@ -31,13 +32,12 @@ type DirectoryServerV2 struct {
 	protocol      string
 	uuid          *uuid.UUID
 	domain        string
-	localIp       string
-	port          uint16
+	address       string
 	dirConfig     config.DirServerConfig
 	listener      net.Listener
 	instancepaths *instancePaths
 	stagingtasks  *stagingTasks
-	hmacHelper    *HMACHelper
+	hmacHelper    HMACHelper
 	logger        *steno.Logger
 }
 
@@ -56,14 +56,16 @@ func NewDirectoryServerV2(localIp string, domain string, config config.DirServer
 		protocol:   config.Protocol,
 		uuid:       dirUuid,
 		domain:     domain,
-		port:       config.V2Port,
+		address:    localIp + ":" + strconv.Itoa(int(config.V2Port)),
 		hmacHelper: NewHMACHelper(hmacKey[:]),
 		logger:     utils.Logger("directoryserver_v2", nil),
 	}, nil
 }
 
 func (ds *DirectoryServerV2) Port() uint16 {
-	return ds.port
+	_, port, _ := net.SplitHostPort(ds.address)
+	n, _ := strconv.ParseUint(port, 10, 16)
+	return uint16(n)
 }
 
 func (ds *DirectoryServerV2) Configure_endpoints(instanceRegistry *starting.InstanceRegistry, stagingTaskRegistry *staging.StagingTaskRegistry) {
@@ -72,22 +74,32 @@ func (ds *DirectoryServerV2) Configure_endpoints(instanceRegistry *starting.Inst
 }
 
 func (ds *DirectoryServerV2) Start() error {
-	address := ds.localIp + ":" + strconv.Itoa(int(ds.port))
-	listener, err := net.Listen("tcp", address)
+	listener, err := net.Listen("tcp", ds.address)
 	if err != nil {
 		return err
 	}
 	ds.listener = listener
+	ds.address = listener.Addr().String()
 
-	msg := fmt.Sprintf("Starting HTTP server at host:port %s", address)
+	msg := fmt.Sprintf("Starting HTTP server at host:port %s", ds.address)
 	ds.logger.Info(msg)
 
-	go http.Serve(listener, ds)
+	server := http.Server{
+		Handler:      ds,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+	}
+
+	go server.Serve(ds.listener)
+
 	return nil
 }
 
 func (ds *DirectoryServerV2) Stop() error {
-	return ds.listener.Close()
+	if ds.listener != nil {
+		return ds.listener.Close()
+	}
+	return nil
 }
 
 // If validation with the DEA is successful, the HTTP request is served.
@@ -265,7 +277,12 @@ func (ds *DirectoryServerV2) verify_hmaced_url(u *url.URL, params url.Values, pa
 		RawQuery: v.Encode(),
 	}
 
-	return ds.hmacHelper.Compare([]byte(params.Get("hmac")), hmacUrl.String())
+	hmacBytes, err := hex.DecodeString(params.Get("hmac"))
+	if err != nil {
+		return false
+	}
+
+	return ds.hmacHelper.Compare(hmacBytes, hmacUrl.String())
 }
 
 func (ds *DirectoryServerV2) verify_instance_file_url(u *url.URL, params url.Values) bool {
@@ -281,11 +298,21 @@ func (ds *DirectoryServerV2) hmaced_url_for(path string, params map[string]strin
 		}
 	}
 
-	verifiable_path_and_params := fmt.Sprintf("%s?%s", path, v.Encode())
+	u := url.URL{
+		Path:     path,
+		RawQuery: v.Encode(),
+	}
 
+	verifiable_path_and_params := u.String()
 	hmac := ds.hmacHelper.Create(verifiable_path_and_params)
-	v.Set("hmac", string(hmac))
+	v.Set("hmac", hex.EncodeToString(hmac))
 	params_with_hmac := v.Encode()
+	u = url.URL{
+		Scheme:   ds.protocol,
+		Host:     ds.External_hostname(),
+		Path:     path,
+		RawQuery: params_with_hmac,
+	}
 
-	return fmt.Sprintf("%s://%s%s?%s", ds.protocol, ds.External_hostname(), path, params_with_hmac)
+	return u.String()
 }

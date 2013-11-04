@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type DirectoryServerV1 struct {
@@ -68,7 +69,13 @@ func (d *DirectoryServerV1) Start() error {
 		}
 	}
 
-	go http.Serve(d.listener, d)
+	server := http.Server{
+		Handler:      d,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+	}
+
+	go server.Serve(d.listener)
 
 	return nil
 }
