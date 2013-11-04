@@ -3,9 +3,7 @@ package directory_server
 import (
 	cfg "dea/config"
 	"dea/container"
-	//	"dea/helpers"
 	"dea/starting"
-	//	"dea/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"

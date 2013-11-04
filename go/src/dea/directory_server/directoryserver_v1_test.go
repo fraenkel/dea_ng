@@ -1,8 +1,7 @@
-package directory_server_test
+package directory_server
 
 import (
 	cfg "dea/config"
-	. "dea/directory_server"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"net/http"

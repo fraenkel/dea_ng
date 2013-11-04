@@ -1,4 +1,4 @@
-package directory_server_test
+package directory_server
 
 import (
 	. "github.com/onsi/ginkgo"

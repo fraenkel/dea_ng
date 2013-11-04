@@ -1,7 +1,6 @@
-package directory_server_test
+package directory_server
 
 import (
-	. "dea/directory_server"
 	"encoding/hex"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

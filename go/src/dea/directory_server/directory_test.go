@@ -1,10 +1,9 @@
-package directory_server_test
+package directory_server
 
 import (
 	"bytes"
 	cfg "dea/config"
 	"dea/container"
-	. "dea/directory_server"
 	"dea/starting"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
