@@ -32,7 +32,11 @@ func (msg StagingMessage) task_id() string {
 }
 
 func (msg StagingMessage) properties() map[string]string {
-	return msg.message["properties"].(map[string]string)
+	if props, ok := msg.message["properties"].(map[string]string); ok {
+		return props
+	}
+
+	return nil
 }
 
 func (msg StagingMessage) buildpack_cache_upload_uri() *url.URL {
@@ -61,13 +65,15 @@ func (msg StagingMessage) start_message() *starting.StartMessage {
 }
 
 func (msg StagingMessage) AdminBuildpacks() []StagingBuildpack {
-	adminBuildpacks := msg.message["admin_buildpacks"].([]map[string]string)
-	buildpacks := make([]StagingBuildpack, 0, len(adminBuildpacks))
-	for _, b := range adminBuildpacks {
-		bpUrl, _ := url.Parse(b["url"])
-		buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"]})
+	if adminBuildpacks, ok := msg.message["admin_buildpacks"].([]map[string]string); ok {
+		buildpacks := make([]StagingBuildpack, 0, len(adminBuildpacks))
+		for _, b := range adminBuildpacks {
+			bpUrl, _ := url.Parse(b["url"])
+			buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"]})
+		}
+		return buildpacks
 	}
-	return buildpacks
+	return []StagingBuildpack{}
 }
 
 func (msg StagingMessage) staging_uri(key string) *url.URL {

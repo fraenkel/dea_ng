@@ -299,7 +299,7 @@ func (i *Instance) Path() (string, error) {
 		return "", errors.New("Warden container path not present")
 	}
 
-	return path.Clean(container_relative_path(i.Container.Path())), nil
+	return container_relative_path(i.Container.Path()), nil
 }
 
 func (i *Instance) attributes_and_stats() map[string]interface{} {

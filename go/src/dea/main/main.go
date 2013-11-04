@@ -127,7 +127,7 @@ func (b bootstrap) setup() error {
 		return err
 	}
 
-	b.directoryServerV2, err = ds.NewDirectoryServerV2(config.Domain, config.DirectoryServer.V2Port, config.DirectoryServer)
+	b.directoryServerV2, err = ds.NewDirectoryServerV2(localIp, config.Domain, config.DirectoryServer)
 	if err != nil {
 		return err
 	}

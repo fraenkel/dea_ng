@@ -10,6 +10,10 @@ type HMACHelper struct {
 }
 
 func NewHMACHelper(key []byte) *HMACHelper {
+	if key == nil {
+		return nil
+	}
+
 	return &HMACHelper{
 		key: key,
 	}
@@ -17,7 +21,8 @@ func NewHMACHelper(key []byte) *HMACHelper {
 
 func (h *HMACHelper) Create(message string) []byte {
 	hmac := hmac.New(sha512.New, h.key)
-	return hmac.Sum([]byte(message))
+	hmac.Write([]byte(message))
+	return hmac.Sum(nil)
 }
 
 func (h *HMACHelper) Compare(correct_hmac []byte, message string) bool {

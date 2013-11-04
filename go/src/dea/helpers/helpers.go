@@ -1,7 +1,7 @@
-package dea
+package helpers
 
 import (
-	"dea/util"
+	"dea/utils"
 )
 
 func valid_service_attributes(syslog_drain_url string) map[string]interface{} {
@@ -31,7 +31,7 @@ func valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 	attrs := map[string]interface{}{
 		"cc_partition": "partition",
 
-		"instance_id":    util.UUID(),
+		"instance_id":    utils.UUID(),
 		"instance_index": 37,
 
 		"application_id":      "37",
@@ -59,7 +59,7 @@ func valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 	return attrs
 }
 
-func valid_staging_attributes() map[string]interface{} {
+func Valid_staging_attributes() map[string]interface{} {
 	return map[string]interface{}{
 		"properties": map[string]interface{}{
 			"services":    []interface{}{},
@@ -71,7 +71,7 @@ func valid_staging_attributes() map[string]interface{} {
 			},
 		},
 		"app_id":           "app-guid",
-		"task_id":          util.UUID(),
+		"task_id":          utils.UUID(),
 		"download_uri":     "http://127.0.0.1:12346/download",
 		"upload_uri":       "http://127.0.0.1:12346/upload",
 		"staged_path":      "",

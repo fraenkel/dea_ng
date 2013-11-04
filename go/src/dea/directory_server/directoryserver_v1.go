@@ -116,7 +116,3 @@ func (dirServer *DirectoryServerV1) ServeHTTP(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Not Found", http.StatusNotFound)
 	}
 }
-
-func unauthorized(w http.ResponseWriter) {
-	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-}

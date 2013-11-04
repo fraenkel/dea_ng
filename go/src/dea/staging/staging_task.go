@@ -37,8 +37,8 @@ type StagingTask struct {
 }
 
 func NewStagingTask(config *config.Config, staging_message StagingMessage,
-	buildpacksInUse []StagingBuildpack, dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) StagingTask {
-	s := StagingTask{
+	buildpacksInUse []StagingBuildpack, dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) *StagingTask {
+	s := &StagingTask{
 		id:              staging_message.task_id(),
 		bindMounts:      config.BindMounts,
 		staging_message: staging_message,
@@ -530,6 +530,16 @@ func (s *StagingTask) DetectedBuildpack() string {
 
 func (s *StagingTask) DropletSHA1() string {
 	return s.dropletSha1
+}
+
+func (s *StagingTask) Path_in_container(pathSuffix string) string {
+	cPath := s.Container.Path()
+	if cPath == "" {
+		return ""
+	}
+
+	// Do not use path.Join since the result is Cleaned
+	return strings.Join([]string{cPath, "tmp", "rootfs", pathSuffix}, "/")
 }
 
 func (s *StagingTask) SetAfter_setup_callback(callback func(e error)) {

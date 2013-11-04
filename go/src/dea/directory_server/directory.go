@@ -88,21 +88,14 @@ func (dir *Directory) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // TODO: add correct response if not readable, not sure if 404 is the best option
 func list_path(dirReq dirRequest) {
-	file, err := os.Open(dirReq.path)
+	file, err := os.Stat(dirReq.path)
 	if err != nil {
 		entity_not_found(dirReq.w)
 		return
 	}
 
-	stat, err := file.Stat()
-	file.Close()
-	if err != nil {
-		entity_not_found(dirReq.w)
-		return
-	}
-
-	if stat.IsDir() {
-		list_directory(dirReq)
+	if file.IsDir() {
+		list_directory(dirReq.path, dirReq.path_info, dirReq.w)
 	} else {
 		http.ServeFile(dirReq.w, dirReq.r, dirReq.path)
 	}
@@ -110,20 +103,20 @@ func list_path(dirReq dirRequest) {
 	return
 }
 
-func list_directory(dirReq dirRequest) {
+func list_directory(path, path_info string, w http.ResponseWriter) {
 
-	root := len(strings.TrimLeft(dirReq.path_info, "/")) == 0
+	root := len(strings.TrimLeft(path_info, "/")) == 0
 
-	fileInfos, err := ioutil.ReadDir(dirReq.path)
+	fileInfos, err := ioutil.ReadDir(path)
 	if err != nil {
-		dirReq.w.WriteHeader(http.StatusInternalServerError)
-		dirReq.w.Write([]byte(err.Error()))
-		dirReq.w.Header().Set("Content-Length", strconv.Itoa(len(err.Error())))
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		w.Header().Set("Content-Length", strconv.Itoa(len(err.Error())))
 		return
 	}
 
-	dirReq.w.WriteHeader(http.StatusOK)
-	dirReq.w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/plain")
 	for _, fileInfo := range fileInfos {
 		basename := filepath.Base(fileInfo.Name())
 		// ignore B29 control files, only return defaults
@@ -139,7 +132,7 @@ func list_directory(dirReq dirRequest) {
 			size = filesize_format(fileInfo.Size())
 		}
 
-		_, err := dirReq.w.Write([]byte(fmt.Sprintf("%-35s %10s\n", basename, size)))
+		_, err := w.Write([]byte(fmt.Sprintf("%-35s %10s\n", basename, size)))
 		if err != nil {
 			return
 		}
@@ -194,12 +187,35 @@ func resolve_sym_link(dirReq *dirRequest) {
 	return
 }
 
+func unauthorized(w http.ResponseWriter) {
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
 func entity_not_found(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
 func forbidden(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusForbidden)
+}
+
+func bad_request(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusBadRequest)
+}
+
+func service_unavailable(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusServiceUnavailable)
+}
+
+// Writes the new error message in the HTTP response and sets the HTTP response
+// status code to 500.
+func writeServerErrorMessage(errorMessage string, w http.ResponseWriter) {
+	msg := fmt.Sprintf("Can't serve request due to error: %s", errorMessage)
+	http.Error(w, msg, http.StatusInternalServerError)
+}
+
+func writeServerError(err *error, w http.ResponseWriter) {
+	writeServerErrorMessage((*err).Error(), w)
 }
 
 var filesizes = []string{"bytes", "KB", "MB", "GB", "TB"}
