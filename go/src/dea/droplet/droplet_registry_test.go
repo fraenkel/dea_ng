@@ -1,51 +1,47 @@
 package droplet
 
 import (
-	"github.com/stretchr/testify/assert"
+	"encoding/hex"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"io/ioutil"
 	"os"
-	"strconv"
-	"testing"
 	"path"
+	"strconv"
 )
 
-func createTmpDir(t *testing.T) string {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "droplet_registry")
-	if err != nil {
-		t.Error(err)
-	}
-	return tmpDir
-}
+var _ = Describe("DropletRegistry", func() {
+	It("should retrieve droplets that are added", func() {
+		tmpDir, _ := ioutil.TempDir("", "dropletregistry")
+		defer os.RemoveAll(tmpDir)
 
-func TestRetrieveDroplet(t *testing.T) {
-	tmpDir := createTmpDir(t)
-	defer os.RemoveAll(tmpDir)
+		registry := NewDropletRegistry(tmpDir)
+		registry.Put("abcdef")
+		var d *Droplet = registry.Get("abcdef")
+		Expect(d).NotTo(BeNil())
+	})
 
-	registry := NewDropletRegistry(tmpDir)
-	registry.Put("atest")
-	var d *Droplet = registry.Get("atest")
-	assert.NotNil(t, d)
-}
+	It("should initialize with existing droplets", func() {
+		tmpDir, _ := ioutil.TempDir("", "dropletregistry")
+		defer os.RemoveAll(tmpDir)
 
-func TestInitializationWithDroplets(t *testing.T) {
-	tmpDir := createTmpDir(t)
-	defer os.RemoveAll(tmpDir)
+		var paths [3]string
 
-	var paths [3]string
+		for i := 0; i < 3; i++ {
+			paths[i] = path.Join(tmpDir, strconv.Itoa(i)+"0")
+		}
 
-	for i := 0; i < 3; i++ {
-		paths[i] = path.Join(tmpDir, strconv.Itoa(i))
-	}
+		for _, p := range paths {
+			os.MkdirAll(p, 0755)
+		}
+		registry := NewDropletRegistry(tmpDir)
+		Expect(registry.Size()).To(Equal(3))
 
-	for _, p := range paths {
-		os.Create(p)
-	}
-	registry := NewDropletRegistry(tmpDir)
-	assert.Equal(t, 3, registry.Size())
+		for _, p := range paths {
+			sha1 := path.Base(p)
+			droplet := registry.Get(sha1)
+			Expect(hex.EncodeToString(droplet.sha1)).To(Equal(sha1))
+		}
+	})
 
-	for _, p := range paths {
-		sha1 := path.Base(p)
-		droplet := registry.Get(sha1)
-		assert.Equal(t, sha1, droplet.Sha1())
-	}
-}
+})

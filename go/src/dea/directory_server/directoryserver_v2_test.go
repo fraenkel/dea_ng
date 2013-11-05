@@ -2,9 +2,9 @@ package directory_server
 
 import (
 	cfg "dea/config"
-	"dea/helpers"
 	"dea/staging"
 	"dea/starting"
+	"dea/testhelpers"
 	"dea/utils"
 	"encoding/hex"
 	. "github.com/onsi/ginkgo"

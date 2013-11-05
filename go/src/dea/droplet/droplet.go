@@ -27,7 +27,7 @@ func NewDroplet(baseDir string, sha1 string) (*Droplet, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	d := &Droplet{
 		baseDir: baseDir,
 		sha1:    shaBytes,
@@ -36,7 +36,10 @@ func NewDroplet(baseDir string, sha1 string) (*Droplet, error) {
 	}
 
 	// Make sure the directory exists
-	os.MkdirAll(d.Droplet_dirname(), 0777)
+	err = os.MkdirAll(d.Droplet_dirname(), 0777)
+	if err != nil {
+		return nil, err
+	}
 
 	return d, nil
 }

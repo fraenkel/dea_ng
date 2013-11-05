@@ -3,8 +3,8 @@ package directory_server
 import (
 	cfg "dea/config"
 	"dea/container"
-	"dea/helpers"
 	"dea/staging"
+	"dea/testhelpers"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

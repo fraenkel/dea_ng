@@ -27,9 +27,14 @@ func HttpDownload(uri string, destination *os.File, sha1_expected []byte, logger
 	}
 	defer rsp.Body.Close()
 
+	if rsp.StatusCode != http.StatusOK {
+		errMsg := fmt.Sprintf("Error downloading: %s (Response status: %s)", uri, rsp.Status)
+		logger.Warnf(errMsg)
+		return errors.New(errMsg)
+	}
+
 	shaDigest := sha1.New()
 	_, err = io.Copy(io.MultiWriter(shaDigest, destination), rsp.Body)
-
 	if err != nil {
 		logger.Warnf("Error downloading: %s (Response status: unknown)", uri)
 		return err
