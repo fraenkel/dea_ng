@@ -2,6 +2,9 @@ package health_check
 
 import (
 	"dea/utils"
+	"encoding/json"
+	"io/ioutil"
+	"os"
 	"time"
 )
 
@@ -31,14 +34,25 @@ func (s StateFileReady) check_state_file() {
 	}
 
 	if utils.File_Exists(s.path) {
-		var state map[string]interface{}
-		if err := utils.Yaml_Load(s.path, state); err == nil {
-			if state["state"] == "RUNNING" {
-				s.done = true
-				s.deferred.Success()
-				return
+		file, err := os.Open(s.path)
+		if err == nil {
+			bytes, err := ioutil.ReadAll(file)
+			file.Close()
+
+			if err == nil {
+				var state = make(map[string]interface{})
+				err = json.Unmarshal(bytes, &state)
+				if err == nil {
+					if state["state"] == "RUNNING" {
+						s.done = true
+						s.deferred.Success()
+						return
+					}
+				}
 			}
-		} else {
+		}
+
+		if err != nil {
 			utils.Logger("StateFileReady", nil).Errorf("Failed parsing state file: ", err.Error())
 		}
 	}
