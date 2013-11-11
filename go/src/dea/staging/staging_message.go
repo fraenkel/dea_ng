@@ -6,8 +6,8 @@ import (
 )
 
 type StagingMessage struct {
-	message      map[string]interface{}
-	startMessage *starting.StartMessage
+	message   map[string]interface{}
+	startData *starting.StartData
 }
 
 type StagingBuildpack struct {
@@ -55,13 +55,13 @@ func (msg StagingMessage) download_uri() *url.URL {
 	return msg.staging_uri("download_uri")
 }
 
-func (msg StagingMessage) start_message() *starting.StartMessage {
-	if msg.startMessage == nil {
-		start := starting.NewStartMessage(msg.message["start_message"].(map[string]interface{}))
-		msg.startMessage = &start
+func (msg StagingMessage) start_data() *starting.StartData {
+	if msg.startData == nil {
+		sdata := starting.NewStartData(msg.message["start_message"].(map[string]interface{}))
+		msg.startData = &sdata
 	}
 
-	return msg.startMessage
+	return msg.startData
 }
 
 func (msg StagingMessage) AdminBuildpacks() []StagingBuildpack {

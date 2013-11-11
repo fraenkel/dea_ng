@@ -113,14 +113,16 @@ type AdvertiseMessage struct {
 	id              string         "id"
 	stacks          []string       "stacks"
 	availableMemory float64        "available_memory"
+	availableDisk   float64        "available_disk"
 	appCounts       map[string]int "app_id_to_count"
 }
 
-func NewAdvertiseMessage(id string, stacks []string, availableMemory float64, appCounts map[string]int) *AdvertiseMessage {
+func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableDisk float64, appCounts map[string]int) *AdvertiseMessage {
 	return &AdvertiseMessage{
 		id:              id,
 		stacks:          stacks,
 		availableMemory: availableMemory,
+		availableDisk:   availableDisk,
 		appCounts:       appCounts,
 	}
 }

@@ -43,3 +43,9 @@
 [submodule "go/src/github.com/onsi/gomega"]
 	path = go/src/github.com/onsi/gomega
 	url = https://github.com/onsi/gomega
+[submodule "go/src/github.com/rcrowley/go-metrics"]
+	path = go/src/github.com/rcrowley/go-metrics
+	url = https://github.com/rcrowley/go-metrics
+[submodule "go/src/github.com/stretchr/objx"]
+	path = go/src/github.com/stretchr/objx
+	url = https://github.com/stretchr/objx

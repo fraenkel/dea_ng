@@ -1,6 +1,7 @@
-package dea
+package router_client
 
 import (
+	"dea"
 	"dea/config"
 	"dea/starting"
 	"dea/utils"
@@ -18,7 +19,7 @@ type RouterClient struct {
 	local_ip string
 }
 
-func NewRouterClient(config *config.Config, nats *Nats, uuid, local_ip string) RouterClient {
+func NewRouterClient(config *config.Config, nats *dea.Nats, uuid, local_ip string) RouterClient {
 	return RouterClient{config, nats.MessageBus, uuid, local_ip}
 }
 

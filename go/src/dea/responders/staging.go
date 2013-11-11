@@ -87,14 +87,14 @@ func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
 	logger.Infof("staging.handle.start %v", msg)
 	task := staging.NewStagingTask(s.config, msg, buildpacksInUse(s.stagingRegistry), s.dropletRegistry, logger)
 
-	s.stagingRegistry.Register(&task)
+	s.stagingRegistry.Register(task)
 
 	s.appManager.SaveSnapshot()
 
-	s.notify_setup_completion(reply, &task)
-	s.notify_completion(data, reply, &task)
-	s.notify_upload(reply, &task)
-	s.notify_stop(reply, &task)
+	s.notify_setup_completion(reply, task)
+	s.notify_completion(data, reply, task)
+	s.notify_upload(reply, task)
+	s.notify_stop(reply, task)
 
 	task.Start()
 }

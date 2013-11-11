@@ -1,4 +1,4 @@
-package dea
+package resource_manager
 
 import (
 	"github.com/stretchr/testify/assert"

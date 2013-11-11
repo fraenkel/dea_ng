@@ -30,7 +30,7 @@ var _ = Describe("StagingTasks", func() {
 		config, _ = cfg.ConfigFromFile(cfgPath)
 
 		stagingTaskRegistry = staging.NewStagingTaskRegistry()
-		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(helpers.Valid_staging_attributes()),
+		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(testhelpers.Valid_staging_attributes()),
 			[]staging.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
 	})
 

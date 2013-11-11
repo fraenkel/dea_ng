@@ -1,7 +1,7 @@
 package starting
 
 import (
-	"dea/util"
+	"dea/utils"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

@@ -35,6 +35,7 @@ type Container interface {
 }
 
 type sContainer struct {
+	connected    bool
 	client       *warden.Client
 	networkPorts map[string]uint32
 	handle       string
@@ -52,11 +53,6 @@ func New(cp warden.ConnectionProvider) Container {
 		return nil
 	}
 
-	if err := client.Connect(); err != nil {
-		logger.Errorf("Connect failed: %s", err.Error())
-		return nil
-	}
-
 	return &sContainer{
 		client:       client,
 		networkPorts: make(map[string]uint32),
@@ -65,8 +61,25 @@ func New(cp warden.ConnectionProvider) Container {
 
 func (c *sContainer) Setup(handle string, hostPort, containerPort uint32) {
 	c.handle = handle
-	c.networkPorts[HOST_PORT] = hostPort
-	c.networkPorts[CONTAINER_PORT] = containerPort
+
+	if hostPort != 0 {
+		c.networkPorts[HOST_PORT] = hostPort
+	}
+	if containerPort != 0 {
+		c.networkPorts[CONTAINER_PORT] = containerPort
+	}
+}
+
+func (c *sContainer) connect() error {
+	if !c.connected {
+		err := c.client.Connect()
+		if err != nil {
+			return err
+		}
+		c.connected = true
+	}
+
+	return nil
 }
 
 func (c *sContainer) RunScript(script string) (*warden.RunResponse, error) {
@@ -96,11 +109,13 @@ func (c *sContainer) RunScript(script string) (*warden.RunResponse, error) {
 }
 
 func (c *sContainer) Stop() error {
+	c.connect()
 	_, err := c.client.Stop(c.handle)
 	return err
 }
 
 func (c *sContainer) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_limit uint64, memory_limit uint64, network bool) error {
+	c.connect()
 	err := c.new_container_with_bind_mounts(bind_mounts)
 	if err != nil {
 		return err
@@ -130,6 +145,7 @@ func (c *sContainer) Destroy() {
 		return
 	}
 
+	c.connect()
 	_, err := c.client.Destroy(c.handle)
 	if err != nil {
 		logger.Warnf("Error destroying container: %s", err.Error())
@@ -142,6 +158,7 @@ func (c *sContainer) CloseAllConnections() {
 }
 
 func (c *sContainer) Spawn(script string, file_descriptor_limit, nproc_limit uint64, discard_output bool) (*warden.SpawnResponse, error) {
+	c.connect()
 
 	resourceLimits := warden.ResourceLimits{Nproc: &nproc_limit,
 		Nofile: &file_descriptor_limit}
@@ -157,6 +174,7 @@ func (c *sContainer) Spawn(script string, file_descriptor_limit, nproc_limit uin
 }
 
 func (c *sContainer) Link(jobId uint32) (*warden.LinkResponse, error) {
+	c.connect()
 	rsp, err := c.client.Link(c.handle, jobId)
 	if err != nil {
 		logger.Warnf("Error linking container: %s", err.Error())
@@ -166,6 +184,7 @@ func (c *sContainer) Link(jobId uint32) (*warden.LinkResponse, error) {
 }
 
 func (c *sContainer) CopyOut(sourcePath, destinationPath string, uid int) error {
+	c.connect()
 	_, err := c.client.CopyOut(c.handle, sourcePath, destinationPath, fmt.Sprintf("%d", uid))
 	if err != nil {
 		logger.Warnf("Error CopyOut container: %s", err.Error())
@@ -174,6 +193,8 @@ func (c *sContainer) CopyOut(sourcePath, destinationPath string, uid int) error 
 }
 
 func (c *sContainer) new_container_with_bind_mounts(bind_mounts []*warden.CreateRequest_BindMount) error {
+	c.connect()
+
 	createRequest := warden.CreateRequest{BindMounts: bind_mounts}
 	response, err := c.client.CreateByRequest(&createRequest)
 	if err != nil {
@@ -185,18 +206,24 @@ func (c *sContainer) new_container_with_bind_mounts(bind_mounts []*warden.Create
 }
 
 func (c *sContainer) limit_disk(disk uint64) error {
+	c.connect()
+
 	disk = disk * 1024 * 1024 // convert to bytes
 	_, err := c.client.LimitDisk(c.handle, disk)
 	return err
 }
 
 func (c *sContainer) limit_memory(mem uint64) error {
+	c.connect()
+
 	mem = mem * 1024 * 1024 // convert to bytes
 	_, err := c.client.LimitMemory(c.handle, mem)
 	return err
 }
 
 func (c *sContainer) setup_network() error {
+	c.connect()
+
 	netResponse, err := c.client.NetIn(c.handle)
 	if err != nil {
 		return err

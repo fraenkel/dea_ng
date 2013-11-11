@@ -86,13 +86,19 @@ func (d *Droplet) Download(uri string) error {
 		d.logger.Warnf("Failed to create temp file, error: %s", err.Error())
 		return err
 	}
+	defer os.RemoveAll(download_destination.Name())
 
-	err = utils.HttpDownload(uri, download_destination, d.sha1, d.logger)
-	if err == nil {
-		os.MkdirAll(d.Droplet_dirname(), 0755)
-		os.Rename(download_destination.Name(), d.Droplet_path())
-		os.Chmod(d.Droplet_path(), 0744)
+	if err = utils.HttpDownload(uri, download_destination, d.sha1, d.logger); err != nil {
+		return err
 	}
+
+	if err = os.MkdirAll(d.Droplet_dirname(), 0755); err != nil {
+		return err
+	}
+	if err = os.Rename(download_destination.Name(), d.Droplet_path()); err != nil {
+		return err
+	}
+	err = os.Chmod(d.Droplet_path(), 0744)
 
 	return err
 }

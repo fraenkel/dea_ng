@@ -6,29 +6,27 @@ import (
 )
 
 type StagingEnv struct {
-	startMsg    env.Message
 	stagingTask *StagingTask
 }
 
-func NewStagingEnv(stagingMsg StagingMessage, stagingTask *StagingTask) *StagingEnv {
+func NewStagingEnv(stagingTask *StagingTask) *StagingEnv {
 	return &StagingEnv{
-		startMsg:    stagingMsg.start_message(),
 		stagingTask: stagingTask,
 	}
 }
 
 func (s StagingEnv) Message() env.Message {
-	return s.startMsg
+	return s.stagingTask.StagingMessage().start_data()
 }
 
 func (s StagingEnv) ExportedSystemEnvironmentVariables() [][]string {
-	vars := make([][]string, 0, 4)
+	vars := make([][]string, 3)
 
 	buildpackCache := s.stagingTask.stagingConfig.Environment["BUILDPACK_CACHE"]
 
-	vars[1] = []string{"BUILDPACK_CACHE", buildpackCache}
-	vars[2] = []string{"STAGING_TIMEOUT", strconv.FormatUint(uint64(s.stagingTask.StagingTimeout()), 10)}
-	vars[3] = []string{"MEMORY_LIMIT", strconv.FormatUint(s.startMsg.MemoryLimit(), 10) + "m"}
+	vars[0] = []string{"BUILDPACK_CACHE", buildpackCache}
+	vars[1] = []string{"STAGING_TIMEOUT", strconv.FormatUint(uint64(s.stagingTask.StagingTimeout()), 10)}
+	vars[2] = []string{"MEMORY_LIMIT", strconv.FormatUint(s.Message().MemoryLimit(), 10) + "m"}
 	return vars
 }
 

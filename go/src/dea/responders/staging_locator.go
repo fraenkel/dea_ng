@@ -1,9 +1,9 @@
 package responders
 
 import (
-	"dea"
 	"dea/config"
 	"dea/protocol"
+	resmgr "dea/resource_manager"
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/go_cfmessagebus"
@@ -15,13 +15,13 @@ var stagingLocatorLogger = utils.Logger("StagingLocator", nil)
 type StagingLocator struct {
 	mbus               cfmessagebus.MessageBus
 	id                 string
-	resourceMgr        *dea.ResourceManager
+	resourceMgr        *resmgr.ResourceManager
 	advertiseIntervals time.Duration
 	stacks             []string
 	advertiseTicker    *time.Ticker
 }
 
-func NewStagingLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *dea.ResourceManager, config *config.Config) *StagingLocator {
+func NewStagingLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *resmgr.ResourceManager, config *config.Config) *StagingLocator {
 	advertiseIntervals := default_advertise_interval
 	if interval, exists := config.Intervals["advertise"]; exists {
 		advertiseIntervals = interval
@@ -55,7 +55,7 @@ func (s StagingLocator) handleIt(payload []byte) {
 
 func (s StagingLocator) Advertise() {
 	am := protocol.NewAdvertiseMessage(s.id, s.stacks,
-		s.resourceMgr.RemainingMemory(), nil)
+		s.resourceMgr.RemainingMemory(), s.resourceMgr.RemainingDisk(), nil)
 	bytes, err := json.Marshal(am)
 	if err != nil {
 		stagingLocatorLogger.Error(err.Error())

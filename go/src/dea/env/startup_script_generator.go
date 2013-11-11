@@ -17,7 +17,7 @@ if [ -d app/.profile.d ]; then
 fi
 `
 
-const start_SCRIPT = `
+const Start_SCRIPT = `
 DROPLET_BASE_DIR=$PWD
 cd app
 (%s) > >(tee $DROPLET_BASE_DIR/logs/stdout.log) 2> >(tee $DROPLET_BASE_DIR/logs/stderr.log >&2) &
@@ -48,6 +48,6 @@ func (ssg StartupScriptGenerator) Generate() string {
 	script = append(script, export_BUILDPACK_ENV_VARIABLES_SCRIPT)
 	script = append(script, ssg.userEnvs)
 	script = append(script, "env > logs/env.log")
-	script = append(script, fmt.Sprintf(start_SCRIPT, ssg.startCommand))
+	script = append(script, fmt.Sprintf(Start_SCRIPT, ssg.startCommand))
 	return strings.Join(script, "\n")
 }

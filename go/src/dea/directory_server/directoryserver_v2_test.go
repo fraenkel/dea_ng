@@ -32,14 +32,13 @@ var _ = Describe("DirectoryserverV2", func() {
 
 		instanceRegistry = starting.NewInstanceRegistry(config)
 
-		attrs := make(map[string]interface{})
-		attrs["application_id"] = "appId"
+		attrs := testhelpers.Valid_instance_attributes(false)
 		instance = starting.NewInstance(attrs, config, nil, "127.0.0.1")
 
 		instanceRegistry.Register(instance)
 
 		stagingTaskRegistry = staging.NewStagingTaskRegistry()
-		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(helpers.Valid_staging_attributes()),
+		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(testhelpers.Valid_staging_attributes()),
 			[]staging.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
 
 	})

@@ -49,7 +49,10 @@ func NewStagingTask(config *config.Config, staging_message StagingMessage,
 		stagingTimeout:  config.Staging.MaxStagingDuration,
 		Task:            task.NewTask(config.WardenSocket, logger),
 	}
-	s.Logger.Set("task_id", s.id)
+
+	if s.Logger != nil {
+		s.Logger.Set("task_id", s.id)
+	}
 
 	s.workspace = NewStagingTaskWorkspace(config.BaseDir, config.BuildpackDir, staging_message, buildpacksInUse)
 
@@ -389,7 +392,7 @@ func (s *StagingTask) promise_app_dir() error {
 }
 
 func (s *StagingTask) promise_stage() error {
-	env := env.NewEnv(NewStagingEnv(s.staging_message, s))
+	env := env.NewEnv(NewStagingEnv(s))
 	exportedEnv, err := env.ExportedEnvironmentVariables()
 	if err != nil {
 		return err
@@ -594,8 +597,8 @@ func (s *StagingTask) staging_timeout_grace_period() time.Duration {
 func (s *StagingTask) loggregator_emit_result(result *warden.RunResponse) *warden.RunResponse {
 	if result != nil {
 		appId := s.staging_message.app_id()
-		loggregator.Emit(appId, result.GetStdout())
-		loggregator.Emit(appId, result.GetStderr())
+		loggregator.StagingEmit(appId, result.GetStdout())
+		loggregator.StagingEmitError(appId, result.GetStderr())
 	}
 	return result
 }

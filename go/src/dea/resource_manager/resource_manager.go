@@ -1,4 +1,4 @@
-package dea
+package resource_manager
 
 import (
 	"dea/config"
@@ -81,7 +81,7 @@ func (rm *ResourceManager) UsedMemory() config.Memory {
 
 func (rm *ResourceManager) CanReserve(memory, disk uint64) bool {
 	return rm.RemainingMemory() > float64(memory) &&
-		rm.remaining_disk() > float64(disk)
+		rm.RemainingDisk() > float64(disk)
 }
 
 func (rm *ResourceManager) reserved_disk() config.Disk {
@@ -89,7 +89,7 @@ func (rm *ResourceManager) reserved_disk() config.Disk {
 		rm.stagingTaskRegistry.ReservedDisk()
 }
 
-func (rm *ResourceManager) remaining_disk() float64 {
+func (rm *ResourceManager) RemainingDisk() float64 {
 	return rm.DiskCapacity() - float64(rm.reserved_disk())
 }
 
@@ -98,7 +98,7 @@ func (rm *ResourceManager) NumberReservable(memory, disk uint64) float64 {
 		return 0
 	}
 
-	return math.Min(rm.RemainingMemory()/float64(memory), rm.remaining_disk()/float64(disk))
+	return math.Min(rm.RemainingMemory()/float64(memory), rm.RemainingDisk()/float64(disk))
 }
 
 func (rm *ResourceManager) AvailableMemoryRatio() float64 {

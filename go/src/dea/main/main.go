@@ -7,7 +7,9 @@ import (
 	"dea/droplet"
 	"dea/loggregator"
 	"dea/protocol"
+	resmgr "dea/resource_manager"
 	"dea/responders"
+	rtr "dea/router_client"
 	"dea/staging"
 	"dea/starting"
 	"dea/utils"
@@ -52,7 +54,7 @@ type bootstrap struct {
 	responders          []responders.Responder
 	evacuationProcessed bool
 	shutdown_processed  bool
-	routerClient        dea.RouterClient
+	routerClient        rtr.RouterClient
 	varz                *common.Varz
 	pidFile             *dea.PidFile
 	instanceRegistry    *starting.InstanceRegistry
@@ -65,7 +67,7 @@ type bootstrap struct {
 	heartbeatTicker     *time.Ticker
 	directoryServer     *ds.DirectoryServerV1
 	directoryServerV2   *ds.DirectoryServerV2
-	resource_manager    *dea.ResourceManager
+	resource_manager    *resmgr.ResourceManager
 	registrationTicker  *time.Ticker
 }
 
@@ -99,20 +101,28 @@ func (b bootstrap) setup() error {
 	b.logger = logger
 
 	if config.Loggregator.Router != "" {
-		emitter, err := emitter.NewEmitter(config.Loggregator.Router, "DEA",
-			strconv.FormatUint(uint64(config.Index), 10), logger)
+		e, err := emitter.NewEmitter(config.Loggregator.Router, "DEA",
+			strconv.FormatUint(uint64(config.Index), 10), config.Loggregator.SharedSecret, logger)
 		if err != nil {
 			return err
 		}
 
-		loggregator.SetEmitter(emitter)
+		loggregator.SetEmitter(e)
+
+		stgemitter, err := emitter.NewEmitter(config.Loggregator.Router, "STG",
+			strconv.FormatUint(uint64(config.Index), 10), config.Loggregator.SharedSecret, logger)
+		if err != nil {
+			return err
+		}
+
+		loggregator.SetStagingEmitter(stgemitter)
 	}
 
 	b.dropletRegistry = droplet.NewDropletRegistry(path.Join(config.BaseDir, "droplets"))
 	b.instanceRegistry = starting.NewInstanceRegistry(config)
 	b.stagingTaskRegistry = staging.NewStagingTaskRegistry()
 
-	b.resource_manager = dea.NewResourceManager(b.instanceRegistry, b.stagingTaskRegistry,
+	b.resource_manager = resmgr.NewResourceManager(b.instanceRegistry, b.stagingTaskRegistry,
 		&b.config.Resources)
 
 	localIp, err := localip.LocalIP()
@@ -384,7 +394,7 @@ func (b *bootstrap) start() {
 	b.load_snapshot()
 
 	b.startComponent()
-	b.routerClient = dea.NewRouterClient(b.config, b.nats, b.component.UUID, b.localIp)
+	b.routerClient = rtr.NewRouterClient(b.config, b.nats, b.component.UUID, b.localIp)
 	b.startNats()
 	b.directoryServer.Start()
 

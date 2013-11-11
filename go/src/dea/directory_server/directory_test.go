@@ -5,6 +5,7 @@ import (
 	cfg "dea/config"
 	"dea/container"
 	"dea/starting"
+	"dea/testhelpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -42,8 +43,8 @@ var _ = Describe("Directory", func() {
 		instanceRegistry = starting.NewInstanceRegistry(config)
 		directory = NewDirectory(instanceRegistry)
 
-		attrs := make(map[string]interface{})
-		attrs["application_id"] = "appId"
+		attrs := testhelpers.Valid_instance_attributes(false)
+
 		instance = starting.NewInstance(attrs, config, nil, "127.0.0.1")
 
 		instance.SetState(starting.STATE_CRASHED)

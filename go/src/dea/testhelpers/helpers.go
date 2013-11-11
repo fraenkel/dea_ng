@@ -1,4 +1,4 @@
-package helpers
+package testhelpers
 
 import (
 	"dea/utils"
@@ -27,7 +27,7 @@ func valid_service_attributes(syslog_drain_url string) map[string]interface{} {
 	}
 }
 
-func valid_instance_attributes(lots_of_services bool) map[string]interface{} {
+func Valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 	attrs := map[string]interface{}{
 		"cc_partition": "partition",
 
@@ -42,7 +42,7 @@ func valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 		"droplet_sha1": "deadbeef",
 		"droplet_uri":  "http://foo.com/file.ext",
 
-		"limits": map[string]uint32{"mem": 512, "disk": 128, "fds": 5000},
+		"limits": map[string]interface{}{"mem": 512, "disk": 128, "fds": 5000},
 		"env":    []string{"FOO=BAR"},
 	}
 
@@ -75,7 +75,7 @@ func Valid_staging_attributes() map[string]interface{} {
 		"download_uri":     "http://127.0.0.1:12346/download",
 		"upload_uri":       "http://127.0.0.1:12346/upload",
 		"staged_path":      "",
-		"start_message":    valid_instance_attributes(false),
+		"start_message":    Valid_instance_attributes(false),
 		"admin_buildpacks": []string{},
 	}
 }

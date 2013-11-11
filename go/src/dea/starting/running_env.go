@@ -10,23 +10,21 @@ const (
 )
 
 type RunningEnv struct {
-	startMsg StartMessage
 	instance *Instance
 }
 
-func NewRunningEnv(msg StartMessage, instance *Instance) *RunningEnv {
+func NewRunningEnv(instance *Instance) *RunningEnv {
 	return &RunningEnv{
-		startMsg: msg,
 		instance: instance,
 	}
 }
 
 func (r RunningEnv) Message() env.Message {
-	return r.startMsg
+	return &r.instance.startData
 }
 
 func (r RunningEnv) ExportedSystemEnvironmentVariables() [][]string {
-	vars := make([][]string, 0, 5)
+	vars := make([][]string, 5)
 	vars[0] = []string{"HOME", "$PWD/app"}
 	vars[1] = []string{"TMPDIR", "$PWD/tmp"}
 	vars[2] = []string{"VCAP_APP_HOST", HOST}
@@ -36,10 +34,10 @@ func (r RunningEnv) ExportedSystemEnvironmentVariables() [][]string {
 }
 
 func (r RunningEnv) VcapApplication() map[string]interface{} {
-	started_at := r.instance.StateTime(STATE_RUNNING)
+	started_at := r.instance.StateTime(STATE_STARTING)
 	return map[string]interface{}{
 		"instance_id":          r.instance.Id(),
-		"instance_index":       r.instance.Index(),
+		"instance_index":       r.Message().Index(),
 		"host":                 HOST,
 		"port":                 strconv.FormatUint(uint64(r.instance.ContainerPort()), 10),
 		"started_at":           started_at.String(),

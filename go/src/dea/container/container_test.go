@@ -22,8 +22,8 @@ var _ = Describe("Container", func() {
 
 			container.Setup("handle", 1, 2)
 			Expect(container.Handle()).To(Equal("handle"))
-			Expect(container.NetworkPorts[HOST_PORT]).To(Equal(uint32(1)))
-			Expect(container.NetworkPorts[CONTAINER_PORT]).To(Equal(uint32(2)))
+			Expect(container.NetworkPort(HOST_PORT)).To(Equal(uint32(1)))
+			Expect(container.NetworkPort(CONTAINER_PORT)).To(Equal(uint32(2)))
 		})
 	})
 	Context("Create", func() {
@@ -143,7 +143,7 @@ func (c *FakeConnectionProvider) ProvideConnection() (*warden.Connection, error)
 	), nil
 }
 
-func FakeContainer(read, write *bytes.Buffer) *Container {
+func FakeContainer(read, write *bytes.Buffer) Container {
 	return New(&FakeConnectionProvider{read, write})
 }
 

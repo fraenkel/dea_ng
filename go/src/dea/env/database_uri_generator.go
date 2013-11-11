@@ -1,9 +1,7 @@
 package env
 
 import (
-	"errors"
 	"net/url"
-	"strings"
 )
 
 var (
@@ -24,60 +22,60 @@ type serviceBinding struct {
 	uri  *url.URL
 }
 
-func NewDatabaseUriGenerator(services []map[string]interface{}) DatabaseUriGenerator {
-	return DatabaseUriGenerator{services: services}
+func NewDatabaseUriGenerator(services []map[string]interface{}) *DatabaseUriGenerator {
+	return &DatabaseUriGenerator{services: services}
 }
 
-func (dbGen DatabaseUriGenerator) DatabaseUri() (*url.URL, error) {
+func (dbGen *DatabaseUriGenerator) DatabaseUri() (*url.URL, error) {
 	uri, err := dbGen.boundDatabaseUri()
 	if err != nil {
 		return nil, err
 	}
 
-	if newScheme, exists := rails_scheme[uri.Scheme]; exists {
-		uri.Scheme = newScheme
+	if uri != nil {
+		if newScheme, exists := rails_scheme[uri.Scheme]; exists {
+			uri.Scheme = newScheme
+		}
 	}
+
 	return uri, nil
 }
 
-func (dbGen DatabaseUriGenerator) boundDatabaseUri() (*url.URL, error) {
+func (dbGen *DatabaseUriGenerator) boundDatabaseUri() (*url.URL, error) {
 	boundDBs, err := dbGen.boundRelationalValidDatabases()
 	if err != nil {
 		return nil, err
 	}
 
-	switch len(boundDBs) {
-	case 0:
-		return nil, nil
-	case 1:
+	if len(boundDBs) > 0 {
 		return boundDBs[0].uri, nil
-	default:
-		for _, binding := range boundDBs {
-			if strings.HasSuffix(binding.name, "production") || strings.HasSuffix(binding.name, "prod") {
-				return binding.uri, nil
-			}
-			return nil, errors.New("Unable to determine primary database from multiple. Please bind only one database service to Rails applications.")
-		}
 	}
 
 	return nil, nil
 }
 
-func (dbGen DatabaseUriGenerator) boundRelationalValidDatabases() ([]serviceBinding, error) {
+func (dbGen *DatabaseUriGenerator) boundRelationalValidDatabases() ([]serviceBinding, error) {
 	if dbGen.boundDatabases == nil {
-		collection := make([]serviceBinding, 1)
+		collection := make([]serviceBinding, 0, 1)
 		for _, binding := range dbGen.services {
 			if b := binding["credentials"]; b != nil {
-				if creds, ok := b.(map[string]string); ok {
-					uri, err := url.Parse(creds["uri"])
-					if err != nil {
-						return nil, err
-					}
-					if valid_db_type(uri.Scheme) {
-						collection = append(collection, serviceBinding{
-							uri: uri, name: binding["name"].(string),
-						})
-					}
+				var creds_uri string
+				if creds, ok := b.(map[string]interface{}); ok {
+					creds_uri = creds["uri"].(string)
+				} else if creds, ok := b.(map[string]string); ok {
+					creds_uri = creds["uri"]
+				}
+
+				uri, err := url.Parse(creds_uri)
+				if err != nil {
+					return nil, err
+				}
+
+				if valid_db_type(uri.Scheme) {
+					name, _ := binding["name"].(string)
+					collection = append(collection, serviceBinding{
+						uri: uri, name: name,
+					})
 				}
 			}
 		}

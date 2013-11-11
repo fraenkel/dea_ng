@@ -42,7 +42,8 @@ type LoggingConfig struct {
 }
 
 type LoggregatorConfig struct {
-	Router string "router"
+	Router       string "router"
+	SharedSecret string "shared_secret"
 }
 
 type ResourcesConfig struct {
@@ -66,7 +67,7 @@ type StagingConfig struct {
 }
 
 var defaultStagingConfig = StagingConfig{
-	MaxStagingDuration: 900 * time.Second,
+	MaxStagingDuration: 900,
 }
 
 type DirServerConfig struct {
@@ -108,6 +109,7 @@ type Config struct {
 	PidFile                       string                   "pid_filename"
 	WardenSocket                  string                   "warden_socket"
 	EvacuationDelay               time.Duration            "evacuation_delay_secs"
+	MaximumHealthCheckTimeout     time.Duration            "maximum_health_check_timeout"
 	Index                         uint                     "index"
 	Staging                       StagingConfig            "staging"
 	Stacks                        []string                 "stacks"
@@ -140,6 +142,7 @@ func ConfigFromFile(configPath string) (*Config, error) {
 		BindMounts:                    []map[string]string{},
 		CrashBlockUsageRatioThreshold: 0.8,
 		CrashInodeUsageRatioThreshold: 0.8,
+		MaximumHealthCheckTimeout:     60,
 	}
 
 	if err := goyaml.Unmarshal(configBytes, &config); err != nil {
@@ -169,6 +172,15 @@ func ConfigFromFile(configPath string) (*Config, error) {
 
 	if config.CrashesPath == "" {
 		config.CrashesPath = path.Join(config.BaseDir, "crashes")
+	}
+
+	// fix up durations
+	config.Staging.MaxStagingDuration = config.Staging.MaxStagingDuration * time.Second
+	config.EvacuationDelay = config.EvacuationDelay * time.Second
+	config.MaximumHealthCheckTimeout = config.MaximumHealthCheckTimeout * time.Second
+	config.CrashLifetime = config.CrashLifetime * time.Second
+	for k, v := range config.Intervals {
+		config.Intervals[k] = v * time.Second
 	}
 
 	return &config, nil

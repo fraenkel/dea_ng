@@ -15,22 +15,6 @@ type Env struct {
 	vcapSrvcs   *map[string][]map[string]interface{}
 }
 
-type Message interface {
-	Name() string
-	Version() string
-	Uris() []string
-	Limits() map[string]uint64
-	MemoryLimit() uint64
-	Services() []map[string]interface{}
-	Env() []string
-}
-
-type EnvStrategy interface {
-	ExportedSystemEnvironmentVariables() [][]string
-	VcapApplication() map[string]interface{}
-	Message() Message
-}
-
 func NewEnv(strategy EnvStrategy) *Env {
 	env := &Env{envStrategy: strategy}
 	return env
@@ -47,16 +31,18 @@ func (e Env) ExportedSystemEnvironmentVariables() (string, error) {
 	}
 
 	envList := make([][]string, 0, 4)
-	envList[0] = []string{"VCAP_APPLICATION", string(vcapApp)}
-	envList[1] = []string{"VCAP_SERVICES", string(vcapServices)}
+	envList = append(envList, []string{"VCAP_APPLICATION", string(vcapApp)})
+	envList = append(envList, []string{"VCAP_SERVICES", string(vcapServices)})
 
 	memlimit := e.envStrategy.Message().MemoryLimit()
-	envList[2] = []string{"MEMORY_LIMIT", strconv.FormatUint(memlimit, 10) + "m"}
+	envList = append(envList, []string{"MEMORY_LIMIT", strconv.FormatUint(memlimit, 10) + "m"})
 
 	services := e.envStrategy.Message().Services()
+
 	if len(services) > 0 {
 		dbGen := NewDatabaseUriGenerator(services)
 		dbUri, err := dbGen.DatabaseUri()
+
 		if err != nil {
 			return "", err
 		}
@@ -69,7 +55,7 @@ func (e Env) ExportedSystemEnvironmentVariables() (string, error) {
 }
 
 func (e Env) ExportedUserEnvironmentVariables() string {
-	return to_export(translate_env(e.envStrategy.Message().Env()))
+	return to_export(translate_env(e.envStrategy.Message().Environment()))
 }
 
 func (e Env) ExportedEnvironmentVariables() (string, error) {
@@ -81,7 +67,7 @@ func (e Env) ExportedEnvironmentVariables() (string, error) {
 }
 
 func (e Env) vcapApplication() map[string]interface{} {
-	if e.vcapApplication == nil {
+	if e.vcapApp == nil {
 		msg := e.envStrategy.Message()
 		vcapApp := e.envStrategy.VcapApplication()
 		vcapApp["limits"] = msg.Limits()
@@ -125,15 +111,10 @@ func (e Env) vcapServices() map[string][]map[string]interface{} {
 	return *e.vcapSrvcs
 }
 
-func translate_env(env []string) [][]string {
-	envs := make([][]string, len(env))
-
-	for _, e := range env {
-		pair := strings.SplitN(string(e), "=", 2)
-		if len(pair) == 1 {
-			pair = append(pair, "")
-		}
-		envs = append(envs, pair)
+func translate_env(env map[string]string) [][]string {
+	envs := make([][]string, 0, len(env))
+	for k, v := range env {
+		envs = append(envs, []string{k, v})
 	}
 	return envs
 }
@@ -153,37 +134,3 @@ func to_export(multienvs ...[][]string) string {
 
 	return strings.Join(exports, "")
 }
-
-/*# coding: UTF-8
-
-VCAP_SERVICES=
-{
-  cleardb-n/a: [
-    {
-      name: "cleardb-1",
-      label: "cleardb-n/a",
-      plan: "spark",
-      credentials: {
-        name: "ad_c6f4446532610ab",
-        hostname: "us-cdbr-east-03.cleardb.com",
-        port: "3306",
-        username: "b5d435f40dd2b2",
-        password: "ebfc00ac",
-        uri: "mysql://b5d435f40dd2b2:ebfc00ac@us-cdbr-east-03.cleardb.com:3306/ad_c6f4446532610ab",
-        jdbcUrl: "jdbc:mysql://b5d435f40dd2b2:ebfc00ac@us-cdbr-east-03.cleardb.com:3306/ad_c6f4446532610ab"
-      }
-    }
-  ],
-  cloudamqp-n/a: [
-    {
-      name: "cloudamqp-6",
-      label: "cloudamqp-n/a",
-      plan: "lemur",
-      credentials: {
-        uri: "amqp://ksvyjmiv:IwN6dCdZmeQD4O0ZPKpu1YOaLx1he8wo@lemur.cloudamqp.com/ksvyjmiv"
-      }
-    }
-  ],
-
-
-*/
