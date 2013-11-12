@@ -44,6 +44,10 @@ func Valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 
 		"limits": map[string]interface{}{"mem": 512, "disk": 128, "fds": 5000},
 		"env":    []string{"FOO=BAR"},
+
+		"warden_handle":           "1234",
+		"instance_host_port":      float64(2345),
+		"instance_container_port": float64(4567),
 	}
 
 	services := make([]map[string]interface{}, 0, 3)

@@ -67,44 +67,44 @@ func (rm *ResourceManager) AppIdToCount() map[string]int {
 }
 
 func (rm *ResourceManager) RemainingMemory() float64 {
-	return rm.memoryCapacityMB - float64(rm.ReservedMemory())
+	return rm.memoryCapacityMB - rm.ReservedMemory()
 }
 
-func (rm *ResourceManager) ReservedMemory() config.Memory {
-	return rm.instanceRegistry.ReservedMemory() +
-		rm.stagingTaskRegistry.ReservedMemory()
+func (rm *ResourceManager) ReservedMemory() float64 {
+	return float64((rm.instanceRegistry.ReservedMemory() +
+		rm.stagingTaskRegistry.ReservedMemory()) / config.Mebi)
 }
 
-func (rm *ResourceManager) UsedMemory() config.Memory {
-	return rm.instanceRegistry.UsedMemory()
+func (rm *ResourceManager) UsedMemory() float64 {
+	return float64(rm.instanceRegistry.UsedMemory() / config.Mebi)
 }
 
-func (rm *ResourceManager) CanReserve(memory, disk uint64) bool {
-	return rm.RemainingMemory() > float64(memory) &&
-		rm.RemainingDisk() > float64(disk)
+func (rm *ResourceManager) CanReserve(memory, disk float64) bool {
+	return rm.RemainingMemory() > memory &&
+		rm.RemainingDisk() > disk
 }
 
-func (rm *ResourceManager) reserved_disk() config.Disk {
-	return rm.instanceRegistry.ReservedDisk() +
-		rm.stagingTaskRegistry.ReservedDisk()
+func (rm *ResourceManager) reserved_disk() float64 {
+	return float64((rm.instanceRegistry.ReservedDisk() +
+		rm.stagingTaskRegistry.ReservedDisk()) / config.MB)
 }
 
 func (rm *ResourceManager) RemainingDisk() float64 {
-	return rm.DiskCapacity() - float64(rm.reserved_disk())
+	return rm.DiskCapacity() - rm.reserved_disk()
 }
 
-func (rm *ResourceManager) NumberReservable(memory, disk uint64) float64 {
+func (rm *ResourceManager) NumberReservable(memory, disk uint64) uint {
 	if memory == 0 || disk == 0 {
 		return 0
 	}
 
-	return math.Min(rm.RemainingMemory()/float64(memory), rm.RemainingDisk()/float64(disk))
+	return uint(math.Min(rm.RemainingMemory()/float64(memory), rm.RemainingDisk()/float64(disk)))
 }
 
 func (rm *ResourceManager) AvailableMemoryRatio() float64 {
-	return 1.0 - (float64(rm.ReservedMemory()) / rm.MemoryCapacity())
+	return 1.0 - (rm.ReservedMemory() / rm.MemoryCapacity())
 }
 
 func (rm *ResourceManager) AvailableDiskRatio() float64 {
-	return 1.0 - (float64(rm.reserved_disk()) / rm.DiskCapacity())
+	return 1.0 - (rm.reserved_disk() / rm.DiskCapacity())
 }

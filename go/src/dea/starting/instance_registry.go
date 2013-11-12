@@ -57,7 +57,7 @@ func NewInstanceRegistry(config *config.Config) *InstanceRegistry {
 	}
 	crashLifetime := config.CrashLifetime
 	if crashLifetime == 0 {
-		crashLifetime = DEFAULT_CRASH_LIFETIME_SECS
+		crashLifetime = DEFAULT_CRASH_LIFETIME_SECS * time.Second
 	}
 	registry.crashLifetime = time.Duration(crashLifetime)
 

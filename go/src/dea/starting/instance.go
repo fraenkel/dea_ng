@@ -240,11 +240,11 @@ func (i *Instance) PrivateInstanceId() string {
 }
 
 func (i *Instance) MemoryLimit() config.Memory {
-	return i.Limits().mem
+	return config.Memory(i.Limits().memMb) * config.Mebi
 }
 
 func (i *Instance) DiskLimit() config.Disk {
-	return i.Limits().disk
+	return config.Disk(i.Limits().diskMb) * config.MB
 }
 
 func (i *Instance) FileDescriptorLimit() uint64 {

@@ -1,15 +1,14 @@
 package starting
 
 import (
-	"dea/config"
 	"reflect"
 	"strings"
 )
 
 type LimitsData struct {
-	mem  config.Memory
-	disk config.Disk
-	fds  uint64
+	memMb  uint64
+	diskMb uint64
+	fds    uint64
 }
 
 type ServiceData struct {
@@ -69,7 +68,7 @@ func (s StartData) Limits() map[string]uint64 {
 }
 
 func (s StartData) MemoryLimit() uint64 {
-	return uint64(s.limits.mem)
+	return uint64(s.limits.memMb)
 }
 
 func (s StartData) Name() string {
@@ -198,16 +197,16 @@ func (s *StartData) MarshalMap(m map[string]interface{}) error {
 }
 
 func (l *LimitsData) UnmarshalMap(m map[string]interface{}) error {
-	l.mem = config.Memory(getUInt(m, "mem"))
-	l.disk = config.Disk(getUInt(m, "disk"))
+	l.memMb = getUInt(m, "mem")
+	l.diskMb = getUInt(m, "disk")
 	l.fds = getUInt(m, "fds")
 
 	return nil
 }
 
 func (l *LimitsData) MarshalMap(m map[string]uint64) error {
-	m["mem"] = uint64(l.mem)
-	m["disk"] = uint64(l.disk)
+	m["mem"] = uint64(l.memMb)
+	m["disk"] = uint64(l.diskMb)
 	m["fds"] = l.fds
 
 	return nil
