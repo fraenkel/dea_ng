@@ -8,6 +8,8 @@ import (
 	"dea/testhelpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io/ioutil"
+	"os"
 )
 
 var _ = Describe("ResourceManager", func() {
@@ -59,9 +61,14 @@ var _ = Describe("ResourceManager", func() {
 	})
 
 	BeforeEach(func() {
-		config = cfg.Config{}
+		tmpdir, _ := ioutil.TempDir("", "resource_manager")
+		config = cfg.Config{BaseDir: tmpdir}
 		instanceRegistry = starting.NewInstanceRegistry(&config)
 		stagingRegistry = staging.NewStagingTaskRegistry()
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(config.BaseDir)
 	})
 
 	JustBeforeEach(func() {
