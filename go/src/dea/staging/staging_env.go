@@ -6,10 +6,10 @@ import (
 )
 
 type StagingEnv struct {
-	stagingTask *StagingTask
+	stagingTask StagingTask
 }
 
-func NewStagingEnv(stagingTask *StagingTask) *StagingEnv {
+func NewStagingEnv(stagingTask StagingTask) *StagingEnv {
 	return &StagingEnv{
 		stagingTask: stagingTask,
 	}
@@ -22,7 +22,7 @@ func (s StagingEnv) Message() env.Message {
 func (s StagingEnv) ExportedSystemEnvironmentVariables() [][]string {
 	vars := make([][]string, 3)
 
-	buildpackCache := s.stagingTask.stagingConfig.Environment["BUILDPACK_CACHE"]
+	buildpackCache := s.stagingTask.StagingConfig().Environment["BUILDPACK_CACHE"]
 
 	vars[0] = []string{"BUILDPACK_CACHE", buildpackCache}
 	vars[1] = []string{"STAGING_TIMEOUT", strconv.FormatUint(uint64(s.stagingTask.StagingTimeout()), 10)}

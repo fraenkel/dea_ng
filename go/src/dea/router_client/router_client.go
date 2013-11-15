@@ -6,7 +6,7 @@ import (
 	"dea/starting"
 	"dea/utils"
 	"encoding/json"
-	"github.com/cloudfoundry/go_cfmessagebus"
+	"github.com/cloudfoundry/yagnats"
 	"strconv"
 )
 
@@ -14,13 +14,13 @@ var rcLogger = utils.Logger("RouterClient", nil)
 
 type RouterClient struct {
 	config   *config.Config
-	mbus     cfmessagebus.MessageBus
+	nats     *dea.Nats
 	uuid     string
 	local_ip string
 }
 
 func NewRouterClient(config *config.Config, nats *dea.Nats, uuid, local_ip string) RouterClient {
-	return RouterClient{config, nats.MessageBus, uuid, local_ip}
+	return RouterClient{config, nats, uuid, local_ip}
 }
 
 func (r *RouterClient) RegisterInstance(i *starting.Instance, opts map[string]interface{}) error {
@@ -52,8 +52,8 @@ func (r *RouterClient) UnregisterInstance(i *starting.Instance, opts map[string]
 	return r.publish("router.unregister", req)
 }
 
-func (r *RouterClient) Greet(callback func(response []byte)) error {
-	err := r.mbus.Request("router.greet", []byte{'{', '}'}, callback)
+func (r *RouterClient) Greet(callback yagnats.Callback) error {
+	_, err := r.nats.Request("router.greet", []byte("{}"), callback)
 	if err != nil {
 		rcLogger.Errorf("greet error: %s", err.Error())
 	}
@@ -87,7 +87,7 @@ func (r *RouterClient) publish(subject string, message interface{}) error {
 		return err
 	}
 
-	return r.mbus.Publish(subject, bytes)
+	return r.nats.NatsClient.Publish(subject, bytes)
 }
 
 /*

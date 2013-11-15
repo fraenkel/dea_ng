@@ -6,29 +6,30 @@ import (
 	resmgr "dea/resource_manager"
 	"dea/utils"
 	"encoding/json"
-	"github.com/cloudfoundry/go_cfmessagebus"
+	"github.com/cloudfoundry/yagnats"
 	"time"
 )
 
 var dealocatorLogger = utils.Logger("DeaLocator", nil)
 
 type DeaLocator struct {
-	mbus               cfmessagebus.MessageBus
+	nats               yagnats.NATSClient
+	subscriptionId     int
 	id                 string
-	resourceMgr        *resmgr.ResourceManager
+	resourceMgr        resmgr.ResourceManager
 	advertiseIntervals time.Duration
 	stacks             []string
 	advertiseTicker    *time.Ticker
 }
 
-func NewDeaLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *resmgr.ResourceManager, config *config.Config) *DeaLocator {
+func NewDeaLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.ResourceManager, config *config.Config) *DeaLocator {
 	advertiseIntervals := default_advertise_interval
-	if interval, exists := config.Intervals["advertise"]; exists {
-		advertiseIntervals = interval
+	if config.Intervals.Advertise != 0 {
+		advertiseIntervals = config.Intervals.Advertise
 	}
 
 	return &DeaLocator{
-		mbus:               mbus,
+		nats:               nats,
 		id:                 id,
 		resourceMgr:        resourceMgr,
 		advertiseIntervals: advertiseIntervals,
@@ -36,24 +37,28 @@ func NewDeaLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *resmgr.
 	}
 }
 
-func (d DeaLocator) Start() {
-	if err := d.mbus.Subscribe("dea.locate", d.handleIt); err != nil {
+func (d *DeaLocator) Start() {
+	sid, err := d.nats.Subscribe("dea.locate", d.handleIt)
+	if err != nil {
 		dealocatorLogger.Error(err.Error())
 		return
 	}
-
-	d.advertiseTicker = utils.RepeatFixed(d.advertiseIntervals*time.Second, d.Advertise)
-}
-func (d DeaLocator) Stop() {
-	//nats.unsubscribe(@dea_locate_sid) if @dea_locate_sid
-	d.advertiseTicker.Stop()
+	d.subscriptionId = sid
+	d.advertiseTicker = utils.RepeatFixed(d.advertiseIntervals, d.Advertise)
 }
 
-func (d DeaLocator) handleIt(payload []byte) {
+func (d *DeaLocator) Stop() {
+	if d.advertiseTicker != nil {
+		d.nats.Unsubscribe(d.subscriptionId)
+		d.advertiseTicker.Stop()
+	}
+}
+
+func (d *DeaLocator) handleIt(msg *yagnats.Message) {
 	d.Advertise()
 }
 
-func (d DeaLocator) Advertise() {
+func (d *DeaLocator) Advertise() {
 	am := protocol.NewAdvertiseMessage(d.id, d.stacks,
 		d.resourceMgr.RemainingMemory(), d.resourceMgr.RemainingDisk(),
 		d.resourceMgr.AppIdToCount())
@@ -62,5 +67,5 @@ func (d DeaLocator) Advertise() {
 		dealocatorLogger.Error(err.Error())
 		return
 	}
-	d.mbus.Publish("dea.advertise", bytes)
+	d.nats.Publish("dea.advertise", bytes)
 }

@@ -167,6 +167,10 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 	return i
 }
 
+func (i *Instance) Validate() error {
+	return nil
+}
+
 func (i *Instance) Setup() {
 	i.setup_stat_collector()
 	i.setup_link()
@@ -174,7 +178,7 @@ func (i *Instance) Setup() {
 }
 
 func (i *Instance) CCPartition() string {
-	return i.startData.cc_partition
+	return i.startData.CC_partition
 }
 
 func (i *Instance) SetId() {
@@ -186,53 +190,53 @@ func (i *Instance) Id() string {
 }
 
 func (i *Instance) Index() int {
-	return i.startData.instance_index
+	return i.startData.Instance_index
 }
 
 func (i *Instance) ApplicationId() string {
-	return i.startData.application_id
+	return i.startData.Application_id
 }
 
 func (i *Instance) SetApplicationVersion(version string) {
-	i.startData.application_version = version
+	i.startData.Application_version = version
 }
 
 func (i *Instance) ApplicationVersion() string {
-	return i.startData.application_version
+	return i.startData.Application_version
 }
 
 func (i *Instance) ApplicationName() string {
-	return i.startData.application_name
+	return i.startData.Application_name
 }
 func (i *Instance) ApplicationUris() []string {
-	return i.startData.application_uris
+	return i.startData.Application_uris
 }
 
 func (i *Instance) SetApplicationUris(uris []string) {
-	i.startData.application_uris = uris
+	i.startData.Application_uris = uris
 }
 
 func (i *Instance) DropletSHA1() string {
-	return i.startData.droplet_sha1
+	return i.startData.Droplet_sha1
 }
 func (i *Instance) DropletUri() string {
-	return i.startData.droplet_uri
+	return i.startData.Droplet_uri
 }
 func (i *Instance) droplet() *droplet.Droplet {
 	return i.dropletRegistry.Get(i.DropletSHA1())
 }
 
 func (i *Instance) StartCommand() string {
-	return i.startData.start_command
+	return i.startData.Start_command
 }
 func (i *Instance) Limits() LimitsData {
-	return i.startData.limits
+	return i.startData.LimitsData
 }
 func (i *Instance) Environment() map[string]string {
-	return i.startData.environment
+	return i.startData.Env
 }
 func (i *Instance) Services() []ServiceData {
-	return i.startData.services
+	return i.startData.ServicesData
 }
 
 func (i *Instance) PrivateInstanceId() string {
@@ -240,15 +244,15 @@ func (i *Instance) PrivateInstanceId() string {
 }
 
 func (i *Instance) MemoryLimit() config.Memory {
-	return config.Memory(i.Limits().memMb) * config.Mebi
+	return config.Memory(i.Limits().MemMb) * config.Mebi
 }
 
 func (i *Instance) DiskLimit() config.Disk {
-	return config.Disk(i.Limits().diskMb) * config.MB
+	return config.Disk(i.Limits().DiskMb) * config.MB
 }
 
 func (i *Instance) FileDescriptorLimit() uint64 {
-	return i.Limits().fds
+	return i.Limits().Fds
 }
 
 func (i *Instance) SetState(newState State) {
@@ -765,7 +769,7 @@ func (i *Instance) staged_info() *map[string]interface{} {
 func (i *Instance) Snapshot_attributes() map[string]interface{} {
 	sysdrainUrls := make([]string, 0, 1)
 	for _, s := range i.Services() {
-		drainUrl := s.syslog_drain_url
+		drainUrl := s.Syslog_drain_url
 		if drainUrl != "" {
 			sysdrainUrls = append(sysdrainUrls, drainUrl)
 		}

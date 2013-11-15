@@ -2,10 +2,11 @@ package directory_server
 
 import (
 	cfg "dea/config"
-	"dea/container"
+	"dea/droplet"
 	"dea/staging"
 	"dea/testhelpers"
-	"dea/utils"
+	teststaging "dea/testhelpers/staging"
+	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -22,16 +23,15 @@ var _ = Describe("StagingTasks", func() {
 	var config *cfg.Config
 	var server *DirectoryServerV2
 	var stagingTaskRegistry *staging.StagingTaskRegistry
-	var stagingTask *staging.StagingTask
+	var stagingTask *teststaging.MockStagingTask
 
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
 		cfgPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/dea.yml"))
 		config, _ = cfg.ConfigFromFile(cfgPath)
 
-		stagingTaskRegistry = staging.NewStagingTaskRegistry()
-		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(testhelpers.Valid_staging_attributes()),
-			[]staging.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
+		stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+		stagingTask = &teststaging.MockStagingTask{StagingMsg: staging.NewStagingMessage(testhelpers.Valid_staging_attributes())}
 	})
 
 	JustBeforeEach(func() {
@@ -83,7 +83,7 @@ var _ = Describe("StagingTasks", func() {
 
 			Context("when container path is not available", func() {
 				BeforeEach(func() {
-					stagingTask.Container = container.MockContainer{MPath: ""}
+					stagingTask.ContainerPath = ""
 				})
 
 				It("returns a 503", func() {
@@ -101,7 +101,7 @@ var _ = Describe("StagingTasks", func() {
 					tmpdir, _ = filepath.EvalSymlinks(tmpdir)
 					container_rootfs_path := filepath.Join(tmpdir, "tmp", "rootfs")
 					os.MkdirAll(container_rootfs_path, 0755)
-					stagingTask.Container = container.MockContainer{MPath: tmpdir}
+					stagingTask.ContainerPath = tmpdir
 				})
 
 				AfterEach(func() {
@@ -157,4 +157,8 @@ func staging_task_file_path(server *DirectoryServerV2, task_id string, file_path
 		urlPath = u.String()
 	}
 	return urlPath
+}
+
+func NewMockStagingTask(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, *droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
+	return &teststaging.MockStagingTask{}
 }

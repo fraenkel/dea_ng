@@ -21,7 +21,7 @@ var _ = Describe("DirectoryserverV2", func() {
 	var instanceRegistry *starting.InstanceRegistry
 	var instance *starting.Instance
 	var stagingTaskRegistry *staging.StagingTaskRegistry
-	var stagingTask *staging.StagingTask
+	var stagingTask staging.StagingTask
 
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
@@ -37,7 +37,7 @@ var _ = Describe("DirectoryserverV2", func() {
 
 		instanceRegistry.Register(instance)
 
-		stagingTaskRegistry = staging.NewStagingTaskRegistry()
+		stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(testhelpers.Valid_staging_attributes()),
 			[]staging.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
 

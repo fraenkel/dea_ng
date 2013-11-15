@@ -6,29 +6,30 @@ import (
 	resmgr "dea/resource_manager"
 	"dea/utils"
 	"encoding/json"
-	"github.com/cloudfoundry/go_cfmessagebus"
+	"github.com/cloudfoundry/yagnats"
 	"time"
 )
 
 var stagingLocatorLogger = utils.Logger("StagingLocator", nil)
 
 type StagingLocator struct {
-	mbus               cfmessagebus.MessageBus
+	nats               yagnats.NATSClient
 	id                 string
-	resourceMgr        *resmgr.ResourceManager
+	resourceMgr        resmgr.ResourceManager
 	advertiseIntervals time.Duration
 	stacks             []string
 	advertiseTicker    *time.Ticker
+	staging_locate_sid int
 }
 
-func NewStagingLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *resmgr.ResourceManager, config *config.Config) *StagingLocator {
+func NewStagingLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.ResourceManager, config *config.Config) *StagingLocator {
 	advertiseIntervals := default_advertise_interval
-	if interval, exists := config.Intervals["advertise"]; exists {
-		advertiseIntervals = interval
+	if config.Intervals.Advertise != 0 {
+		advertiseIntervals = config.Intervals.Advertise
 	}
 
 	return &StagingLocator{
-		mbus:               mbus,
+		nats:               nats,
 		id:                 id,
 		resourceMgr:        resourceMgr,
 		advertiseIntervals: advertiseIntervals,
@@ -36,24 +37,29 @@ func NewStagingLocator(mbus cfmessagebus.MessageBus, id string, resourceMgr *res
 	}
 }
 
-func (s StagingLocator) Start() {
-	if err := s.mbus.Subscribe("staging.locate", s.handleIt); err != nil {
+func (s *StagingLocator) Start() {
+	sid, err := s.nats.Subscribe("staging.locate", s.handleIt)
+	if err != nil {
 		stagingLocatorLogger.Error(err.Error())
 		return
 	}
+	s.staging_locate_sid = sid
+
 	s.advertiseTicker = utils.RepeatFixed(s.advertiseIntervals*time.Second, s.Advertise)
 }
 
-func (s StagingLocator) Stop() {
-	//nats.unsubscribe(@dea_locate_sid) if @dea_locate_sid
-	s.advertiseTicker.Stop()
+func (s *StagingLocator) Stop() {
+	s.nats.Unsubscribe(s.staging_locate_sid)
+	if s.advertiseTicker != nil {
+		s.advertiseTicker.Stop()
+	}
 }
 
-func (s StagingLocator) handleIt(payload []byte) {
+func (s *StagingLocator) handleIt(msg *yagnats.Message) {
 	s.Advertise()
 }
 
-func (s StagingLocator) Advertise() {
+func (s *StagingLocator) Advertise() {
 	am := protocol.NewAdvertiseMessage(s.id, s.stacks,
 		s.resourceMgr.RemainingMemory(), s.resourceMgr.RemainingDisk(), nil)
 	bytes, err := json.Marshal(am)
@@ -61,7 +67,7 @@ func (s StagingLocator) Advertise() {
 		stagingLocatorLogger.Error(err.Error())
 		return
 	}
-	s.mbus.Publish("staging.advertise", bytes)
+	s.nats.Publish("staging.advertise", bytes)
 }
 
 /*

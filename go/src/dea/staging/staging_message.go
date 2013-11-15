@@ -11,8 +11,8 @@ type StagingMessage struct {
 }
 
 type StagingBuildpack struct {
-	url *url.URL
-	key string
+	Url *url.URL
+	Key string
 }
 
 func NewStagingMessage(data map[string]interface{}) StagingMessage {
@@ -23,16 +23,16 @@ func (msg StagingMessage) AsMap() map[string]interface{} {
 	return msg.message
 }
 
-func (msg StagingMessage) app_id() string {
+func (msg StagingMessage) App_id() string {
 	return msg.message["app_id"].(string)
 }
 
-func (msg StagingMessage) task_id() string {
+func (msg StagingMessage) Task_id() string {
 	return msg.message["task_id"].(string)
 }
 
-func (msg StagingMessage) properties() map[string]string {
-	if props, ok := msg.message["properties"].(map[string]string); ok {
+func (msg StagingMessage) properties() map[string]interface{} {
+	if props, ok := msg.message["properties"].(map[string]interface{}); ok {
 		return props
 	}
 
@@ -65,11 +65,11 @@ func (msg StagingMessage) start_data() *starting.StartData {
 }
 
 func (msg StagingMessage) AdminBuildpacks() []StagingBuildpack {
-	if adminBuildpacks, ok := msg.message["admin_buildpacks"].([]map[string]string); ok {
+	if adminBuildpacks, ok := msg.message["admin_buildpacks"].([]map[string]interface{}); ok {
 		buildpacks := make([]StagingBuildpack, 0, len(adminBuildpacks))
 		for _, b := range adminBuildpacks {
-			bpUrl, _ := url.Parse(b["url"])
-			buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"]})
+			bpUrl, _ := url.Parse(b["url"].(string))
+			buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"].(string)})
 		}
 		return buildpacks
 	}

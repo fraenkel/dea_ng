@@ -10,10 +10,10 @@ import (
 const VERSION = "0.0.1"
 
 type HelloMessage struct {
-	Id      string "id"
-	Ip      string "ip"
-	Port    uint16 "port"
-	Version string "version"
+	Id      string `json:"id"`
+	Ip      string `json:"ip"`
+	Port    uint16 `json:"port"`
+	Version string `json:"version"`
 }
 
 func NewHelloMessage(uuid string, ip string, port uint16) *HelloMessage {
@@ -26,10 +26,10 @@ func NewHelloMessage(uuid string, ip string, port uint16) *HelloMessage {
 }
 
 type GoodbyeMessage struct {
-	Id           string         "id"
-	Ip           string         "ip"
-	AppIdToCount map[string]int "app_id_to_count"
-	Version      string         "version"
+	Id           string         `json:"id"`
+	Ip           string         `json:"ip"`
+	AppIdToCount map[string]int `json:"app_id_to_count"`
+	Version      string         `json:"version"`
 }
 
 func NewGoodbyeMessage(uuid string, ip string, appIdToCount map[string]int) *GoodbyeMessage {
@@ -42,18 +42,18 @@ func NewGoodbyeMessage(uuid string, ip string, appIdToCount map[string]int) *Goo
 }
 
 type HeartbeatInstanceV1 struct {
-	CCPartition string    "cc_partition"
-	Droplet     string    "droplet"
-	Version     string    "version"
-	Id          string    "instance"
-	Index       int       "index"
-	State       string    "state"
-	Timestamp   time.Time "state_timestamp"
+	CCPartition string    `json:"cc_partition"`
+	Droplet     string    `json:"droplet"`
+	Version     string    `json:"version"`
+	Id          string    `json:"instance"`
+	Index       int       `json:"index"`
+	State       string    `json:"state"`
+	Timestamp   time.Time `json:"state_timestamp"`
 }
 
 type HeartbeatResponseV1 struct {
-	Heartbeats []HeartbeatInstanceV1 "droplets"
-	Uuid       string                "dea"
+	Heartbeats []HeartbeatInstanceV1 `json:"droplets"`
+	Uuid       string                `json:"dea"`
 }
 
 func NewHeartbeatResponseV1(uuid string, instances []*starting.Instance) *HeartbeatResponseV1 {
@@ -78,15 +78,15 @@ func NewHeartbeatResponseV1(uuid string, instances []*starting.Instance) *Heartb
 }
 
 type ExitMessage struct {
-	CCPartition     string     "cc_partition"
-	Droplet         string     "droplet"
-	Version         string     "version"
-	Id              string     "instance"
-	Index           int        "index"
-	Reason          string     "reason"
-	ExitStatus      int32      "exit_status"
-	ExitDescription string     "exit_description"
-	CrashTimestamp  *time.Time "crash_timestamp"
+	CCPartition     string     `json:"cc_partition"`
+	Droplet         string     `json:"droplet"`
+	Version         string     `json:"version"`
+	Id              string     `json: "instance"`
+	Index           int        `json:"index"`
+	Reason          string     `json:"reason"`
+	ExitStatus      int32      `json:"exit_status"`
+	ExitDescription string     `json:"exit_description"`
+	CrashTimestamp  *time.Time `json:"crash_timestamp"`
 }
 
 func NewExitMessage(i starting.Instance, reason string) *ExitMessage {
@@ -110,38 +110,44 @@ func NewExitMessage(i starting.Instance, reason string) *ExitMessage {
 }
 
 type AdvertiseMessage struct {
-	id              string         "id"
-	stacks          []string       "stacks"
-	availableMemory float64        "available_memory"
-	availableDisk   float64        "available_disk"
-	appCounts       map[string]int "app_id_to_count"
+	ID              string         `json:"id"`
+	Stacks          []string       `json:"stacks"`
+	AvailableMemory float64        `json:"available_memory"`
+	AvailableDisk   float64        `json:"available_disk"`
+	AppCounts       map[string]int `json:"app_id_to_count"`
 }
 
 func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableDisk float64, appCounts map[string]int) *AdvertiseMessage {
 	return &AdvertiseMessage{
-		id:              id,
-		stacks:          stacks,
-		availableMemory: availableMemory,
-		availableDisk:   availableDisk,
-		appCounts:       appCounts,
+		ID:              id,
+		Stacks:          stacks,
+		AvailableMemory: availableMemory,
+		AvailableDisk:   availableDisk,
+		AppCounts:       appCounts,
 	}
 }
 
 type DeaStatusResponse struct {
-	HelloMessage
-	MaxMemory      float64 "max_memory"
-	ReservedMemory uint    "reserved_memory"
-	UsedMemory     uint    "used_memory"
-	NumClients     *uint32 "num_clients"
+	Id             string  `json:"id"`
+	Ip             string  `json:"ip"`
+	Port           uint16  `json:"port"`
+	Version        string  `json:"version"`
+	MaxMemory      float64 `json:"max_memory"`
+	ReservedMemory uint    `json:"reserved_memory"`
+	UsedMemory     uint    `json:"used_memory"`
+	NumClients     *uint32 `json:"num_clients"`
 }
 
 func NewDeaStatusResponse(uuid string, ip string, port uint16, memoryCapacity float64, reservedMemory, usedMemory uint) *DeaStatusResponse {
 	response := DeaStatusResponse{
+		Id:             uuid,
+		Ip:             ip,
+		Port:           port,
+		Version:        VERSION,
 		MaxMemory:      memoryCapacity,
 		ReservedMemory: reservedMemory,
 		UsedMemory:     usedMemory,
 	}
-	response.HelloMessage = *NewHelloMessage(uuid, ip, port)
 
 	return &response
 }
@@ -162,22 +168,22 @@ type FindDropletResponse struct {
 }
 
 type FindDropletStats struct {
-	Name        string           "name"
-	Uris        []string         "uris"
-	Host        string           "host"
-	Port        uint32           "port"
-	Uptime      float64          "uptime"
-	MemoryQuota config.Memory    "mem_quota"
-	DiskQuota   config.Disk      "disk_quota"
-	FdsQuota    uint64           "fds_quota"
+	Name        string           `json:"name"`
+	Uris        []string         `json:"uris"`
+	Host        string           `json:"host"`
+	Port        uint32           `json:"port"`
+	Uptime      float64          `json:"uptime"`
+	MemoryQuota config.Memory    `json:"mem_quota"`
+	DiskQuota   config.Disk      `json:"disk_quota"`
+	FdsQuota    uint64           `json:"fds_quota"`
 	Usage       FindDropletUsage `json:"usage"`
 }
 
 type FindDropletUsage struct {
-	Time     string
-	CPU      float32     "cpu"
-	MemoryKB uint64      "mem"
-	Disk     config.Disk "disk"
+	Time     string      `json:"time"`
+	CPU      float32     `json:"cpu"`
+	MemoryKB uint64      `json:"mem"`
+	Disk     config.Disk `json:"disk"`
 }
 
 func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,

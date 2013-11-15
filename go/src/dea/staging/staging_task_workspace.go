@@ -19,7 +19,7 @@ var stwLogger = utils.Logger("StagingTaskWorkspace", nil)
 
 type StagingTaskWorkspace struct {
 	baseDir               string
-	environmentProperties map[string]string
+	environmentProperties map[string]interface{}
 	buildpackManager      BuildpackManager
 }
 

@@ -7,7 +7,21 @@ import (
 	"math"
 )
 
-type ResourceManager struct {
+type ResourceManager interface {
+	MemoryCapacity() float64
+	DiskCapacity() float64
+	AppIdToCount() map[string]int
+	RemainingMemory() float64
+	ReservedMemory() float64
+	UsedMemory() float64
+	CanReserve(memory, disk float64) bool
+	RemainingDisk() float64
+	NumberReservable(memory, disk uint64) uint
+	AvailableMemoryRatio() float64
+	AvailableDiskRatio() float64
+}
+
+type resourceManager struct {
 	memoryCapacityMB    float64
 	diskCapacityMB      float64
 	instanceRegistry    *starting.InstanceRegistry
@@ -37,7 +51,7 @@ func getFloat64(configVal, defaultVal float64) float64 {
 
 func NewResourceManager(iRegistry *starting.InstanceRegistry,
 	stRegistry *staging.StagingTaskRegistry,
-	config *config.ResourcesConfig) *ResourceManager {
+	config *config.ResourcesConfig) ResourceManager {
 
 	memoryMb := getUint64(config.MemoryMB, defaultConfig.MemoryMB)
 	memoryOvercommit := getFloat64(config.MemoryOvercommitFactor, defaultConfig.MemoryOvercommitFactor)
@@ -46,7 +60,7 @@ func NewResourceManager(iRegistry *starting.InstanceRegistry,
 	diskOvercommit := getFloat64(config.DiskOvercommitFactor, defaultConfig.DiskOvercommitFactor)
 	disk := float64(diskMb) * diskOvercommit
 
-	return &ResourceManager{
+	return &resourceManager{
 		memoryCapacityMB:    memory,
 		diskCapacityMB:      disk,
 		instanceRegistry:    iRegistry,
@@ -54,46 +68,46 @@ func NewResourceManager(iRegistry *starting.InstanceRegistry,
 	}
 }
 
-func (rm *ResourceManager) MemoryCapacity() float64 {
+func (rm *resourceManager) MemoryCapacity() float64 {
 	return rm.memoryCapacityMB
 }
 
-func (rm *ResourceManager) DiskCapacity() float64 {
+func (rm *resourceManager) DiskCapacity() float64 {
 	return rm.diskCapacityMB
 }
 
-func (rm *ResourceManager) AppIdToCount() map[string]int {
+func (rm *resourceManager) AppIdToCount() map[string]int {
 	return rm.instanceRegistry.AppIdToCount()
 }
 
-func (rm *ResourceManager) RemainingMemory() float64 {
+func (rm *resourceManager) RemainingMemory() float64 {
 	return rm.memoryCapacityMB - rm.ReservedMemory()
 }
 
-func (rm *ResourceManager) ReservedMemory() float64 {
+func (rm *resourceManager) ReservedMemory() float64 {
 	return float64((rm.instanceRegistry.ReservedMemory() +
 		rm.stagingTaskRegistry.ReservedMemory()) / config.Mebi)
 }
 
-func (rm *ResourceManager) UsedMemory() float64 {
+func (rm *resourceManager) UsedMemory() float64 {
 	return float64(rm.instanceRegistry.UsedMemory() / config.Mebi)
 }
 
-func (rm *ResourceManager) CanReserve(memory, disk float64) bool {
+func (rm *resourceManager) CanReserve(memory, disk float64) bool {
 	return rm.RemainingMemory() > memory &&
 		rm.RemainingDisk() > disk
 }
 
-func (rm *ResourceManager) reserved_disk() float64 {
+func (rm *resourceManager) reserved_disk() float64 {
 	return float64((rm.instanceRegistry.ReservedDisk() +
 		rm.stagingTaskRegistry.ReservedDisk()) / config.MB)
 }
 
-func (rm *ResourceManager) RemainingDisk() float64 {
+func (rm *resourceManager) RemainingDisk() float64 {
 	return rm.DiskCapacity() - rm.reserved_disk()
 }
 
-func (rm *ResourceManager) NumberReservable(memory, disk uint64) uint {
+func (rm *resourceManager) NumberReservable(memory, disk uint64) uint {
 	if memory == 0 || disk == 0 {
 		return 0
 	}
@@ -101,10 +115,10 @@ func (rm *ResourceManager) NumberReservable(memory, disk uint64) uint {
 	return uint(math.Min(rm.RemainingMemory()/float64(memory), rm.RemainingDisk()/float64(disk)))
 }
 
-func (rm *ResourceManager) AvailableMemoryRatio() float64 {
+func (rm *resourceManager) AvailableMemoryRatio() float64 {
 	return 1.0 - (rm.ReservedMemory() / rm.MemoryCapacity())
 }
 
-func (rm *ResourceManager) AvailableDiskRatio() float64 {
+func (rm *resourceManager) AvailableDiskRatio() float64 {
 	return 1.0 - (rm.reserved_disk() / rm.DiskCapacity())
 }

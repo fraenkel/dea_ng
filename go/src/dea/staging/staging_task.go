@@ -18,16 +18,35 @@ import (
 	"time"
 )
 
-type StagingTask struct {
+type Callback func(e error)
+
+type StagingTask interface {
+	Id() string
+	StagingMessage() StagingMessage
+	StagingConfig() config.StagingConfig
+	MemoryLimit() config.Memory
+	DiskLimit() config.Disk
+	Start() error
+	Stop()
+	StreamingLogUrl() string
+	DetectedBuildpack() string
+	DropletSHA1() string
+	Path_in_container(pathSuffix string) string
+	SetAfter_setup_callback(callback Callback)
+	SetAfter_complete_callback(callback Callback)
+	SetAfter_upload_callback(callback Callback)
+	SetAfter_stop_callback(callback Callback)
+	StagingTimeout() time.Duration
+}
+
+type stagingTask struct {
 	id              string
 	stagingConfig   *config.StagingConfig
 	bindMounts      []map[string]string
 	staging_message StagingMessage
-	buildpacksInUse []StagingBuildpack
 	workspace       StagingTaskWorkspace
 	dropletRegistry *droplet.DropletRegistry
 	deaRuby         string
-	stagingTimeout  time.Duration
 	task.Task
 	dropletSha1             string
 	after_setup_callback    func(e error)
@@ -36,17 +55,15 @@ type StagingTask struct {
 	after_stop_callback     func(e error)
 }
 
-func NewStagingTask(config *config.Config, staging_message StagingMessage,
-	buildpacksInUse []StagingBuildpack, dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) *StagingTask {
-	s := &StagingTask{
-		id:              staging_message.task_id(),
+func NewStagingTask(config *config.Config, staging_message StagingMessage, buildpacksInUse []StagingBuildpack,
+	dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) StagingTask {
+	s := &stagingTask{
+		id:              staging_message.Task_id(),
 		bindMounts:      config.BindMounts,
 		staging_message: staging_message,
 		stagingConfig:   &config.Staging,
-		buildpacksInUse: buildpacksInUse,
 		dropletRegistry: dropletRegistry,
 		deaRuby:         config.DeaRuby,
-		stagingTimeout:  config.Staging.MaxStagingDuration,
 		Task:            task.NewTask(config.WardenSocket, logger),
 	}
 
@@ -59,23 +76,27 @@ func NewStagingTask(config *config.Config, staging_message StagingMessage,
 	return s
 }
 
-func (s *StagingTask) Id() string {
+func (s *stagingTask) Id() string {
 	return s.id
 }
 
-func (s *StagingTask) StagingMessage() StagingMessage {
+func (s *stagingTask) StagingConfig() config.StagingConfig {
+	return *s.stagingConfig
+}
+
+func (s *stagingTask) StagingMessage() StagingMessage {
 	return s.staging_message
 }
 
-func (s *StagingTask) MemoryLimit() config.Memory {
+func (s *stagingTask) MemoryLimit() config.Memory {
 	return config.Memory(s.stagingConfig.MemoryLimitMB) * config.Mebi
 }
 
-func (s *StagingTask) DiskLimit() config.Disk {
+func (s *stagingTask) DiskLimit() config.Disk {
 	return config.Disk(s.stagingConfig.DiskLimitMB) * config.MB
 }
 
-func (s *StagingTask) Start() error {
+func (s *stagingTask) Start() error {
 	defer func() {
 		s.Promise_destroy()
 		os.RemoveAll(s.workspace.workspace_dir())
@@ -106,7 +127,7 @@ func (s *StagingTask) Start() error {
 	return err
 }
 
-func (s *StagingTask) Stop() {
+func (s *stagingTask) Stop() {
 	s.Logger.Info("staging.task.stopped")
 
 	s.SetAfter_complete_callback(nil)
@@ -118,7 +139,7 @@ func (s *StagingTask) Stop() {
 	s.trigger_after_stop(err)
 }
 
-func (s *StagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
+func (s *stagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
 	workspaceDirs := []string{s.workspace.workspace_dir(), s.workspace.buildpack_dir(), s.workspace.admin_buildpacks_dir()}
 	mounts := make([]*warden.CreateRequest_BindMount, 0, len(workspaceDirs)+len(s.bindMounts))
 	for _, d := range workspaceDirs {
@@ -138,7 +159,7 @@ func (s *StagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
 	return mounts
 }
 
-func (s *StagingTask) resolve_staging_setup() error {
+func (s *stagingTask) resolve_staging_setup() error {
 	s.workspace.prepare()
 	s.Container.Create(s.bind_mounts(), uint64(s.DiskLimit()), uint64(s.MemoryLimit()), false)
 
@@ -160,7 +181,7 @@ func (s *StagingTask) resolve_staging_setup() error {
 	return err
 }
 
-func (s *StagingTask) resolve_staging() error {
+func (s *stagingTask) resolve_staging() error {
 	defer s.promise_task_log()
 
 	err := utils.Sequence_promises(
@@ -177,14 +198,14 @@ func (s *StagingTask) resolve_staging() error {
 	return err
 }
 
-func (s *StagingTask) resolve_staging_upload() error {
+func (s *stagingTask) resolve_staging_upload() error {
 	return utils.Sequence_promises(
 		s.promise_app_upload,
 		s.promise_save_buildpack_cache,
 	)
 }
 
-func (s *StagingTask) promise_log_upload_started() error {
+func (s *stagingTask) promise_log_upload_started() error {
 	script := "set -o pipefail\n" +
 		"droplet_size=`du -h " + s.workspace.warden_staged_droplet() + " | cut -f1`\n" +
 		"package_size=`du -h " + s.workspace.downloaded_app_package_path() + " | cut -f1`\n" +
@@ -195,7 +216,7 @@ func (s *StagingTask) promise_log_upload_started() error {
 	return err
 }
 
-func (s *StagingTask) promise_app_upload() error {
+func (s *stagingTask) promise_app_upload() error {
 	uploadUri := s.staging_message.upload_uri()
 	s.Logger.Infod(map[string]interface{}{
 		"source":      s.workspace.staged_droplet_path(),
@@ -221,7 +242,7 @@ func (s *StagingTask) promise_app_upload() error {
 	return err
 }
 
-func (s *StagingTask) promise_app_download() error {
+func (s *stagingTask) promise_app_download() error {
 	downloadUri := s.staging_message.download_uri()
 	s.Logger.Infod(map[string]interface{}{"uri": downloadUri},
 		"staging.app-download.starting uri")
@@ -255,7 +276,7 @@ func (s *StagingTask) promise_app_download() error {
 	return nil
 }
 
-func (s *StagingTask) promise_buildpack_cache_upload() error {
+func (s *stagingTask) promise_buildpack_cache_upload() error {
 	uploadUri := s.staging_message.buildpack_cache_upload_uri()
 	s.Logger.Infod(map[string]interface{}{
 		"source":      s.workspace.staged_buildpack_cache_path(),
@@ -281,7 +302,7 @@ func (s *StagingTask) promise_buildpack_cache_upload() error {
 	return err
 }
 
-func (s *StagingTask) promise_buildpack_cache_download() error {
+func (s *stagingTask) promise_buildpack_cache_download() error {
 	downloadUri := s.staging_message.buildpack_cache_download_uri()
 	s.Logger.Infod(map[string]interface{}{
 		"uri": downloadUri},
@@ -315,7 +336,7 @@ func (s *StagingTask) promise_buildpack_cache_download() error {
 	return nil
 }
 
-func (s *StagingTask) promise_copy_out() error {
+func (s *stagingTask) promise_copy_out() error {
 	src := s.workspace.warden_staged_droplet()
 	dst := s.workspace.staged_droplet_dir()
 	s.Logger.Infod(map[string]interface{}{
@@ -326,7 +347,7 @@ func (s *StagingTask) promise_copy_out() error {
 	return s.Copy_out_request(src, dst)
 }
 
-func (s *StagingTask) promise_save_buildpack_cache() error {
+func (s *stagingTask) promise_save_buildpack_cache() error {
 	start := time.Now()
 	err := s.promise_pack_buildpack_cache()
 	if err == nil {
@@ -349,7 +370,7 @@ func (s *StagingTask) promise_save_buildpack_cache() error {
 	return err
 }
 
-func (s *StagingTask) promise_save_droplet() error {
+func (s *stagingTask) promise_save_droplet() error {
 	sha1, err := utils.SHA1Digest(s.workspace.staged_droplet_path())
 	if err != nil {
 		return err
@@ -367,7 +388,7 @@ func (s *StagingTask) promise_save_droplet() error {
 	return nil
 }
 
-func (s *StagingTask) promise_prepare_staging_log() error {
+func (s *stagingTask) promise_prepare_staging_log() error {
 	script := fmt.Sprintf("mkdir -p %s/logs && touch %s", s.workspace.warden_staged_dir(),
 		s.workspace.warden_staging_log())
 
@@ -378,7 +399,7 @@ func (s *StagingTask) promise_prepare_staging_log() error {
 	return err
 }
 
-func (s *StagingTask) promise_app_dir() error {
+func (s *stagingTask) promise_app_dir() error {
 	// Some buildpacks seem to make assumption that /app is a non-empty directory
 	// See: https://github.com/heroku/heroku-buildpack-python/blob/master/bin/compile#L46
 	// TODO possibly remove this if pull request is accepted
@@ -391,7 +412,7 @@ func (s *StagingTask) promise_app_dir() error {
 	return err
 }
 
-func (s *StagingTask) promise_stage() error {
+func (s *stagingTask) promise_stage() error {
 	env := env.NewEnv(NewStagingEnv(s))
 	exportedEnv, err := env.ExportedEnvironmentVariables()
 	if err != nil {
@@ -410,7 +431,7 @@ func (s *StagingTask) promise_stage() error {
 	s.Logger.Debugd(map[string]interface{}{"script": script},
 		"staging.task.execute-staging")
 
-	err = utils.Timeout(s.stagingTimeout+s.staging_timeout_grace_period(),
+	err = utils.Timeout(s.StagingTimeout()+s.staging_timeout_grace_period(),
 		func() error {
 			rsp, err := s.Container.RunScript(script)
 			s.loggregator_emit_result(rsp)
@@ -420,7 +441,7 @@ func (s *StagingTask) promise_stage() error {
 	return err
 }
 
-func (s *StagingTask) promise_task_log() error {
+func (s *stagingTask) promise_task_log() error {
 	src := s.workspace.warden_staging_log()
 	dst := path.Dir(s.workspace.staging_log_path())
 	s.Logger.Infod(map[string]interface{}{
@@ -431,7 +452,7 @@ func (s *StagingTask) promise_task_log() error {
 	return s.Copy_out_request(src, dst)
 }
 
-func (s *StagingTask) promise_staging_info() error {
+func (s *stagingTask) promise_staging_info() error {
 	src := s.workspace.warden_staging_info()
 	dest := path.Dir(s.workspace.staging_info_path())
 	s.Logger.Infod(map[string]interface{}{
@@ -442,7 +463,7 @@ func (s *StagingTask) promise_staging_info() error {
 	return s.Copy_out_request(src, dest)
 }
 
-func (s *StagingTask) promise_unpack_app() error {
+func (s *stagingTask) promise_unpack_app() error {
 	dst := s.workspace.warden_unstaged_dir()
 	s.Logger.Infod(map[string]interface{}{
 		"destination": dst,
@@ -458,7 +479,7 @@ func (s *StagingTask) promise_unpack_app() error {
 	return err
 }
 
-func (s *StagingTask) promise_pack_app() error {
+func (s *stagingTask) promise_pack_app() error {
 	s.Logger.Info("staging.task.packing-droplet")
 
 	script := "cd " + s.workspace.warden_staged_dir() + " && " +
@@ -467,7 +488,7 @@ func (s *StagingTask) promise_pack_app() error {
 	return err
 }
 
-func (s *StagingTask) promise_pack_buildpack_cache() error {
+func (s *stagingTask) promise_pack_buildpack_cache() error {
 	// TODO: Ignore if buildpack cache is empty or does not exist
 
 	script := "mkdir -p " + s.workspace.warden_cache() + " && " +
@@ -477,7 +498,7 @@ func (s *StagingTask) promise_pack_buildpack_cache() error {
 	return err
 }
 
-func (s *StagingTask) promise_unpack_buildpack_cache() error {
+func (s *stagingTask) promise_unpack_buildpack_cache() error {
 	if utils.File_Exists(s.workspace.downloaded_buildpack_cache_path()) {
 		s.Logger.Infod(map[string]interface{}{
 			"destination": s.workspace.warden_cache(),
@@ -497,7 +518,7 @@ func (s *StagingTask) promise_unpack_buildpack_cache() error {
 	return nil
 }
 
-func (s *StagingTask) promise_copy_out_buildpack_cache() error {
+func (s *stagingTask) promise_copy_out_buildpack_cache() error {
 	src := s.workspace.warden_staged_buildpack_cache()
 	dst := s.workspace.staged_droplet_dir()
 	s.Logger.Infod(map[string]interface{}{
@@ -508,13 +529,13 @@ func (s *StagingTask) promise_copy_out_buildpack_cache() error {
 	return s.Copy_out_request(src, dst)
 }
 
-func (s *StagingTask) StreamingLogUrl() string {
+func (s *stagingTask) StreamingLogUrl() string {
 	// TODO
 	panic("Not Implemented")
 	//return s.dirServer.StagingTaskFileUrlFor(s.id, workspace.warden_staging_log)
 }
 
-func (s *StagingTask) task_info() map[string]interface{} {
+func (s *stagingTask) task_info() map[string]interface{} {
 	data := make(map[string]interface{})
 	stagingInfoPath := s.workspace.staging_info_path()
 	if _, err := os.Stat(stagingInfoPath); os.IsExist(err) {
@@ -527,15 +548,15 @@ func (s *StagingTask) task_info() map[string]interface{} {
 	return data
 }
 
-func (s *StagingTask) DetectedBuildpack() string {
+func (s *stagingTask) DetectedBuildpack() string {
 	return s.task_info()["detected_buildpack"].(string)
 }
 
-func (s *StagingTask) DropletSHA1() string {
+func (s *stagingTask) DropletSHA1() string {
 	return s.dropletSha1
 }
 
-func (s *StagingTask) Path_in_container(pathSuffix string) string {
+func (s *stagingTask) Path_in_container(pathSuffix string) string {
 	cPath := s.Container.Path()
 	if cPath == "" {
 		return ""
@@ -545,58 +566,58 @@ func (s *StagingTask) Path_in_container(pathSuffix string) string {
 	return strings.Join([]string{cPath, "tmp", "rootfs", pathSuffix}, "/")
 }
 
-func (s *StagingTask) SetAfter_setup_callback(callback func(e error)) {
+func (s *stagingTask) SetAfter_setup_callback(callback Callback) {
 	s.after_setup_callback = callback
 }
-func (s *StagingTask) trigger_after_setup(err error) {
+func (s *stagingTask) trigger_after_setup(err error) {
 	if s.after_setup_callback != nil {
 		s.after_setup_callback(err)
 	}
 }
 
-func (s *StagingTask) SetAfter_complete_callback(callback func(e error)) {
+func (s *stagingTask) SetAfter_complete_callback(callback Callback) {
 	s.after_complete_callback = callback
 }
 
-func (s *StagingTask) trigger_after_complete(err error) {
+func (s *stagingTask) trigger_after_complete(err error) {
 	if s.after_complete_callback != nil {
 		s.after_complete_callback(err)
 	}
 }
 
-func (s *StagingTask) SetAfter_upload_callback(callback func(e error)) {
+func (s *stagingTask) SetAfter_upload_callback(callback Callback) {
 	s.after_upload_callback = callback
 }
-func (s *StagingTask) trigger_after_upload(err error) {
+func (s *stagingTask) trigger_after_upload(err error) {
 	if s.after_upload_callback != nil {
 		s.after_upload_callback(err)
 	}
 }
 
-func (s *StagingTask) SetAfter_stop_callback(callback func(e error)) {
+func (s *stagingTask) SetAfter_stop_callback(callback Callback) {
 	s.after_stop_callback = callback
 }
-func (s *StagingTask) trigger_after_stop(err error) {
+func (s *stagingTask) trigger_after_stop(err error) {
 	if s.after_stop_callback != nil {
 		s.after_stop_callback(err)
 	}
 }
 
-func (s *StagingTask) run_plugin_path() string {
+func (s *stagingTask) run_plugin_path() string {
 	return path.Join(s.workspace.buildpack_dir(), "bin", "run")
 }
 
-func (s *StagingTask) StagingTimeout() time.Duration {
-	return s.stagingTimeout
+func (s *stagingTask) StagingTimeout() time.Duration {
+	return s.stagingConfig.MaxStagingDuration
 }
 
-func (s *StagingTask) staging_timeout_grace_period() time.Duration {
+func (s *stagingTask) staging_timeout_grace_period() time.Duration {
 	return 60 * time.Second
 }
 
-func (s *StagingTask) loggregator_emit_result(result *warden.RunResponse) *warden.RunResponse {
+func (s *stagingTask) loggregator_emit_result(result *warden.RunResponse) *warden.RunResponse {
 	if result != nil {
-		appId := s.staging_message.app_id()
+		appId := s.staging_message.App_id()
 		loggregator.StagingEmit(appId, result.GetStdout())
 		loggregator.StagingEmitError(appId, result.GetStderr())
 	}

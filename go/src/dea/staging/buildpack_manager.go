@@ -66,7 +66,7 @@ func (bpMgr BuildpackManager) buildpacks_needing_deletion() []string {
 func (bpMgr BuildpackManager) admin_buildpacks_in_staging_message() []string {
 	paths := make([]string, 0, len(bpMgr.admin_buildpacks))
 	for _, bp := range bpMgr.admin_buildpacks {
-		bpDir := path.Join(bpMgr.adminBuildpacks_dir, bp.key)
+		bpDir := path.Join(bpMgr.adminBuildpacks_dir, bp.Key)
 		if utils.File_Exists(bpDir) {
 			paths = append(paths, bpDir)
 		}
@@ -78,7 +78,7 @@ func (bpMgr BuildpackManager) admin_buildpacks_in_staging_message() []string {
 func (bpMgr BuildpackManager) buildpacks_in_use_paths() []string {
 	paths := make([]string, 0, len(bpMgr.admin_buildpacks))
 	for _, bp := range bpMgr.buildpacks_in_use {
-		bpDir := path.Join(bpMgr.adminBuildpacks_dir, bp.key)
+		bpDir := path.Join(bpMgr.adminBuildpacks_dir, bp.Key)
 		paths = append(paths, bpDir)
 	}
 

@@ -1,12 +1,11 @@
-package dea_test
+package responders
 
 import (
-	//	. "dea"
 	. "github.com/onsi/ginkgo"
 
 //	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Nats", func() {
+var _ = Describe("StagingLocator", func() {
 
 })

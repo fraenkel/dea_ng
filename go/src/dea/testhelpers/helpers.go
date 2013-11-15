@@ -11,11 +11,11 @@ func valid_service_attributes(syslog_drain_url string) map[string]interface{} {
 		"label":            "label",
 		"vendor":           "vendor",
 		"version":          "version",
-		"tags":             []string{"tag1", "tag2"},
+		"tags":             []interface{}{"tag1", "tag2"},
 		"plan":             "plan",
 		"plan_option":      "plan_option",
 		"syslog_drain_url": syslog_drain_url,
-		"credentials": map[string]string{
+		"credentials": map[string]interface{}{
 			"jdbcUrl":  "jdbc:mysql://some_user:some_password@some-db-provider.com:3306/db_name",
 			"uri":      "mysql://some_user:some_password@some-db-provider.com:3306/db_name",
 			"name":     "db_name",
@@ -37,13 +37,13 @@ func Valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 		"application_id":      "37",
 		"application_version": "some_version",
 		"application_name":    "my_application",
-		"application_uris":    []string{"foo.com", "bar.com"},
+		"application_uris":    []interface{}{"foo.com", "bar.com"},
 
 		"droplet_sha1": "deadbeef",
 		"droplet_uri":  "http://foo.com/file.ext",
 
 		"limits": map[string]interface{}{"mem": 512, "disk": 128, "fds": 5000},
-		"env":    []string{"FOO=BAR"},
+		"env":    []interface{}{"FOO=BAR"},
 
 		"warden_handle":           "1234",
 		"instance_host_port":      float64(2345),
@@ -67,8 +67,8 @@ func Valid_staging_attributes() map[string]interface{} {
 	return map[string]interface{}{
 		"properties": map[string]interface{}{
 			"services":    []interface{}{},
-			"environment": []string{"FOO=BAR"},
-			"resources": map[string]uint32{
+			"environment": []interface{}{"FOO=BAR"},
+			"resources": map[string]interface{}{
 				"memory": 512,
 				"disk":   128,
 				"fds":    5000,
@@ -80,6 +80,6 @@ func Valid_staging_attributes() map[string]interface{} {
 		"upload_uri":       "http://127.0.0.1:12346/upload",
 		"staged_path":      "",
 		"start_message":    Valid_instance_attributes(false),
-		"admin_buildpacks": []string{},
+		"admin_buildpacks": []map[string]interface{}{},
 	}
 }

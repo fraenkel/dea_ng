@@ -16,11 +16,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	cfmessage "github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/cloudfoundry/gorouter/common"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/loggregatorlib/cfcomponent/localip"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
+	"github.com/cloudfoundry/yagnats"
 	"io/ioutil"
 	"launchpad.net/goyaml"
 	"os"
@@ -67,7 +67,7 @@ type bootstrap struct {
 	heartbeatTicker     *time.Ticker
 	directoryServer     *ds.DirectoryServerV1
 	directoryServerV2   *ds.DirectoryServerV2
-	resource_manager    *resmgr.ResourceManager
+	resource_manager    resmgr.ResourceManager
 	registrationTicker  *time.Ticker
 }
 
@@ -147,11 +147,7 @@ func (b bootstrap) setup() error {
 	b.setupPidFile()
 	b.setupSweepers()
 
-	nats, err := dea.NewNats(b.config.NatsConfig)
-	if err != nil {
-		return err
-	}
-	b.nats = nats
+	b.nats = dea.NewNats(b.config.NatsConfig)
 
 	return nil
 }
@@ -203,10 +199,8 @@ func (bootstrap *bootstrap) setupPidFile() error {
 
 func (b *bootstrap) setupSweepers() {
 	// Heartbeats of instances we're managing
-	hbInterval, exist := b.config.Intervals["heartbeat"]
-	if exist {
-		hbInterval = hbInterval * time.Second
-	} else {
+	hbInterval := b.config.Intervals.Heartbeat
+	if hbInterval == 0 {
 		hbInterval = DEFAULT_HEARTBEAT_INTERVAL
 	}
 
@@ -241,7 +235,7 @@ func (b *bootstrap) sendHeartbeat(instances []*starting.Instance) {
 			b.logger.Error(err.Error())
 			return
 		}
-		b.nats.MessageBus.Publish("dea.heartbeat", bytes)
+		b.nats.NatsClient.Publish("dea.heartbeat", bytes)
 	}
 }
 
@@ -329,7 +323,7 @@ func (b *bootstrap) sendShutdownMessage() {
 		b.logger.Error(err.Error())
 		return
 	}
-	b.nats.MessageBus.Publish("dea.shutdown", bytes)
+	b.nats.NatsClient.Publish("dea.shutdown", bytes)
 }
 
 func (b *bootstrap) sendExitMessage(i *starting.Instance, reason string) {
@@ -339,7 +333,7 @@ func (b *bootstrap) sendExitMessage(i *starting.Instance, reason string) {
 		b.logger.Error(err.Error())
 		return
 	}
-	b.nats.MessageBus.Publish("droplet.exited", bytes)
+	b.nats.NatsClient.Publish("droplet.exited", bytes)
 }
 
 func (b *bootstrap) send_instance_stop_message(instance *starting.Instance) {
@@ -380,7 +374,7 @@ func (b *bootstrap) evacuate() {
 		}
 	}
 
-	time.AfterFunc(b.config.EvacuationDelay*time.Second, func() {
+	time.AfterFunc(b.config.EvacuationDelay, func() {
 		b.shutdown()
 	})
 }
@@ -414,7 +408,7 @@ func (b *bootstrap) start() {
 		return
 	}
 
-	b.nats.MessageBus.Publish("dea.start", bytes)
+	b.nats.NatsClient.Publish("dea.start", bytes)
 	for _, r := range b.responders {
 		if lr, ok := r.(responders.LocatorResponder); ok {
 			lr.Advertise()
@@ -445,19 +439,21 @@ func (b *bootstrap) startComponent() error {
 	component.Host = fmt.Sprintf("%s:%d", host, statusConfig.Port)
 
 	common.StartComponent(component)
-	common.Register(component, b.nats.MessageBus)
+	common.Register(component, b.nats.NatsClient)
 
 	b.component = component
 	return nil
 }
 
 func (b *bootstrap) startNats() {
-	b.nats.Start(b)
+	if err := b.nats.Start(b); err != nil {
+		panic(err)
+	}
 
 	b.responders = []responders.Responder{
-		responders.NewDeaLocator(b.nats.MessageBus, b.component.UUID, b.resource_manager, b.config),
-		responders.NewStagingLocator(b.nats.MessageBus, b.component.UUID, b.resource_manager, b.config),
-		responders.NewStaging(b, b.nats.MessageBus, b.component.UUID, b.stagingTaskRegistry, b.config, b.dropletRegistry),
+		responders.NewDeaLocator(b.nats.NatsClient, b.component.UUID, b.resource_manager, b.config),
+		responders.NewStagingLocator(b.nats.NatsClient, b.component.UUID, b.resource_manager, b.config),
+		responders.NewStaging(b, b.nats.NatsClient, b.component.UUID, b.stagingTaskRegistry, b.config, b.dropletRegistry),
 	}
 
 	for _, r := range b.responders {
@@ -466,8 +462,8 @@ func (b *bootstrap) startNats() {
 }
 
 func (b *bootstrap) greetRouter() {
-	b.routerClient.Greet(func(response []byte) {
-		b.HandleRouterStart(response)
+	b.routerClient.Greet(func(msg *yagnats.Message) {
+		b.HandleRouterStart(msg)
 	})
 }
 
@@ -564,9 +560,8 @@ func (b *bootstrap) create_instance(attributes map[string]interface{}) *starting
 		return nil
 	}
 
-	limits := attributes["limits"].(map[string]uint64)
-	memory := limits["mem"]
-	disk := limits["disk"]
+	memory := float64(instance.MemoryLimit() / config.Mebi)
+	disk := float64(instance.DiskLimit() / config.MB)
 	if !b.resource_manager.CanReserve(memory, disk) {
 		b.logger.Errorf("Unable to start instance: %s for app: %s, not enough resources available.", attributes["instance_index"], attributes["application_id"])
 		return nil
@@ -679,21 +674,18 @@ func (b *bootstrap) SaveSnapshot() {
 	b.logger.Debugf("Saving snapshot took: %.3fs", (time.Now().Sub(start) / time.Second))
 }
 
-func (b *bootstrap) HandleHealthManagerStart(payload []byte) {
+func (b *bootstrap) HandleHealthManagerStart(msg *yagnats.Message) {
 	b.sendHeartbeat(b.instanceRegistry.Instances())
 }
 
-func (b *bootstrap) HandleRouterStart(payload []byte) {
-	var d map[string]interface{}
-	if err := json.Unmarshal(payload, d); err != nil {
-		b.logger.Errorf("Invalid Router Start payload: %s", payload)
+func (b *bootstrap) HandleRouterStart(msg *yagnats.Message) {
+	routerStart := &common.RouterStart{}
+	if err := json.Unmarshal(msg.Payload, routerStart); err != nil {
+		b.logger.Errorf("Invalid Router Start payload: %s", msg.Payload)
 		return
 	}
 
-	var interval time.Duration = 0
-	if d != nil {
-		interval = d["minimumRegisterIntervalInSeconds"].(time.Duration)
-	}
+	interval := time.Duration(routerStart.MinimumRegisterIntervalInSeconds) * time.Second
 
 	b.register_routes()
 
@@ -701,7 +693,7 @@ func (b *bootstrap) HandleRouterStart(payload []byte) {
 		if b.registrationTicker != nil {
 			b.registrationTicker.Stop()
 		}
-		utils.RepeatFixed(interval*time.Second, func() { b.register_routes() })
+		utils.RepeatFixed(interval, func() { b.register_routes() })
 	}
 
 }
@@ -714,29 +706,29 @@ func (b *bootstrap) register_routes() {
 	}
 }
 
-func (b *bootstrap) HandleDeaStatus(payload []byte, replyTo cfmessage.ReplyTo) {
+func (b *bootstrap) HandleDeaStatus(msg *yagnats.Message) {
 	response := protocol.NewDeaStatusResponse(b.component.UUID, b.localIp, b.directoryServer.Port,
 		b.resource_manager.MemoryCapacity(),
 		uint(b.resource_manager.ReservedMemory()), uint(b.resource_manager.UsedMemory()))
 	if bytes, err := json.Marshal(response); err == nil {
-		replyTo.Respond(bytes)
+		b.nats.NatsClient.Publish(msg.ReplyTo, bytes)
 	} else {
 		b.logger.Errorf("HandleDeaStatus: marshal failed, %s", err.Error())
 	}
 }
 
-func (b *bootstrap) HandleDeaDirectedStart(payload []byte) {
+func (b *bootstrap) HandleDeaDirectedStart(msg *yagnats.Message) {
 	var d map[string]interface{}
-	if err := json.Unmarshal(payload, d); err == nil {
+	if err := json.Unmarshal(msg.Payload, d); err == nil {
 		b.StartApp(d)
 	} else {
 		b.logger.Errorf("HandleDeaDirectedStart: marshal failed, %s", err.Error())
 	}
 
 }
-func (b *bootstrap) HandleDeaStop(payload []byte) {
+func (b *bootstrap) HandleDeaStop(msg *yagnats.Message) {
 	var d map[string]interface{}
-	if err := json.Unmarshal(payload, d); err == nil {
+	if err := json.Unmarshal(msg.Payload, d); err == nil {
 		b.instances_filtered_by_message(d, func(i *starting.Instance) {
 			switch i.State() {
 			case starting.STATE_RUNNING, starting.STATE_STARTING:
@@ -750,9 +742,9 @@ func (b *bootstrap) HandleDeaStop(payload []byte) {
 	}
 }
 
-func (b *bootstrap) HandleDeaUpdate(payload []byte) {
+func (b *bootstrap) HandleDeaUpdate(msg *yagnats.Message) {
 	var d map[string]interface{}
-	if err := json.Unmarshal(payload, d); err != nil {
+	if err := json.Unmarshal(msg.Payload, d); err != nil {
 		b.logger.Errorf("HandleDeaUpdate: marshal failed, %s", err.Error())
 	}
 	app_id := d["droplet"].(string)
@@ -784,13 +776,13 @@ func (b *bootstrap) HandleDeaUpdate(payload []byte) {
 	}
 }
 
-func (b *bootstrap) HandleDeaFindDroplet(payload []byte, replyTo cfmessage.ReplyTo) {
+func (b *bootstrap) HandleDeaFindDroplet(msg *yagnats.Message) {
 	var d map[string]interface{}
-	if err := json.Unmarshal(payload, d); err == nil {
+	if err := json.Unmarshal(msg.Payload, d); err == nil {
 		b.instances_filtered_by_message(d, func(i *starting.Instance) {
 			response := protocol.NewFindDropletResponse(b.UUID(), b.localIp, i, b.directoryServer, b.directoryServerV2, d)
 			if bytes, err := json.Marshal(response); err == nil {
-				replyTo.Respond(bytes)
+				b.nats.NatsClient.Publish(msg.ReplyTo, bytes)
 			} else {
 				b.logger.Errorf("HandleDeaStatus: marshal failed, %s", err.Error())
 			}

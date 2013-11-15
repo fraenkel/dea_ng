@@ -19,9 +19,6 @@
 [submodule "go/src/github.com/stretchr/testify"]
 	path = go/src/github.com/stretchr/testify
 	url = https://github.com/stretchr/testify
-[submodule "go/src/github.com/cloudfoundry/go_cfmessagebus"]
-	path = go/src/github.com/cloudfoundry/go_cfmessagebus
-	url = https://github.com/cloudfoundry/go_cfmessagebus
 [submodule "go/src/github.com/cloudfoundry/gordon"]
 	path = go/src/github.com/cloudfoundry/gordon
 	url = https://github.com/cloudfoundry/gordon
@@ -49,3 +46,6 @@
 [submodule "go/src/github.com/stretchr/objx"]
 	path = go/src/github.com/stretchr/objx
 	url = https://github.com/stretchr/objx
+[submodule "go/src/github.com/stathat/go"]
+	path = go/src/github.com/stathat/go
+	url = https://github.com/stathat/go

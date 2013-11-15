@@ -7,8 +7,8 @@ import (
 	"dea/staging"
 	"dea/utils"
 	"encoding/json"
-	"github.com/cloudfoundry/go_cfmessagebus"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/yagnats"
 )
 
 var stagingLogger = utils.Logger("Staging", nil)
@@ -19,22 +19,25 @@ type AppManager interface {
 }
 
 type Staging struct {
-	enabled         bool
-	appManager      AppManager
-	mbus            cfmessagebus.MessageBus
-	id              string
-	stagingRegistry *staging.StagingTaskRegistry
-	config          *config.Config
-	dropletRegistry *droplet.DropletRegistry
+	enabled          bool
+	appManager       AppManager
+	nats             yagnats.NATSClient
+	id               string
+	stagingRegistry  *staging.StagingTaskRegistry
+	config           *config.Config
+	dropletRegistry  *droplet.DropletRegistry
+	staging_sid      *int
+	staging_id_sid   *int
+	staging_stop_sid *int
 }
 
-func NewStaging(appManager AppManager, mbus cfmessagebus.MessageBus, id string,
+func NewStaging(appManager AppManager, nats yagnats.NATSClient, id string,
 	stagingTaskRegistry *staging.StagingTaskRegistry,
 	config *config.Config, dropletRegistry *droplet.DropletRegistry) *Staging {
 	return &Staging{
 		enabled:         config.Staging.Enabled,
 		appManager:      appManager,
-		mbus:            mbus,
+		nats:            nats,
 		id:              id,
 		stagingRegistry: stagingTaskRegistry,
 		config:          config,
@@ -42,64 +45,108 @@ func NewStaging(appManager AppManager, mbus cfmessagebus.MessageBus, id string,
 	}
 }
 
-func (s Staging) Start() {
+func (s *Staging) Start() {
 	if !s.enabled {
 		return
 	}
-	if err := s.mbus.ReplyToChannel("staging", s.handle); err != nil {
-		stagingLogger.Error(err.Error())
-		return
-	}
-
-	if err := s.mbus.ReplyToChannel("staging."+s.id+".start", s.handle); err != nil {
-		stagingLogger.Error(err.Error())
-		return
-	}
-
-	if err := s.mbus.ReplyToChannel("staging.stop", s.handle); err != nil {
-		stagingLogger.Error(err.Error())
-		return
-	}
-}
-
-func (s Staging) Stop() {
-	//	unsubscribe_from_staging
-	//	unsubscribe_from_dea_specific_staging
-	//	unsubscribe_from_staging_stop
-}
-
-func (s Staging) handle(payload []byte, reply cfmessagebus.ReplyTo) {
-
-	var tmpVal interface{}
-	err := json.Unmarshal(payload, &tmpVal)
+	staging_sid, err := s.nats.Subscribe("staging", s.handle)
 	if err != nil {
-		stagingLogger.Errorf("Parsing failed: %s", err.Error)
+		stagingLogger.Error(err.Error())
+		return
+	}
+	s.staging_sid = &staging_sid
+
+	staging_id_sid, err := s.nats.Subscribe("staging."+s.id+".start", s.handle)
+	if err != nil {
+		stagingLogger.Error(err.Error())
+		return
+	}
+	s.staging_id_sid = &staging_id_sid
+
+	staging_stop_sid, err := s.nats.Subscribe("staging.stop", s.handleStop)
+	if err != nil {
+		stagingLogger.Error(err.Error())
+		return
+	}
+	s.staging_stop_sid = &staging_stop_sid
+}
+
+func (s *Staging) Stop() {
+	if s.staging_sid != nil {
+		s.nats.Unsubscribe(*s.staging_sid)
+	}
+	if s.staging_id_sid != nil {
+		s.nats.Unsubscribe(*s.staging_id_sid)
+	}
+	if s.staging_stop_sid != nil {
+		s.nats.Unsubscribe(*s.staging_stop_sid)
+	}
+}
+
+func (s *Staging) handle(msg *yagnats.Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			stagingLogger.Errorf("Error during handle: %v", r)
+		}
+	}()
+
+	var data map[string]interface{}
+	err := json.Unmarshal(msg.Payload, &data)
+	if err != nil {
+		stagingLogger.Errorf("Parsing failed: %s", err.Error())
 		return
 	}
 
-	data := tmpVal.(map[string]interface{})
-	msg := staging.NewStagingMessage(data)
-	appId := data["app_id"].(string)
+	stagingMsg := staging.NewStagingMessage(data)
+	appId := stagingMsg.App_id()
 
 	logger := logger_for_app(appId)
 
-	loggregator.Emit(appId, "staging.handle.start "+appId)
-	logger.Infof("staging.handle.start %v", msg)
-	task := staging.NewStagingTask(s.config, msg, buildpacksInUse(s.stagingRegistry), s.dropletRegistry, logger)
+	loggregator.Emit(appId, "Got staging request for app with id "+appId)
+	logger.Infof("staging.handle.start %v", stagingMsg)
+	task := s.stagingRegistry.NewStagingTask(s.config, stagingMsg, s.dropletRegistry, logger)
 
 	s.stagingRegistry.Register(task)
 
 	s.appManager.SaveSnapshot()
 
-	s.notify_setup_completion(reply, task)
-	s.notify_completion(data, reply, task)
-	s.notify_upload(reply, task)
-	s.notify_stop(reply, task)
+	s.notify_setup_completion(msg.ReplyTo, task)
+	s.notify_completion(data, task)
+	s.notify_upload(msg.ReplyTo, task)
+	s.notify_stop(msg.ReplyTo, task)
 
 	task.Start()
 }
 
-func (s Staging) notify_setup_completion(reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
+func (s *Staging) handleStop(msg *yagnats.Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			stagingLogger.Errorf("Error during handleStop: %v", r)
+		}
+	}()
+
+	var data map[string]interface{}
+	err := json.Unmarshal(msg.Payload, &data)
+	if err != nil {
+		stagingLogger.Errorf("Parsing failed: %s", err.Error())
+		return
+	}
+
+	appId := data["app_id"].(string)
+	if appId == "" {
+		stagingLogger.Errorf("Missing app_id: %s", data)
+		return
+	}
+
+	for _, st := range s.stagingRegistry.Tasks() {
+
+		if appId == st.StagingMessage().App_id() {
+			st.Stop()
+		}
+	}
+}
+
+func (s *Staging) notify_setup_completion(replyTo string, task staging.StagingTask) {
 	task.SetAfter_setup_callback(func(e error) {
 		data := map[string]string{
 			"task_id":           task.Id(),
@@ -109,13 +156,13 @@ func (s Staging) notify_setup_completion(reply cfmessagebus.ReplyTo, task *stagi
 			data["error"] = e.Error()
 
 		}
-		respondTo(reply, data)
+		s.respondTo(replyTo, data)
 	})
 }
 
-func (s Staging) notify_completion(data map[string]interface{}, reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
+func (s *Staging) notify_completion(data map[string]interface{}, task staging.StagingTask) {
 	task.SetAfter_complete_callback(func(e error) {
-		if msg, exists := data["start_message"]; exists && e != nil {
+		if msg, exists := data["start_message"]; exists && e == nil {
 			startMsg := msg.(map[string]interface{})
 			startMsg["sha1"] = task.DropletSHA1()
 			s.appManager.StartApp(startMsg)
@@ -123,7 +170,7 @@ func (s Staging) notify_completion(data map[string]interface{}, reply cfmessageb
 	})
 }
 
-func (s Staging) notify_upload(reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
+func (s *Staging) notify_upload(replyTo string, task staging.StagingTask) {
 	task.SetAfter_upload_callback(func(e error) {
 		data := map[string]string{
 			"task_id":            task.Id(),
@@ -134,7 +181,7 @@ func (s Staging) notify_upload(reply cfmessagebus.ReplyTo, task *staging.Staging
 			data["error"] = e.Error()
 		}
 
-		respondTo(reply, data)
+		s.respondTo(replyTo, data)
 
 		s.stagingRegistry.Unregister(task)
 
@@ -142,7 +189,7 @@ func (s Staging) notify_upload(reply cfmessagebus.ReplyTo, task *staging.Staging
 	})
 }
 
-func (s Staging) notify_stop(reply cfmessagebus.ReplyTo, task *staging.StagingTask) {
+func (s *Staging) notify_stop(replyTo string, task staging.StagingTask) {
 	task.SetAfter_stop_callback(func(e error) {
 		data := map[string]string{
 			"task_id": task.Id(),
@@ -151,7 +198,7 @@ func (s Staging) notify_stop(reply cfmessagebus.ReplyTo, task *staging.StagingTa
 			data["error"] = e.Error()
 		}
 
-		respondTo(reply, data)
+		s.respondTo(replyTo, data)
 
 		s.stagingRegistry.Unregister(task)
 
@@ -159,37 +206,27 @@ func (s Staging) notify_stop(reply cfmessagebus.ReplyTo, task *staging.StagingTa
 	})
 }
 
-func respondTo(reply cfmessagebus.ReplyTo, params map[string]string) {
-	data := map[string]string{
-		"task_id":                params["task_id"],
-		"task_streaming_log_url": params["streaming_log_url"],
-		"detected_buildpack":     params["detected_buildpack"],
-		"error":                  params["error"],
-		"droplet_sha1":           params["droplet_sha1"],
+func (s *Staging) respondTo(replyTo string, params map[string]string) {
+	data := map[string]*string{
+		"task_id":                stringOrNil(params["task_id"]),
+		"task_streaming_log_url": stringOrNil(params["streaming_log_url"]),
+		"detected_buildpack":     stringOrNil(params["detected_buildpack"]),
+		"error":                  stringOrNil(params["error"]),
+		"droplet_sha1":           stringOrNil(params["droplet_sha1"]),
 	}
 
 	if bytes, err := json.Marshal(&data); err != nil {
 		stagingLogger.Errorf("Marshal failed with %v", data)
 	} else {
-		reply.Respond(bytes)
+		s.nats.Publish(replyTo, bytes)
 	}
 }
 
-func buildpacksInUse(stagingRegistry *staging.StagingTaskRegistry) []staging.StagingBuildpack {
-	inuse := make(map[staging.StagingBuildpack]bool)
-
-	for _, t := range stagingRegistry.Tasks() {
-		for _, bp := range t.StagingMessage().AdminBuildpacks() {
-			inuse[bp] = true
-		}
+func stringOrNil(s string) *string {
+	if s == "" {
+		return nil
 	}
-
-	buildpacks := make([]staging.StagingBuildpack, 0, len(inuse))
-	for bp, _ := range inuse {
-		buildpacks = append(buildpacks, bp)
-	}
-
-	return buildpacks
+	return &s
 }
 
 func logger_for_app(app_id string) *steno.Logger {

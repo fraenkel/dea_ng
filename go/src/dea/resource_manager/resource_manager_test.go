@@ -14,7 +14,7 @@ import (
 
 var _ = Describe("ResourceManager", func() {
 	var config cfg.Config
-	var manager *ResourceManager
+	var manager ResourceManager
 	var instanceRegistry *starting.InstanceRegistry
 	var stagingRegistry *staging.StagingTaskRegistry
 	var memory_mb uint64
@@ -44,7 +44,7 @@ var _ = Describe("ResourceManager", func() {
 		return createMemDiskInstance(amt, amt, state)
 	}
 
-	createStagingTask := func() *staging.StagingTask {
+	createStagingTask := func() staging.StagingTask {
 		stgAttrs := testhelpers.Valid_staging_attributes()
 		staging_message := staging.NewStagingMessage(stgAttrs)
 
@@ -64,7 +64,7 @@ var _ = Describe("ResourceManager", func() {
 		tmpdir, _ := ioutil.TempDir("", "resource_manager")
 		config = cfg.Config{BaseDir: tmpdir}
 		instanceRegistry = starting.NewInstanceRegistry(&config)
-		stagingRegistry = staging.NewStagingTaskRegistry()
+		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 	})
 
 	AfterEach(func() {

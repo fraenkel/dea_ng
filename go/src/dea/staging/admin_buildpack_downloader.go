@@ -30,7 +30,7 @@ func (bpdl AdminBuildpackDownloader) download() {
 	download_promises := make([]func() error, 0, len(bpdl.buildpacks))
 	for _, bp := range bpdl.buildpacks {
 		buildpack := bp
-		dest := path.Join(bpdl.destination, bp.key)
+		dest := path.Join(bpdl.destination, bp.Key)
 		if !utils.File_Exists(dest) {
 			download_promises = append(download_promises, func() error { return bpdl.download_buildpack(buildpack, dest) })
 		}
@@ -48,7 +48,7 @@ func (bpdl AdminBuildpackDownloader) download_buildpack(buildpack StagingBuildpa
 
 	defer os.RemoveAll(file.Name())
 
-	err = utils.HttpDownload(buildpack.url.String(), file, nil, bpdlLogger)
+	err = utils.HttpDownload(buildpack.Url.String(), file, nil, bpdlLogger)
 	if err != nil {
 		return err
 	}

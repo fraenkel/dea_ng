@@ -2,7 +2,7 @@ package responders
 
 import "time"
 
-const default_advertise_interval time.Duration = 5
+const default_advertise_interval time.Duration = 5 * time.Second
 
 type Responder interface {
 	Start()

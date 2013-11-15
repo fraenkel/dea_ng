@@ -75,7 +75,7 @@ var _ = Describe("Download", func() {
 		defer server.Close()
 
 		err := HttpDownload(server.URL+"/droplet", to_file, sha, logger)
-		Expect(err.Error()).To(ContainSubstring("HTTP status: 404"))
+		Expect(err.Error()).To(ContainSubstring("status: 404"))
 	})
 
 	It("should fail when response payload has invalid SHA1", func() {

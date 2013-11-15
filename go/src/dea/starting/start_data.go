@@ -6,48 +6,48 @@ import (
 )
 
 type LimitsData struct {
-	memMb  uint64
-	diskMb uint64
-	fds    uint64
+	MemMb  uint64
+	DiskMb uint64
+	Fds    uint64
 }
 
 type ServiceData struct {
-	name             string
-	label            string
-	credentials      map[string]interface{}
-	tags             []string
-	syslog_drain_url string
+	Name             string
+	Label            string
+	Credentials      map[string]interface{}
+	Tags             []string
+	Syslog_drain_url string
 
-	options map[string]interface{}
+	Options map[string]interface{}
 
-	provider string
-	vendor   string
-	plan     string
+	Provider string
+	Vendor   string
+	Plan     string
 
-	version string
+	Version string
 }
 
 type StartData struct {
-	cc_partition string
+	CC_partition string
 
-	instance_index int
+	Instance_index int
 
-	application_id      string
-	application_version string
-	application_name    string
-	application_uris    []string
+	Application_id      string
+	Application_version string
+	Application_name    string
+	Application_uris    []string
 
-	prod bool
+	Prod bool
 
-	droplet_sha1 string
-	droplet_uri  string
+	Droplet_sha1 string
+	Droplet_uri  string
 
-	start_command string
+	Start_command string
 
-	limits LimitsData
+	LimitsData LimitsData
 
-	environment map[string]string
-	services    []ServiceData
+	Env          map[string]string
+	ServicesData []ServiceData
 }
 
 func NewStartData(m map[string]interface{}) StartData {
@@ -58,33 +58,33 @@ func NewStartData(m map[string]interface{}) StartData {
 }
 
 func (s StartData) Index() int {
-	return s.instance_index
+	return s.Instance_index
 }
 
 func (s StartData) Limits() map[string]uint64 {
 	limit := make(map[string]uint64)
-	s.limits.MarshalMap(limit)
+	s.LimitsData.MarshalMap(limit)
 	return limit
 }
 
 func (s StartData) MemoryLimit() uint64 {
-	return uint64(s.limits.memMb)
+	return uint64(s.LimitsData.MemMb)
 }
 
 func (s StartData) Name() string {
-	return s.application_name
+	return s.Application_name
 }
 
 func (s StartData) Version() string {
-	return s.application_version
+	return s.Application_version
 }
 func (s StartData) Uris() []string {
-	return s.application_uris
+	return s.Application_uris
 }
 
 func (s StartData) Services() []map[string]interface{} {
-	services := make([]map[string]interface{}, len(s.services))
-	for i, s := range s.services {
+	services := make([]map[string]interface{}, len(s.ServicesData))
+	for i, s := range s.ServicesData {
 		service := make(map[string]interface{})
 		s.MarshalMap(service)
 		services[i] = service
@@ -93,159 +93,210 @@ func (s StartData) Services() []map[string]interface{} {
 }
 
 func (s StartData) Environment() map[string]string {
-	return s.environment
+	return s.Env
 }
 
 func (s *StartData) UnmarshalMap(m map[string]interface{}) error {
-	s.cc_partition = m["cc_partition"].(string)
+	s.CC_partition = m["cc_partition"].(string)
 
-	s.instance_index = getInt(m, "instance_index")
+	s.Instance_index = getInt(m, "instance_index")
 
-	s.application_version = getString(m, "application_version")
-	if s.application_version == "" {
-		s.application_version = getString(m, "version")
+	s.Application_version = getString(m, "application_version")
+	if s.Application_version == "" {
+		s.Application_version = getString(m, "version")
 	}
-	s.application_name = getString(m, "application_name")
-	if s.application_name == "" {
-		s.application_name = getString(m, "name")
+	s.Application_name = getString(m, "application_name")
+	if s.Application_name == "" {
+		s.Application_name = getString(m, "name")
 	}
-	s.application_uris = m["application_uris"].([]string)
-	if s.application_uris == nil {
-		s.application_uris = m["uris"].([]string)
 
-		if s.application_uris == nil {
-			s.application_uris = []string{}
+	uris := m["application_uris"].([]interface{})
+	if uris == nil {
+		uris = m["uris"].([]interface{})
+	}
+	if uris != nil {
+		s.Application_uris = make([]string, len(uris))
+		for i := 0; i < len(uris); i++ {
+			s.Application_uris[i] = uris[i].(string)
 		}
+	} else {
+		s.Application_uris = []string{}
 	}
 
-	s.prod = getBool(m, "prod")
+	s.Prod = getBool(m, "prod")
 
-	s.application_id = getString(m, "application_id")
-	if s.application_id == "" {
-		s.application_id = getString(m, "droplet")
+	s.Application_id = getString(m, "application_id")
+	if s.Application_id == "" {
+		s.Application_id = getString(m, "droplet")
 	}
 
-	s.droplet_sha1 = getString(m, "droplet_sha1")
-	if s.droplet_sha1 == "" {
-		s.droplet_sha1 = getString(m, "sha1")
+	s.Droplet_sha1 = getString(m, "droplet_sha1")
+	if s.Droplet_sha1 == "" {
+		s.Droplet_sha1 = getString(m, "sha1")
 	}
 
-	s.droplet_uri = getString(m, "droplet_uri")
-	if s.droplet_uri == "" {
-		s.droplet_uri = getString(m, "executableUri")
+	s.Droplet_uri = getString(m, "droplet_uri")
+	if s.Droplet_uri == "" {
+		s.Droplet_uri = getString(m, "executableUri")
 	}
 
-	s.start_command = getString(m, "start_command")
+	s.Start_command = getString(m, "start_command")
 
 	if env, exist := m["environment"]; exist {
-		s.environment = env.(map[string]string)
+		s.Env = env.(map[string]string)
 	} else {
 		env := make(map[string]string)
-		s.environment = env
-		for _, e := range m["env"].([]string) {
-			pair := strings.SplitN(string(e), "=", 2)
-			val := ""
-			if len(pair) == 2 {
-				val = pair[1]
+		s.Env = env
+		rv := reflect.ValueOf(m["env"])
+		if !rv.IsNil() && (rv.Kind() == reflect.Array || rv.Kind() == reflect.Slice) {
+			for i := 0; i < rv.Len(); i++ {
+				elemV := rv.Index(i)
+				if elemV.Kind() == reflect.Interface {
+					elemV = elemV.Elem()
+				}
+				pair := strings.SplitN(elemV.String(), "=", 2)
+				val := ""
+				if len(pair) == 2 {
+					val = pair[1]
+				}
+				env[pair[0]] = val
 			}
-			env[pair[0]] = val
 		}
 	}
 
-	s.limits.UnmarshalMap(m["limits"].(map[string]interface{}))
+	s.LimitsData.UnmarshalMap(m["limits"])
 
 	serviceData := m["services"].([]map[string]interface{})
-	s.services = make([]ServiceData, len(serviceData))
-	for i := 0; i < len(s.services); i++ {
-		s.services[i].UnmarshalMap(serviceData[i])
+	s.ServicesData = make([]ServiceData, len(serviceData))
+	for i := 0; i < len(serviceData); i++ {
+		s.ServicesData[i].UnmarshalMap(serviceData[i])
 	}
 
 	return nil
 }
 
 func (s *StartData) MarshalMap(m map[string]interface{}) error {
-	m["cc_partition"] = s.cc_partition
+	m["cc_partition"] = s.CC_partition
 
-	m["instance_index"] = s.instance_index
+	m["instance_index"] = s.Instance_index
 
-	m["application_version"] = s.application_version
-	m["application_name"] = s.application_name
-	m["application_uris"] = s.application_uris
+	m["application_version"] = s.Application_version
+	m["application_name"] = s.Application_name
+	m["application_uris"] = s.Application_uris
 
-	m["prod"] = s.prod
+	m["prod"] = s.Prod
 
-	m["application_id"] = s.application_id
-	m["droplet_sha1"] = s.droplet_sha1
+	m["application_id"] = s.Application_id
+	m["droplet_sha1"] = s.Droplet_sha1
 
-	m["droplet_uri"] = s.droplet_uri
+	m["droplet_uri"] = s.Droplet_uri
 
-	m["start_command"] = s.start_command
+	m["start_command"] = s.Start_command
 
-	m["environment"] = s.environment
+	m["environment"] = s.Env
 
 	limit := make(map[string]uint64)
 	m["limits"] = limit
-	s.limits.MarshalMap(limit)
+	s.LimitsData.MarshalMap(limit)
 
-	services := make([]map[string]interface{}, len(s.services))
+	services := make([]map[string]interface{}, len(s.ServicesData))
 	m["services"] = services
-	for i, s := range s.services {
+	for i, s := range s.ServicesData {
 		s.MarshalMap(services[i])
 	}
 
 	return nil
 }
 
-func (l *LimitsData) UnmarshalMap(m map[string]interface{}) error {
-	l.memMb = getUInt(m, "mem")
-	l.diskMb = getUInt(m, "disk")
-	l.fds = getUInt(m, "fds")
+func (l *LimitsData) UnmarshalMap(m interface{}) error {
+	switch m.(type) {
+	case map[string]uint64:
+		umap := m.(map[string]uint64)
+		l.MemMb = umap["mem"]
+		l.DiskMb = umap["disk"]
+		l.Fds = umap["fds"]
+	case map[string]interface{}:
+		imap := m.(map[string]interface{})
+		l.MemMb = getUInt(imap, "mem")
+		l.DiskMb = getUInt(imap, "disk")
+		l.Fds = getUInt(imap, "fds")
+	default:
+		return &reflect.ValueError{"MarshalMap", reflect.ValueOf(m).Kind()}
+	}
 
 	return nil
 }
 
-func (l *LimitsData) MarshalMap(m map[string]uint64) error {
-	m["mem"] = uint64(l.memMb)
-	m["disk"] = uint64(l.diskMb)
-	m["fds"] = l.fds
+func (l *LimitsData) MarshalMap(m interface{}) error {
+	switch m.(type) {
+	case map[string]uint64:
+		umap := m.(map[string]uint64)
+		umap["mem"] = uint64(l.MemMb)
+		umap["disk"] = uint64(l.DiskMb)
+		umap["fds"] = l.Fds
+
+	case map[string]interface{}:
+		imap := m.(map[string]interface{})
+		imap["mem"] = uint64(l.MemMb)
+		imap["disk"] = uint64(l.DiskMb)
+		imap["fds"] = l.Fds
+
+	default:
+		return &reflect.ValueError{"MarshalMap", reflect.ValueOf(m).Kind()}
+	}
 
 	return nil
 }
 
 func (s *ServiceData) UnmarshalMap(m map[string]interface{}) error {
-	s.name = getString(m, "name")
-	s.label = getString(m, "label")
-	s.credentials = m["credentials"].(map[string]interface{})
-	s.tags = m["tags"].([]string)
-	s.syslog_drain_url = getString(m, "syslog_drain_url")
-
-	if opts, exists := m["options"]; exists {
-		s.options = opts.(map[string]interface{})
+	s.Name = getString(m, "name")
+	s.Label = getString(m, "label")
+	if creds, exists := m["credentials"]; exists {
+		s.Credentials = creds.(map[string]interface{})
 	}
 
-	s.provider = getString(m, "provider")
-	s.vendor = getString(m, "vendor")
-	s.plan = getString(m, "plan")
+	if t, exists := m["tags"]; exists {
+		switch t.(type) {
+		case []string:
+			s.Tags = t.([]string)
+		case []interface{}:
+			tags := t.([]interface{})
+			s.Tags = make([]string, len(tags))
+			for i := 0; i < len(tags); i++ {
+				s.Tags[i] = tags[i].(string)
+			}
+		}
+	}
 
-	s.version = getString(m, "version")
+	s.Syslog_drain_url = getString(m, "syslog_drain_url")
+
+	if opts, exists := m["options"]; exists {
+		s.Options = opts.(map[string]interface{})
+	}
+
+	s.Provider = getString(m, "provider")
+	s.Vendor = getString(m, "vendor")
+	s.Plan = getString(m, "plan")
+
+	s.Version = getString(m, "version")
 
 	return nil
 }
 
 func (s *ServiceData) MarshalMap(m map[string]interface{}) error {
-	m["name"] = s.name
-	m["label"] = s.label
-	m["credentials"] = s.credentials
-	m["tags"] = s.tags
-	m["syslog_drain_url"] = s.syslog_drain_url
+	m["name"] = s.Name
+	m["label"] = s.Label
+	m["credentials"] = s.Credentials
+	m["tags"] = s.Tags
+	m["syslog_drain_url"] = s.Syslog_drain_url
 
-	m["options"] = s.options
+	m["options"] = s.Options
 
-	m["provider"] = s.provider
-	m["vendor"] = s.vendor
-	m["plan"] = s.plan
+	m["provider"] = s.Provider
+	m["vendor"] = s.Vendor
+	m["plan"] = s.Plan
 
-	m["version"] = s.version
+	m["version"] = s.Version
 
 	return nil
 }

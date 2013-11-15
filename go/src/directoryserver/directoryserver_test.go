@@ -168,7 +168,7 @@ func (s *DirectoryServerSuite) TestHandler_ServeHTTP_EntityNotFound(t *C) {
 
 func (s *DirectoryServerSuite) TestHandler_ServeHTTP_ReturnDirectoryListing(t *C) {
 	// Create temp directory listing for this unit test.
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := ioutil.TempDir("", "ds")
 	if err != nil {
 		t.Error(err)
 	}

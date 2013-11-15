@@ -98,32 +98,37 @@ var defaultNatsConfig = NatsConfig{
 	Pass: "",
 }
 
+type IntervalConfig struct {
+	Heartbeat time.Duration "heartbeat"
+	Advertise time.Duration "advertise"
+}
+
 type Config struct {
-	BaseDir                       string                   "base_dir"
-	BuildpackDir                  string                   "buildpack_dir"
-	Logging                       LoggingConfig            "logging"
-	Loggregator                   LoggregatorConfig        "loggregator"
-	Resources                     ResourcesConfig          "resources"
-	natsUri                       string                   "nats_uri"
-	NatsConfig                    NatsConfig               "nats"
-	PidFile                       string                   "pid_filename"
-	WardenSocket                  string                   "warden_socket"
-	EvacuationDelay               time.Duration            "evacuation_delay_secs"
-	MaximumHealthCheckTimeout     time.Duration            "maximum_health_check_timeout"
-	Index                         uint                     "index"
-	Staging                       StagingConfig            "staging"
-	Stacks                        []string                 "stacks"
-	Intervals                     map[string]time.Duration "intervals"
-	Status                        StatusConfig             "status"
-	CrashesPath                   string                   "crashes_path"
-	CrashLifetime                 time.Duration            "crash_lifetime_secs"
-	BindMounts                    []map[string]string      "bind_mounts"
-	CrashBlockUsageRatioThreshold float64                  "crash_block_usage_ratio_threshold"
-	CrashInodeUsageRatioThreshold float64                  "crash_inode_usage_ratio_threshold"
-	Domain                        string                   "domain"
-	DirectoryServer               DirServerConfig          "directory_server"
-	DeaRuby                       string                   "dea_ruby"
-	Hooks                         map[string]string        "hooks"
+	BaseDir                       string              "base_dir"
+	BuildpackDir                  string              "buildpack_dir"
+	Logging                       LoggingConfig       "logging"
+	Loggregator                   LoggregatorConfig   "loggregator"
+	Resources                     ResourcesConfig     "resources"
+	natsUri                       string              "nats_uri"
+	NatsConfig                    NatsConfig          "nats"
+	PidFile                       string              "pid_filename"
+	WardenSocket                  string              "warden_socket"
+	EvacuationDelay               time.Duration       "evacuation_delay_secs"
+	MaximumHealthCheckTimeout     time.Duration       "maximum_health_check_timeout"
+	Index                         uint                "index"
+	Staging                       StagingConfig       "staging"
+	Stacks                        []string            "stacks"
+	Intervals                     IntervalConfig      "intervals"
+	Status                        StatusConfig        "status"
+	CrashesPath                   string              "crashes_path"
+	CrashLifetime                 time.Duration       "crash_lifetime_secs"
+	BindMounts                    []map[string]string "bind_mounts"
+	CrashBlockUsageRatioThreshold float64             "crash_block_usage_ratio_threshold"
+	CrashInodeUsageRatioThreshold float64             "crash_inode_usage_ratio_threshold"
+	Domain                        string              "domain"
+	DirectoryServer               DirServerConfig     "directory_server"
+	DeaRuby                       string              "dea_ruby"
+	Hooks                         map[string]string   "hooks"
 }
 
 func ConfigFromFile(configPath string) (*Config, error) {
@@ -133,7 +138,6 @@ func ConfigFromFile(configPath string) (*Config, error) {
 	}
 
 	config := Config{
-		Intervals:                     make(map[string]time.Duration),
 		Status:                        StatusConfig{},
 		NatsConfig:                    defaultNatsConfig,
 		Resources:                     ResourcesConfig{},
@@ -175,13 +179,12 @@ func ConfigFromFile(configPath string) (*Config, error) {
 	}
 
 	// fix up durations
-	config.Staging.MaxStagingDuration = config.Staging.MaxStagingDuration * time.Second
-	config.EvacuationDelay = config.EvacuationDelay * time.Second
-	config.MaximumHealthCheckTimeout = config.MaximumHealthCheckTimeout * time.Second
-	config.CrashLifetime = config.CrashLifetime * time.Second
-	for k, v := range config.Intervals {
-		config.Intervals[k] = v * time.Second
-	}
+	config.Staging.MaxStagingDuration *= time.Second
+	config.EvacuationDelay *= time.Second
+	config.MaximumHealthCheckTimeout *= time.Second
+	config.CrashLifetime *= time.Second
+	config.Intervals.Advertise *= time.Second
+	config.Intervals.Heartbeat *= time.Second
 
 	return &config, nil
 }

@@ -1,83 +1,72 @@
-package dea
+package dea_test
 
 import (
-	"github.com/stretchr/testify/assert"
+	. "dea"
+	"dea/utils"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"syscall"
-	"testing"
 )
 
-func TestCreatePidFile(t *testing.T) {
-	pidFilename := createTempFile(t)
-	pidFile, err := NewPidFile(pidFilename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pidFile.Release()
+var _ = Describe("PidFile", func() {
+	var pidFilename string
+	var pidFile *PidFile
 
-	assert.True(t, exists(t, pidFilename))
-	f, err := os.Open(pidFilename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bytes, err := ioutil.ReadAll(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pid, err := strconv.Atoi(string(bytes))
-	if err != nil {
-		t.Fatal(err)
-	}
+	BeforeEach(func() {
+		pidFilename = createTempFile()
+		pidFile, _ = NewPidFile(pidFilename)
+	})
 
-	assert.Equal(t, pid, os.Getpid())
-}
+	AfterEach(func() {
+		pidFile.Release()
+	})
 
-func TestReleasePidFile(t *testing.T) {
-	pidFilename := createTempFile(t)
-	pidFile, err := NewPidFile(pidFilename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pidFile.Release()
-	pidFile.Release()
+	Context("NewPidFile", func() {
 
-	assert.False(t, exists(t, pidFilename))
-}
+		It("creates a new pid file", func() {
+			Expect(utils.File_Exists(pidFilename)).To(BeTrue())
+		})
 
-func TestPidFileAlreadyLocked(t *testing.T) {
-	pidFilename := createTempFile(t)
-	pidFile, err := NewPidFile(pidFilename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pidFile.Release()
+		It("contains a pid", func() {
+			f, _ := os.Open(pidFilename)
+			bytes, _ := ioutil.ReadAll(f)
+			pid, _ := strconv.Atoi(string(bytes))
+			Expect(os.Getpid()).To(Equal(pid))
+		})
 
-	pidFile2, err2 := NewPidFile(pidFilename)
-	defer func() {
-		if pidFile2 != nil {
-			pidFile2.Release()
-		}
-	}()
+		It("fails when already created", func() {
+			pidFile2, err := NewPidFile(pidFilename)
+			defer func() {
+				if pidFile2 != nil {
+					pidFile2.Release()
+				}
+			}()
 
-	assert.Equal(t, err2, syscall.EWOULDBLOCK)
-}
+			Expect(err).To(Equal(syscall.EWOULDBLOCK))
+		})
+	})
 
-func createTempFile(t *testing.T) string {
+	Context("Release", func() {
+		It("removes the pid file", func() {
+			pidFile.Release()
+			Expect(utils.File_Exists(pidFilename)).To(BeFalse())
+		})
+		It("doesn't fail when called twice", func() {
+			pidFile.Release()
+			pidFile.Release()
+		})
+	})
+
+})
+
+func createTempFile() string {
 	file, err := ioutil.TempFile("", "pidfile")
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	os.Remove(file.Name())
 	return file.Name()
-}
-
-func exists(t *testing.T, filename string) bool {
-	if _, err := os.Stat(filename); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
 }
