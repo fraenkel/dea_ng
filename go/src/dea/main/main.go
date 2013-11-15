@@ -120,7 +120,7 @@ func (b bootstrap) setup() error {
 
 	b.dropletRegistry = droplet.NewDropletRegistry(path.Join(config.BaseDir, "droplets"))
 	b.instanceRegistry = starting.NewInstanceRegistry(config)
-	b.stagingTaskRegistry = staging.NewStagingTaskRegistry()
+	b.stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 
 	b.resource_manager = resmgr.NewResourceManager(b.instanceRegistry, b.stagingTaskRegistry,
 		&b.config.Resources)

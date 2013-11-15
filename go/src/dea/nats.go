@@ -10,6 +10,7 @@ import (
 type Nats struct {
 	NatsClient yagnats.NATSClient
 	config     cfg.NatsConfig
+	sids       []int
 }
 
 type NatsHandler interface {
@@ -27,6 +28,7 @@ func NewNats(config cfg.NatsConfig) *Nats {
 	return &Nats{
 		NatsClient: yagnats.NewClient(),
 		config:     config,
+		sids:       make([]int, 0, 7),
 	}
 }
 
@@ -42,34 +44,45 @@ func (n *Nats) Start(handler NatsHandler) error {
 		return err
 	}
 
-	if _, err := n.NatsClient.Subscribe("healthmanager.start", handler.HandleHealthManagerStart); err != nil {
+	if err := n.subscribe("healthmanager.start", handler.HandleHealthManagerStart); err != nil {
 		return err
 	}
 
-	if _, err := n.NatsClient.Subscribe("router.start", handler.HandleRouterStart); err != nil {
+	if err := n.subscribe("router.start", handler.HandleRouterStart); err != nil {
 		return err
 	}
 
-	if _, err := n.NatsClient.Subscribe("dea.status", handler.HandleDeaStatus); err != nil {
+	if err := n.subscribe("dea.status", handler.HandleDeaStatus); err != nil {
 		return err
 	}
 
 	uuid := handler.UUID()
-	if _, err := n.NatsClient.Subscribe("dea."+uuid+".start", handler.HandleDeaDirectedStart); err != nil {
+	if err := n.subscribe("dea."+uuid+".start", handler.HandleDeaDirectedStart); err != nil {
 		return err
 	}
 
-	if _, err := n.NatsClient.Subscribe("dea.stop", handler.HandleDeaStop); err != nil {
+	if err := n.subscribe("dea.stop", handler.HandleDeaStop); err != nil {
 		return err
 	}
 
-	if _, err := n.NatsClient.Subscribe("dea.update", handler.HandleDeaUpdate); err != nil {
+	if err := n.subscribe("dea.update", handler.HandleDeaUpdate); err != nil {
 		return err
 	}
 
-	if _, err := n.NatsClient.Subscribe("dea.find.droplet", handler.HandleDeaFindDroplet); err != nil {
+	if err := n.subscribe("dea.find.droplet", handler.HandleDeaFindDroplet); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (n *Nats) subscribe(subject string, callback yagnats.Callback) error {
+	sid, err := n.NatsClient.Subscribe(subject, callback)
+	if err != nil {
+		return err
+	}
+
+	n.sids = append(n.sids, sid)
 
 	return nil
 }
@@ -89,8 +102,11 @@ func (n *Nats) Request(subject string, message []byte, callback yagnats.Callback
 	return sid, err
 }
 
-func (nats *Nats) Stop() {
-	nats.NatsClient.Disconnect()
+func (n *Nats) Stop() {
+	for _, sid := range n.sids {
+		n.NatsClient.Unsubscribe(sid)
+	}
+	n.sids = make([]int, 0, 1)
 }
 
 func (n *Nats) createInbox() (string, error) {
