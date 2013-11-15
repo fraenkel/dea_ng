@@ -758,12 +758,12 @@ func (b *bootstrap) HandleDeaUpdate(msg *yagnats.Message) {
 		b.logger.Debug("Mapping new URIs")
 		b.logger.Debugf("New: %v Old: %v", uris, current_uris)
 
-		new_uris := utils.Intersection(uris, current_uris)
+		new_uris := utils.Difference(uris, current_uris)
 		if len(new_uris) > 0 {
 			b.routerClient.RegisterInstance(i, map[string]interface{}{"uris": new_uris})
 		}
 
-		obsolete_uris := utils.Intersection(current_uris, uris)
+		obsolete_uris := utils.Difference(current_uris, uris)
 		if len(obsolete_uris) > 0 {
 			b.routerClient.UnregisterInstance(i, map[string]interface{}{"uris": obsolete_uris})
 		}

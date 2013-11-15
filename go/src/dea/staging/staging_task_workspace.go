@@ -49,7 +49,7 @@ func (s StagingTaskWorkspace) write_config_file() error {
 		"cache_dir":         s.warden_cache(),
 		"environment":       s.environmentProperties,
 		"staging_info_name": STAGING_INFO,
-		"buildpack_dirs":    s.buildpackManager.list(),
+		"buildpack_dirs":    s.buildpackManager.List(),
 	}
 
 	stwLogger.Infod(plugin_config, "write_config_file.starting")
@@ -66,8 +66,8 @@ func (s StagingTaskWorkspace) write_config_file() error {
 func (s StagingTaskWorkspace) prepare() {
 	os.MkdirAll(s.tmp_dir(), 0755)
 
-	s.buildpackManager.download()
-	s.buildpackManager.clean()
+	s.buildpackManager.Download()
+	s.buildpackManager.Clean()
 	s.write_config_file()
 }
 

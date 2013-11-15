@@ -18,11 +18,26 @@ func Intersection(a []string, b []string) []string {
 	return intersection
 }
 
-func Contains(a []string, e string) bool {
-	for _, elem := range a {
-		if e == elem {
-			return true
+func Difference(a []string, b []string) []string {
+	diff := make([]string, 0, len(a))
+	for _, e := range a {
+		if !Contains(b, e) {
+			diff = append(diff, e)
 		}
 	}
-	return false
+
+	return diff
+}
+
+func Index(a []string, e string) int {
+	for i, elem := range a {
+		if e == elem {
+			return i
+		}
+	}
+	return -1
+}
+
+func Contains(a []string, e string) bool {
+	return Index(a, e) != -1
 }

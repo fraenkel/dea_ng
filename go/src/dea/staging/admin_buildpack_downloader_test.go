@@ -2,21 +2,18 @@ package staging_test
 
 import (
 	. "dea/staging"
+	tstaging "dea/testhelpers/staging"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path"
-	"runtime"
 )
 
-const error_path = "/bad/path"
-
-var _ = Describe("AdminBuildpackDownloader.Go", func() {
+var _ = Describe("AdminBuildpackDownloader", func() {
 	var downloader AdminBuildpackDownloader
 	var destination string
 	var buildpacks []StagingBuildpack
@@ -24,15 +21,7 @@ var _ = Describe("AdminBuildpackDownloader.Go", func() {
 
 	BeforeEach(func() {
 		destination, _ = ioutil.TempDir("", "adminbpdownload")
-		_, testfile, _, _ := runtime.Caller(0)
-		buildpack := path.Join(testfile, "../../../../fixtures/buildpack.zip")
-		httpServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == error_path {
-				http.Error(w, "", http.StatusInternalServerError)
-				return
-			}
-			http.ServeFile(w, r, buildpack)
-		}))
+		httpServer = tstaging.NewFileServer()
 	})
 
 	JustBeforeEach(func() {
@@ -101,7 +90,7 @@ var _ = Describe("AdminBuildpackDownloader.Go", func() {
 
 		Context("error handling", func() {
 			BeforeEach(func() {
-				buildpacks[1].Url.Path = error_path
+				buildpacks[1].Url.Path = tstaging.ERROR_PATH
 			})
 
 			It("doesn't throw exceptions if the download fails", func() {

@@ -37,11 +37,11 @@ func (bpMgr BuildpackManager) system_buildpacks_dir() string {
 	return bpMgr.systemBuildpacks_dir
 }
 
-func (bpMgr BuildpackManager) download() {
+func (bpMgr BuildpackManager) Download() {
 	NewAdminBuildpackDownloader(bpMgr.admin_buildpacks, bpMgr.adminBuildpacks_dir).Download()
 }
 
-func (bpMgr BuildpackManager) clean() {
+func (bpMgr BuildpackManager) Clean() {
 	for _, bp := range bpMgr.buildpacks_needing_deletion() {
 		if err := os.RemoveAll(bp); err != nil {
 			bpMgrLogger.Errorf("Delete failed for %s, err: %s", bp, err.Error())
@@ -49,7 +49,7 @@ func (bpMgr BuildpackManager) clean() {
 	}
 }
 
-func (bpMgr BuildpackManager) list() []string {
+func (bpMgr BuildpackManager) List() []string {
 	paths := bpMgr.admin_buildpacks_in_staging_message()
 	paths = append(paths, bpMgr.system_buildpack_paths()...)
 	return paths
@@ -57,9 +57,8 @@ func (bpMgr BuildpackManager) list() []string {
 
 func (bpMgr BuildpackManager) buildpacks_needing_deletion() []string {
 	paths := bpMgr.all_buildpack_paths()
-	paths = utils.Intersection(paths, bpMgr.admin_buildpacks_in_staging_message())
-	paths = utils.Intersection(paths, bpMgr.buildpacks_in_use_paths())
-
+	paths = utils.Difference(paths, bpMgr.admin_buildpacks_in_staging_message())
+	paths = utils.Difference(paths, bpMgr.buildpacks_in_use_paths())
 	return paths
 }
 
@@ -94,16 +93,16 @@ func (bpMgr BuildpackManager) system_buildpack_paths() []string {
 	return collectChildrenDirs(bpMgr.systemBuildpacks_dir)
 }
 
-func collectChildrenDirs(path string) []string {
-	children, err := ioutil.ReadDir(path)
+func collectChildrenDirs(dir string) []string {
+	children, err := ioutil.ReadDir(dir)
 	if err != nil {
-		bpMgrLogger.Errorf("Enumerating children for %s, error: %s", path, err.Error())
+		bpMgrLogger.Errorf("Enumerating children for %s, error: %s", dir, err.Error())
 		return []string{}
 	}
 
 	paths := make([]string, 0, len(children))
 	for _, c := range children {
-		paths = append(paths, c.Name())
+		paths = append(paths, path.Join(dir, c.Name()))
 	}
 	return paths
 }
