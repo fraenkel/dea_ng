@@ -6,6 +6,7 @@ import (
 	resmgr "dea/resource_manager"
 	"dea/staging"
 	"dea/starting"
+	testrm "dea/testhelpers/resource_manager"
 	"encoding/json"
 	"errors"
 	"github.com/cloudfoundry/yagnats"
@@ -71,7 +72,7 @@ var _ = Describe("DeaLocator", func() {
 			})
 			It("starts sending every 10ms", func() {
 				subject.Start()
-				time.Sleep(20 * time.Millisecond)
+				time.Sleep(30 * time.Millisecond)
 
 				advertised := nats.PublishedMessages["dea.advertise"]
 				Expect(len(advertised)).To(BeNumerically(">", 1))
@@ -127,13 +128,6 @@ var _ = Describe("DeaLocator", func() {
 	})
 
 	Describe("advertise", func() {
-		BeforeEach(func() {
-			//      resource_manager.stub(:app_id_to_count => {
-			//          "app_id_1" => 1,
-			//          "app_id_2" => 3
-			//      })
-		})
-
 		Context("when config specifies stacks", func() {
 			availableMemory := 12345.0
 			availableDisk := 45678.0
@@ -145,10 +139,10 @@ var _ = Describe("DeaLocator", func() {
 
 			BeforeEach(func() {
 				config.Stacks = stacks
-				resourceManager = mockResourceManager{
-					memory:    availableMemory,
-					disk:      availableDisk,
-					appCounts: appCounts,
+				resourceManager = testrm.MockResourceManager{
+					Memory:    availableMemory,
+					Disk:      availableDisk,
+					AppCounts: appCounts,
 				}
 			})
 
@@ -192,44 +186,4 @@ func publish(nats *fakeyagnats.FakeYagnats, subject string, payload []byte, repl
 	for _, sub := range nats.Subscriptions[subject] {
 		sub.Callback(msg)
 	}
-}
-
-type mockResourceManager struct {
-	memory    float64
-	disk      float64
-	appCounts map[string]int
-}
-
-func (rm mockResourceManager) MemoryCapacity() float64 {
-	return 1.0
-}
-func (rm mockResourceManager) DiskCapacity() float64 {
-	return 1.0
-}
-func (rm mockResourceManager) AppIdToCount() map[string]int {
-	return rm.appCounts
-}
-func (rm mockResourceManager) RemainingMemory() float64 {
-	return rm.memory
-}
-func (rm mockResourceManager) ReservedMemory() float64 {
-	return 1.0
-}
-func (rm mockResourceManager) UsedMemory() float64 {
-	return 1.0
-}
-func (rm mockResourceManager) CanReserve(memory, disk float64) bool {
-	return true
-}
-func (rm mockResourceManager) RemainingDisk() float64 {
-	return rm.disk
-}
-func (rm mockResourceManager) NumberReservable(memory, disk uint64) uint {
-	return 1
-}
-func (rm mockResourceManager) AvailableMemoryRatio() float64 {
-	return 1.0
-}
-func (rm mockResourceManager) AvailableDiskRatio() float64 {
-	return 1.0
 }
