@@ -38,7 +38,7 @@ func (bpMgr BuildpackManager) system_buildpacks_dir() string {
 }
 
 func (bpMgr BuildpackManager) download() {
-	NewAdminBuildpackDownloader(bpMgr.admin_buildpacks, bpMgr.adminBuildpacks_dir).download()
+	NewAdminBuildpackDownloader(bpMgr.admin_buildpacks, bpMgr.adminBuildpacks_dir).Download()
 }
 
 func (bpMgr BuildpackManager) clean() {

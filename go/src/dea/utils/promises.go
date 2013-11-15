@@ -5,6 +5,10 @@ import (
 )
 
 func Parallel_promises(callbacks ...func() error) (result error) {
+	if len(callbacks) == 0 {
+		return nil
+	}
+
 	wg := sync.WaitGroup{}
 	wg.Add(len(callbacks) - 1)
 	lock := sync.Mutex{}
@@ -23,13 +27,13 @@ func Parallel_promises(callbacks ...func() error) (result error) {
 		}()
 	}
 	err := callbacks[0]()
-	
+
 	wg.Wait()
-	
+
 	if result == nil {
 		result = err
 	}
-		
+
 	return
 }
 

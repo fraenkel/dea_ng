@@ -37,6 +37,10 @@ var _ = Describe("Promises", func() {
 			Expect(err).NotTo(BeNil())
 			Expect(cnt).Should(BeNumerically("==", 0))
 		})
+
+		It("does not fail with no promises", func() {
+			Expect(func() { Sequence_promises() }).ToNot(Panic())
+		})
 	})
 
 	Describe("Parallel promises", func() {
@@ -56,7 +60,11 @@ var _ = Describe("Promises", func() {
 			err := Parallel_promises(inc, fail, inc)
 			Expect(err).NotTo(BeNil())
 			Expect(cnt).Should(BeNumerically("==", 2))
-
 		})
+
+		It("does not fail with no promises", func() {
+			Expect(func() { Parallel_promises() }).ToNot(Panic())
+		})
+
 	})
 })

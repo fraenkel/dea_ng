@@ -19,7 +19,7 @@ func NewAdminBuildpackDownloader(buildpacks []StagingBuildpack, destination stri
 	return AdminBuildpackDownloader{buildpacks, destination}
 }
 
-func (bpdl AdminBuildpackDownloader) download() {
+func (bpdl AdminBuildpackDownloader) Download() {
 	bpdlLogger.Debugd(map[string]interface{}{"buildpacks": bpdl.buildpacks},
 		"admin-buildpacks.download")
 
