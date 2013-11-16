@@ -165,7 +165,7 @@ func (s *stagingTask) resolve_staging_setup() error {
 
 	promises := make([]func() error, 1, 2)
 	promises[0] = s.promise_app_download
-	if s.staging_message.buildpack_cache_download_uri() != nil {
+	if s.staging_message.Buildpack_cache_download_uri() != nil {
 		promises = append(promises, s.promise_buildpack_cache_download)
 	}
 
@@ -217,7 +217,7 @@ func (s *stagingTask) promise_log_upload_started() error {
 }
 
 func (s *stagingTask) promise_app_upload() error {
-	uploadUri := s.staging_message.upload_uri()
+	uploadUri := s.staging_message.Upload_uri()
 	s.Logger.Infod(map[string]interface{}{
 		"source":      s.workspace.staged_droplet_path(),
 		"destination": uploadUri},
@@ -243,7 +243,7 @@ func (s *stagingTask) promise_app_upload() error {
 }
 
 func (s *stagingTask) promise_app_download() error {
-	downloadUri := s.staging_message.download_uri()
+	downloadUri := s.staging_message.Download_uri()
 	s.Logger.Infod(map[string]interface{}{"uri": downloadUri},
 		"staging.app-download.starting uri")
 	download_destination, err := ioutil.TempFile(s.workspace.tmp_dir(), "app-package-download.tgz")
@@ -277,7 +277,7 @@ func (s *stagingTask) promise_app_download() error {
 }
 
 func (s *stagingTask) promise_buildpack_cache_upload() error {
-	uploadUri := s.staging_message.buildpack_cache_upload_uri()
+	uploadUri := s.staging_message.Buildpack_cache_upload_uri()
 	s.Logger.Infod(map[string]interface{}{
 		"source":      s.workspace.staged_buildpack_cache_path(),
 		"destination": uploadUri},
@@ -303,7 +303,7 @@ func (s *stagingTask) promise_buildpack_cache_upload() error {
 }
 
 func (s *stagingTask) promise_buildpack_cache_download() error {
-	downloadUri := s.staging_message.buildpack_cache_download_uri()
+	downloadUri := s.staging_message.Buildpack_cache_download_uri()
 	s.Logger.Infod(map[string]interface{}{
 		"uri": downloadUri},
 		"staging.buildpack-cache-download.starting")

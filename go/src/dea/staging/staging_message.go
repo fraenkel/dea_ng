@@ -31,7 +31,7 @@ func (msg StagingMessage) Task_id() string {
 	return msg.message["task_id"].(string)
 }
 
-func (msg StagingMessage) properties() map[string]interface{} {
+func (msg StagingMessage) Properties() map[string]interface{} {
 	if props, ok := msg.message["properties"].(map[string]interface{}); ok {
 		return props
 	}
@@ -39,19 +39,19 @@ func (msg StagingMessage) properties() map[string]interface{} {
 	return nil
 }
 
-func (msg StagingMessage) buildpack_cache_upload_uri() *url.URL {
+func (msg StagingMessage) Buildpack_cache_upload_uri() *url.URL {
 	return msg.staging_uri("buildpack_cache_upload_uri")
 }
 
-func (msg StagingMessage) buildpack_cache_download_uri() *url.URL {
+func (msg StagingMessage) Buildpack_cache_download_uri() *url.URL {
 	return msg.staging_uri("buildpack_cache_download_uri")
 }
 
-func (msg StagingMessage) upload_uri() *url.URL {
+func (msg StagingMessage) Upload_uri() *url.URL {
 	return msg.staging_uri("upload_uri")
 }
 
-func (msg StagingMessage) download_uri() *url.URL {
+func (msg StagingMessage) Download_uri() *url.URL {
 	return msg.staging_uri("download_uri")
 }
 
@@ -65,15 +65,17 @@ func (msg StagingMessage) start_data() *starting.StartData {
 }
 
 func (msg StagingMessage) AdminBuildpacks() []StagingBuildpack {
-	if adminBuildpacks, ok := msg.message["admin_buildpacks"].([]map[string]interface{}); ok {
-		buildpacks := make([]StagingBuildpack, 0, len(adminBuildpacks))
-		for _, b := range adminBuildpacks {
-			bpUrl, _ := url.Parse(b["url"].(string))
-			buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"].(string)})
-		}
-		return buildpacks
+	adminBuildpacks, ok := msg.message["admin_buildpacks"].([]map[string]interface{})
+	if !ok {
+		return []StagingBuildpack{}
 	}
-	return []StagingBuildpack{}
+
+	buildpacks := make([]StagingBuildpack, 0, len(adminBuildpacks))
+	for _, b := range adminBuildpacks {
+		bpUrl, _ := url.Parse(b["url"].(string))
+		buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"].(string)})
+	}
+	return buildpacks
 }
 
 func (msg StagingMessage) staging_uri(key string) *url.URL {

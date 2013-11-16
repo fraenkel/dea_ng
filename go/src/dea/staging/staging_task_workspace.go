@@ -32,7 +32,7 @@ func NewStagingTaskWorkspace(baseDir, system_buildpack_dir string, stagingMsg St
 
 	s := StagingTaskWorkspace{
 		baseDir:               baseDir,
-		environmentProperties: stagingMsg.properties(),
+		environmentProperties: stagingMsg.Properties(),
 		buildpackManager:      buildpackMgr,
 	}
 
