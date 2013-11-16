@@ -99,7 +99,7 @@ func (s *stagingTask) DiskLimit() config.Disk {
 func (s *stagingTask) Start() error {
 	defer func() {
 		s.Promise_destroy()
-		os.RemoveAll(s.workspace.workspace_dir())
+		os.RemoveAll(s.workspace.Workspace_dir())
 	}()
 
 	err := s.resolve_staging_setup()
@@ -140,7 +140,7 @@ func (s *stagingTask) Stop() {
 }
 
 func (s *stagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
-	workspaceDirs := []string{s.workspace.workspace_dir(), s.workspace.buildpack_dir(), s.workspace.admin_buildpacks_dir()}
+	workspaceDirs := []string{s.workspace.Workspace_dir(), s.workspace.buildpack_dir(), s.workspace.Admin_buildpacks_dir()}
 	mounts := make([]*warden.CreateRequest_BindMount, 0, len(workspaceDirs)+len(s.bindMounts))
 	for _, d := range workspaceDirs {
 		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &d, DstPath: &d})
@@ -160,7 +160,7 @@ func (s *stagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
 }
 
 func (s *stagingTask) resolve_staging_setup() error {
-	s.workspace.prepare()
+	s.workspace.Prepare()
 	s.Container.Create(s.bind_mounts(), uint64(s.DiskLimit()), uint64(s.MemoryLimit()), false)
 
 	promises := make([]func() error, 1, 2)
@@ -246,7 +246,7 @@ func (s *stagingTask) promise_app_download() error {
 	downloadUri := s.staging_message.Download_uri()
 	s.Logger.Infod(map[string]interface{}{"uri": downloadUri},
 		"staging.app-download.starting uri")
-	download_destination, err := ioutil.TempFile(s.workspace.tmp_dir(), "app-package-download.tgz")
+	download_destination, err := ioutil.TempFile(s.workspace.Tmp_dir(), "app-package-download.tgz")
 	if err != nil {
 		return err
 	}
@@ -308,7 +308,7 @@ func (s *stagingTask) promise_buildpack_cache_download() error {
 		"uri": downloadUri},
 		"staging.buildpack-cache-download.starting")
 
-	download_destination, err := ioutil.TempFile(s.workspace.tmp_dir(), "buildpack-cache")
+	download_destination, err := ioutil.TempFile(s.workspace.Tmp_dir(), "buildpack-cache")
 	if err != nil {
 		return err
 	}
@@ -424,7 +424,7 @@ func (s *stagingTask) promise_stage() error {
 		exportedEnv,
 		s.deaRuby,
 		s.run_plugin_path(),
-		s.workspace.plugin_config_path(),
+		s.workspace.Plugin_config_path(),
 		"| tee -a " + s.workspace.warden_staging_log(),
 	}, " ")
 

@@ -36,9 +36,9 @@ func NewStagingTaskWorkspace(baseDir, system_buildpack_dir string, stagingMsg St
 		buildpackManager:      buildpackMgr,
 	}
 
-	os.MkdirAll(s.tmp_dir(), 0755)
+	os.MkdirAll(s.Workspace_dir(), 0755)
+	os.MkdirAll(s.Tmp_dir(), 0755)
 
-	os.MkdirAll(s.workspace_dir(), 0755)
 	return s
 }
 
@@ -59,27 +59,26 @@ func (s StagingTaskWorkspace) write_config_file() error {
 		return err
 	}
 
-	err = ioutil.WriteFile(s.plugin_config_path(), bytes, 0755)
+	err = ioutil.WriteFile(s.Plugin_config_path(), bytes, 0755)
+
 	return err
 }
 
-func (s StagingTaskWorkspace) prepare() {
-	os.MkdirAll(s.tmp_dir(), 0755)
-
+func (s StagingTaskWorkspace) Prepare() {
 	s.buildpackManager.Download()
 	s.buildpackManager.Clean()
 	s.write_config_file()
 }
 
-func (s StagingTaskWorkspace) tmp_dir() string {
+func (s StagingTaskWorkspace) Tmp_dir() string {
 	return path.Join(s.baseDir, "tmp")
 }
 
-func (s StagingTaskWorkspace) admin_buildpacks_dir() string {
+func (s StagingTaskWorkspace) Admin_buildpacks_dir() string {
 	return s.buildpackManager.admin_buildpacks_dir()
 }
 
-func (s StagingTaskWorkspace) workspace_dir() string {
+func (s StagingTaskWorkspace) Workspace_dir() string {
 	return path.Join(s.baseDir, "staging")
 }
 
@@ -88,15 +87,15 @@ func (s StagingTaskWorkspace) buildpack_dir() string {
 }
 
 func (s StagingTaskWorkspace) staging_info_path() string {
-	return path.Join(s.workspace_dir(), STAGING_INFO)
+	return path.Join(s.Workspace_dir(), STAGING_INFO)
 }
 
 func (s StagingTaskWorkspace) staging_log_path() string {
-	return path.Join(s.workspace_dir(), STAGING_LOG)
+	return path.Join(s.Workspace_dir(), STAGING_LOG)
 }
 
 func (s StagingTaskWorkspace) staged_droplet_dir() string {
-	return path.Join(s.workspace_dir(), "staged")
+	return path.Join(s.Workspace_dir(), "staged")
 }
 
 func (s StagingTaskWorkspace) staged_droplet_path() string {
@@ -108,11 +107,11 @@ func (s StagingTaskWorkspace) staged_buildpack_cache_path() string {
 }
 
 func (s StagingTaskWorkspace) downloaded_app_package_path() string {
-	return path.Join(s.workspace_dir(), "app.zip")
+	return path.Join(s.Workspace_dir(), "app.zip")
 }
 
 func (s StagingTaskWorkspace) downloaded_buildpack_cache_path() string {
-	return path.Join(s.workspace_dir(), BUILDPACK_CACHE_FILE)
+	return path.Join(s.Workspace_dir(), BUILDPACK_CACHE_FILE)
 }
 
 func (s StagingTaskWorkspace) warden_cache() string {
@@ -143,6 +142,6 @@ func (s StagingTaskWorkspace) warden_staging_info() string {
 	return path.Join(s.warden_staged_dir(), "logs", STAGING_INFO)
 }
 
-func (s StagingTaskWorkspace) plugin_config_path() string {
-	return path.Join(s.workspace_dir(), "plugin_config")
+func (s StagingTaskWorkspace) Plugin_config_path() string {
+	return path.Join(s.Workspace_dir(), "plugin_config")
 }
