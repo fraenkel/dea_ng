@@ -378,7 +378,7 @@ func (i *Instance) promise_crash_handler() error {
 		if err != nil {
 			return err
 		}
-		i.Promises.Promise_destroy()
+		i.Promise_destroy()
 
 		i.Container.CloseAllConnections()
 	}
@@ -477,7 +477,7 @@ func (i *Instance) Stop() error {
 	}
 
 	err = i.promise_exec_hook_script("after_stop")
-	err = i.Promises.Promise_stop()
+	err = i.Promise_stop()
 	if err != nil {
 		goto done
 	}

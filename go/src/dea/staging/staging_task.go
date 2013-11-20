@@ -108,7 +108,7 @@ func (s *stagingTask) DiskLimit() config.Disk {
 
 func (s *stagingTask) Start() error {
 	defer func() {
-		s.Task.Promises.Promise_destroy()
+		s.Promise_destroy()
 		os.RemoveAll(s.workspace.Workspace_dir())
 	}()
 
@@ -148,7 +148,7 @@ func (s *stagingTask) Stop() {
 
 	s.SetAfter_complete_callback(nil)
 	if s.Container.Handle() != "" {
-		s.Task.Promises.Promise_stop()
+		s.Promise_stop()
 	}
 
 	s.trigger_after_stop(errors.New("StagingTaskStoppedError"))

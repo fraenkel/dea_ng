@@ -258,7 +258,7 @@ detected_buildpack: Ruby/Rack
 
 		JustBeforeEach(func() {
 			stgTask.StagingPromises = mockPromises
-			stgTask.Task.Promises = mockPromises
+			stgTask.Task.TaskPromises = mockPromises
 		})
 
 		it_calls_callback := func(set_callback func(Callback), options map[string]error) {
@@ -525,7 +525,7 @@ detected_buildpack: Ruby/Rack
 
 		JustBeforeEach(func() {
 			stgTask.StagingPromises = mockPromises
-			stgTask.Task.Promises = mockPromises
+			stgTask.Task.TaskPromises = mockPromises
 		})
 
 		Context("if container exists", func() {
@@ -767,7 +767,7 @@ detected_buildpack: Ruby/Rack
 		JustBeforeEach(func() {
 			mockPromises.stagingPromises = stgTask.StagingPromises
 			stgTask.StagingPromises = mockPromises
-			stgTask.Task.Promises = mockPromises
+			stgTask.Task.TaskPromises = mockPromises
 		})
 
 		Context("when packing succeeds", func() {
