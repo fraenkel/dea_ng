@@ -68,7 +68,7 @@ var _ = Describe("InstancePaths", func() {
 
 		Context("when instance path is not available", func() {
 			BeforeEach(func() {
-				instance.Container = container.MockContainer{MPath: ""}
+				instance.Container = &container.MockContainer{MPath: ""}
 			})
 
 			It("returns a 503 if the instance path is unavailable", func() {
@@ -88,7 +88,7 @@ var _ = Describe("InstancePaths", func() {
 				file, _ := os.Create(filepath.Join(home_dir, "test"))
 				file.Close()
 
-				instance.Container = container.MockContainer{MPath: tmpdir}
+				instance.Container = &container.MockContainer{MPath: tmpdir}
 				instance.SetState(starting.STATE_CRASHED)
 			})
 

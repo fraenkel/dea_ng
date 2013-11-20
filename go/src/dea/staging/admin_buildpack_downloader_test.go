@@ -1,8 +1,7 @@
-package staging_test
+package staging
 
 import (
-	. "dea/staging"
-	tstaging "dea/testhelpers/staging"
+	thelpers "dea/testhelpers"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -21,7 +20,7 @@ var _ = Describe("AdminBuildpackDownloader", func() {
 
 	BeforeEach(func() {
 		destination, _ = ioutil.TempDir("", "adminbpdownload")
-		httpServer = tstaging.NewFileServer()
+		httpServer = thelpers.NewFileServer()
 	})
 
 	JustBeforeEach(func() {
@@ -45,7 +44,6 @@ var _ = Describe("AdminBuildpackDownloader", func() {
 			downloader.Download()
 
 			expected_file_name := path.Join(destination, "abcdef")
-
 			fileinfo, err := os.Stat(expected_file_name)
 			Expect(os.IsNotExist(err)).To(BeFalse())
 			Expect(fileinfo.Mode().Perm()).To(Equal(os.FileMode(0755)))
@@ -90,7 +88,7 @@ var _ = Describe("AdminBuildpackDownloader", func() {
 
 		Context("error handling", func() {
 			BeforeEach(func() {
-				buildpacks[1].Url.Path = tstaging.ERROR_PATH
+				buildpacks[1].Url.Path = thelpers.ERROR_PATH
 			})
 
 			It("doesn't throw exceptions if the download fails", func() {

@@ -1,4 +1,4 @@
-package staging_test
+package staging
 
 import (
 	. "github.com/onsi/ginkgo"

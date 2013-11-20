@@ -108,7 +108,7 @@ var _ = Describe("ResourceManager", func() {
 			})
 
 			It("returns the correct remaining memory", func() {
-				Expect(manager.RemainingMemory()).To(BeNumerically("~", nominal_memory_capacity()-float64((1+2+4+8+config.Staging.MemoryLimitMB))))
+				Expect(manager.RemainingMemory()).To(BeNumerically("~", nominal_memory_capacity()-float64((1+2+4+8+config.Staging.Minimum_staging_memory_mb()))))
 			})
 		})
 
@@ -135,7 +135,7 @@ var _ = Describe("ResourceManager", func() {
 			})
 
 			It("returns the correct remaining memory", func() {
-				Expect(manager.RemainingDisk()).To(BeNumerically("~", nominal_disk_capacity()-float64((1+2+4+8+config.Staging.DiskLimitMB))))
+				Expect(manager.RemainingDisk()).To(BeNumerically("~", nominal_disk_capacity()-float64((1+2+4+8+config.Staging.Minimum_staging_disk_mb()))))
 			})
 		})
 
@@ -225,7 +225,7 @@ var _ = Describe("ResourceManager", func() {
 		})
 
 		It("is the ratio of available memory to total memory", func() {
-			Expect(manager.AvailableMemoryRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.MemoryLimitMB)/nominal_memory_capacity()))
+			Expect(manager.AvailableMemoryRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.Minimum_staging_memory_mb())/nominal_memory_capacity()))
 		})
 	})
 
@@ -236,7 +236,7 @@ var _ = Describe("ResourceManager", func() {
 		})
 
 		It("is the ratio of available disk to total disk", func() {
-			Expect(manager.AvailableDiskRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.DiskLimitMB)/nominal_disk_capacity()))
+			Expect(manager.AvailableDiskRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.Minimum_staging_disk_mb())/nominal_disk_capacity()))
 		})
 	})
 
@@ -248,8 +248,8 @@ var _ = Describe("ResourceManager", func() {
 			instanceRegistry.Register(createMemDiskInstance(512, 1024, starting.STATE_RUNNING))
 			stagingRegistry.Register(createStagingTask())
 
-			remaining_memory = nominal_memory_capacity() - float64(512-config.Staging.MemoryLimitMB)
-			remaining_disk = nominal_disk_capacity() - float64(1024-config.Staging.DiskLimitMB)
+			remaining_memory = nominal_memory_capacity() - float64(512+config.Staging.Minimum_staging_memory_mb())
+			remaining_disk = nominal_disk_capacity() - float64(1024+config.Staging.Minimum_staging_disk_mb())
 		})
 
 		Context("when the given amounts of memory and disk are available (including extra 'headroom' memory)", func() {

@@ -453,7 +453,7 @@ func (b *bootstrap) startNats() {
 	b.responders = []responders.Responder{
 		responders.NewDeaLocator(b.nats.NatsClient, b.component.UUID, b.resource_manager, b.config),
 		responders.NewStagingLocator(b.nats.NatsClient, b.component.UUID, b.resource_manager, b.config),
-		responders.NewStaging(b, b.nats.NatsClient, b.component.UUID, b.stagingTaskRegistry, b.config, b.dropletRegistry),
+		responders.NewStaging(b, b.nats.NatsClient, b.component.UUID, b.stagingTaskRegistry, b.config, b.dropletRegistry, b.directoryServerV2),
 	}
 
 	for _, r := range b.responders {

@@ -29,13 +29,13 @@ func EmitError(appId, message string) {
 }
 
 func StagingEmit(appId, message string) {
-	if theEmitter != nil && appId != "" {
+	if theStagingEmitter != nil && appId != "" {
 		theStagingEmitter.Emit(appId, message)
 	}
 }
 
 func StagingEmitError(appId, message string) {
-	if theEmitter != nil && appId != "" {
+	if theStagingEmitter != nil && appId != "" {
 		theStagingEmitter.EmitLogMessage(theStagingEmitter.NewLogMessage(appId, message, logmessage.LogMessage_ERR))
 	}
 }

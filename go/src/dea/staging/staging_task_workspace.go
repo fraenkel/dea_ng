@@ -139,7 +139,7 @@ func (s StagingTaskWorkspace) warden_staging_log() string {
 }
 
 func (s StagingTaskWorkspace) warden_staging_info() string {
-	return path.Join(s.warden_staged_dir(), "logs", STAGING_INFO)
+	return path.Join(s.warden_staged_dir(), STAGING_INFO)
 }
 
 func (s StagingTaskWorkspace) Plugin_config_path() string {

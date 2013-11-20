@@ -26,6 +26,7 @@ type Staging struct {
 	stagingRegistry  *staging.StagingTaskRegistry
 	config           *config.Config
 	dropletRegistry  *droplet.DropletRegistry
+	urlMaker         staging.StagingTaskUrlMaker
 	staging_sid      *int
 	staging_id_sid   *int
 	staging_stop_sid *int
@@ -33,7 +34,7 @@ type Staging struct {
 
 func NewStaging(appManager AppManager, nats yagnats.NATSClient, id string,
 	stagingTaskRegistry *staging.StagingTaskRegistry,
-	config *config.Config, dropletRegistry *droplet.DropletRegistry) *Staging {
+	config *config.Config, dropletRegistry *droplet.DropletRegistry, maker staging.StagingTaskUrlMaker) *Staging {
 	return &Staging{
 		enabled:         config.Staging.Enabled,
 		appManager:      appManager,
@@ -42,6 +43,7 @@ func NewStaging(appManager AppManager, nats yagnats.NATSClient, id string,
 		stagingRegistry: stagingTaskRegistry,
 		config:          config,
 		dropletRegistry: dropletRegistry,
+		urlMaker:        maker,
 	}
 }
 
@@ -147,31 +149,34 @@ func (s *Staging) handleStop(msg *yagnats.Message) {
 }
 
 func (s *Staging) notify_setup_completion(replyTo string, task staging.StagingTask) {
-	task.SetAfter_setup_callback(func(e error) {
+	task.SetAfter_setup_callback(func(e error) error {
 		data := map[string]string{
 			"task_id":           task.Id(),
-			"streaming_log_url": task.StreamingLogUrl(),
+			"streaming_log_url": task.StreamingLogUrl(s.urlMaker),
 		}
 		if e != nil {
 			data["error"] = e.Error()
 
 		}
 		s.respondTo(replyTo, data)
+
+		return nil
 	})
 }
 
 func (s *Staging) notify_completion(data map[string]interface{}, task staging.StagingTask) {
-	task.SetAfter_complete_callback(func(e error) {
+	task.SetAfter_complete_callback(func(e error) error {
 		if msg, exists := data["start_message"]; exists && e == nil {
 			startMsg := msg.(map[string]interface{})
 			startMsg["sha1"] = task.DropletSHA1()
 			s.appManager.StartApp(startMsg)
 		}
+		return nil
 	})
 }
 
 func (s *Staging) notify_upload(replyTo string, task staging.StagingTask) {
-	task.SetAfter_upload_callback(func(e error) {
+	task.SetAfter_upload_callback(func(e error) error {
 		data := map[string]string{
 			"task_id":            task.Id(),
 			"detected_buildpack": task.DetectedBuildpack(),
@@ -186,11 +191,13 @@ func (s *Staging) notify_upload(replyTo string, task staging.StagingTask) {
 		s.stagingRegistry.Unregister(task)
 
 		s.appManager.SaveSnapshot()
+
+		return nil
 	})
 }
 
 func (s *Staging) notify_stop(replyTo string, task staging.StagingTask) {
-	task.SetAfter_stop_callback(func(e error) {
+	task.SetAfter_stop_callback(func(e error) error {
 		data := map[string]string{
 			"task_id": task.Id(),
 		}
@@ -203,6 +210,8 @@ func (s *Staging) notify_stop(replyTo string, task staging.StagingTask) {
 		s.stagingRegistry.Unregister(task)
 
 		s.appManager.SaveSnapshot()
+
+		return nil
 	})
 }
 

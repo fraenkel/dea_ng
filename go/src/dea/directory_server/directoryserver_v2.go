@@ -252,7 +252,7 @@ func (ds *DirectoryServerV2) Instance_file_url_for(instance_id, file_path string
 		}, verifiable_file_params)
 }
 
-func (ds *DirectoryServerV2) staging_task_file_url_for(task_id, file_path string) string {
+func (ds *DirectoryServerV2) Staging_task_url(task_id, file_path string) string {
 	path := fmt.Sprintf("/staging_tasks/%s/file_path", task_id)
 	return ds.hmaced_url_for(path,
 		map[string]string{

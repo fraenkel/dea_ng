@@ -1,7 +1,6 @@
-package staging_test
+package staging
 
 import (
-	. "dea/staging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"net/url"

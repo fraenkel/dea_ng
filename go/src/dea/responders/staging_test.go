@@ -5,11 +5,11 @@ import (
 	"dea/droplet"
 	"dea/loggregator"
 	"dea/staging"
-	teststaging "dea/testhelpers/staging"
+	temitter "dea/testhelpers/emitter"
+	tstaging "dea/testhelpers/staging"
 	"encoding/json"
 	"errors"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/loggregatorlib/logmessage"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	. "github.com/onsi/ginkgo"
@@ -25,7 +25,7 @@ var _ = Describe("Staging", func() {
 	var stagingRegistry *staging.StagingTaskRegistry
 	var dropletRegistry *droplet.DropletRegistry
 	var nats *fakeyagnats.FakeYagnats
-	var staging_task *teststaging.MockStagingTask
+	var staging_task *tstaging.MockStagingTask
 	var appManager mockAppManager
 
 	panicNewStagingTask := func(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, *droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
@@ -38,7 +38,7 @@ var _ = Describe("Staging", func() {
 		dropletRegistry = droplet.NewDropletRegistry(tmpdir)
 		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 		nats = fakeyagnats.New()
-		staging_task = &teststaging.MockStagingTask{
+		staging_task = &tstaging.MockStagingTask{
 			StagingMsg: staging.NewStagingMessage(map[string]interface{}{
 				"app_id":  "some_app_id",
 				"task_id": "task-id"}),
@@ -48,7 +48,7 @@ var _ = Describe("Staging", func() {
 	})
 
 	JustBeforeEach(func() {
-		subject = NewStaging(&appManager, nats, dea_id, stagingRegistry, &config, dropletRegistry)
+		subject = NewStaging(&appManager, nats, dea_id, stagingRegistry, &config, dropletRegistry, nil)
 	})
 
 	AfterEach(func() {
@@ -249,11 +249,11 @@ var _ = Describe("Staging", func() {
 					})
 
 					It("logs to the loggregator", func() {
-						emitter := mockEmitter{}
+						emitter := temitter.MockEmitter{}
 						loggregator.SetEmitter(&emitter)
 
 						subject.handle(&message)
-						Expect(emitter.messages[app_id][0]).To(Equal("Got staging request for app with id " + app_id))
+						Expect(emitter.Messages[app_id][0]).To(Equal("Got staging request for app with id " + app_id))
 					})
 				})
 				Context("when failed", func() {
@@ -418,25 +418,4 @@ func (am *mockAppManager) StartApp(msg map[string]interface{}) {
 }
 func (am *mockAppManager) SaveSnapshot() {
 	am.savedSnapshot = true
-}
-
-type mockEmitter struct {
-	messages map[string][]string
-}
-
-func (e *mockEmitter) Emit(appId, msg string) {
-	if e.messages == nil {
-		e.messages = make(map[string][]string)
-	}
-	msgs := e.messages[appId]
-	if msgs == nil {
-		msgs = make([]string, 0, 5)
-	}
-	e.messages[appId] = append(msgs, msg)
-}
-
-func (e *mockEmitter) EmitLogMessage(logmsg *logmessage.LogMessage) {
-}
-func (e *mockEmitter) NewLogMessage(appId, message string, mt logmessage.LogMessage_MessageType) *logmessage.LogMessage {
-	return nil
 }

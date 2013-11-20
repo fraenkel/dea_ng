@@ -148,7 +148,7 @@ func stagingtaskRequest(server *DirectoryServerV2, task_id string, file_path str
 }
 
 func staging_task_file_path(server *DirectoryServerV2, task_id string, file_path string, options map[string]interface{}) string {
-	urlPath := server.staging_task_file_url_for(task_id, file_path)
+	urlPath := server.Staging_task_url(task_id, file_path)
 	if options["hmac"] != nil {
 		u, _ := url.Parse(urlPath)
 		params := u.Query()

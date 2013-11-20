@@ -93,7 +93,7 @@ var _ = Describe("DirectoryserverV2", func() {
 			})
 
 			It("can handle staging tasks requests", func() {
-				u := server.staging_task_file_url_for("task-id", "some-file-path")
+				u := server.Staging_task_url("task-id", "some-file-path")
 
 				err := server.Start()
 				Expect(err).To(BeNil())
@@ -184,7 +184,7 @@ var _ = Describe("DirectoryserverV2", func() {
 				server.hmacHelper = fakeHMAC
 				server.protocol = "FAKEPROTOCOL"
 
-				stagingtaskURL = server.staging_task_file_url_for("task-id", "/path-to-file")
+				stagingtaskURL = server.Staging_task_url("task-id", "/path-to-file")
 				u, _ := url.Parse(stagingtaskURL)
 				timestamp = u.Query().Get("timestamp")
 

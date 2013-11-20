@@ -79,7 +79,12 @@ func (msg StagingMessage) AdminBuildpacks() []StagingBuildpack {
 }
 
 func (msg StagingMessage) staging_uri(key string) *url.URL {
-	uri := msg.message[key].(string)
+	v, exists := msg.message[key]
+	if !exists {
+		return nil
+	}
+	
+	uri := v.(string)
 	if uri == "" {
 		return nil
 	}

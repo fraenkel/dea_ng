@@ -6,24 +6,36 @@ import (
 	"os"
 )
 
+type TaskPromises interface {
+	Promise_stop() error
+	Promise_destroy()
+}
+
+type taskPromises struct {
+	task *Task
+}
+
 type Task struct {
 	Container container.Container
 	Logger    *steno.Logger
+	Promises  TaskPromises
 }
 
-func NewTask(wardenSocket string, logger *steno.Logger) Task {
-	return Task{
+func NewTask(wardenSocket string, logger *steno.Logger) *Task {
+	p := &taskPromises{}
+	t := &Task{
 		Container: container.NewContainer(wardenSocket),
-		Logger:    logger}
-}
+		Logger:    logger,
+		Promises:  p,
+	}
 
-func (t *Task) Promise_stop() error {
-	return t.Container.Stop()
+	p.task = t
+	return t
 }
 
 func (t *Task) Destroy() {
 	t.Logger.Info("task.destroying")
-	t.Promise_destroy()
+	t.Promises.Promise_destroy()
 	t.Logger.Info("task.destroy.completed")
 }
 
@@ -36,6 +48,10 @@ func (t *Task) Copy_out_request(source_path, destination_path string) error {
 	return err
 }
 
-func (t *Task) Promise_destroy() {
-	t.Container.Destroy()
+func (p *taskPromises) Promise_stop() error {
+	return p.task.Container.Stop()
+}
+
+func (p *taskPromises) Promise_destroy() {
+	p.task.Container.Destroy()
 }

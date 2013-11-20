@@ -1,8 +1,7 @@
-package staging_test
+package staging
 
 import (
-	. "dea/staging"
-	tstaging "dea/testhelpers/staging"
+	thelpers "dea/testhelpers"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -41,7 +40,7 @@ var _ = Describe("BuildpackManager", func() {
 		var httpServer *httptest.Server
 
 		BeforeEach(func() {
-			httpServer = tstaging.NewFileServer()
+			httpServer = thelpers.NewFileServer()
 
 			url1, _ := url.Parse(httpServer.URL + "/buildpacks/uri/abcdef")
 			admin_buildpacks = []StagingBuildpack{StagingBuildpack{Url: url1, Key: "abcdef"}}

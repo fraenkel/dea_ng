@@ -3,11 +3,10 @@ package staging
 import (
 	"dea/config"
 	"dea/droplet"
-	"dea/env"
 	"dea/loggregator"
 	"dea/task"
 	"dea/utils"
-	"fmt"
+	"errors"
 	"github.com/cloudfoundry/gordon"
 	steno "github.com/cloudfoundry/gosteno"
 	"io/ioutil"
@@ -18,7 +17,11 @@ import (
 	"time"
 )
 
-type Callback func(e error)
+type Callback func(e error) error
+
+type StagingTaskUrlMaker interface {
+	Staging_task_url(task_id, file_path string) string
+}
 
 type StagingTask interface {
 	Id() string
@@ -28,7 +31,7 @@ type StagingTask interface {
 	DiskLimit() config.Disk
 	Start() error
 	Stop()
-	StreamingLogUrl() string
+	StreamingLogUrl(maker StagingTaskUrlMaker) string
 	DetectedBuildpack() string
 	DropletSHA1() string
 	Path_in_container(pathSuffix string) string
@@ -47,25 +50,32 @@ type stagingTask struct {
 	workspace       StagingTaskWorkspace
 	dropletRegistry *droplet.DropletRegistry
 	deaRuby         string
-	task.Task
+	*task.Task
 	dropletSha1             string
-	after_setup_callback    func(e error)
-	after_complete_callback func(e error)
-	after_upload_callback   func(e error)
-	after_stop_callback     func(e error)
+	after_setup_callback    Callback
+	after_complete_callback Callback
+	after_upload_callback   Callback
+	after_stop_callback     Callback
+	StagingPromises
+	staging_timeout_buffer time.Duration
 }
 
 func NewStagingTask(config *config.Config, staging_message StagingMessage, buildpacksInUse []StagingBuildpack,
 	dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) StagingTask {
+	p := &stagingPromises{}
 	s := &stagingTask{
-		id:              staging_message.Task_id(),
-		bindMounts:      config.BindMounts,
-		staging_message: staging_message,
-		stagingConfig:   &config.Staging,
-		dropletRegistry: dropletRegistry,
-		deaRuby:         config.DeaRuby,
-		Task:            task.NewTask(config.WardenSocket, logger),
+		id:                     staging_message.Task_id(),
+		bindMounts:             config.BindMounts,
+		staging_message:        staging_message,
+		stagingConfig:          &config.Staging,
+		dropletRegistry:        dropletRegistry,
+		deaRuby:                config.DeaRuby,
+		Task:                   task.NewTask(config.WardenSocket, logger),
+		StagingPromises:        p,
+		staging_timeout_buffer: 60 * time.Second,
 	}
+
+	p.staging = s
 
 	if s.Logger != nil {
 		s.Logger.Set("task_id", s.id)
@@ -89,16 +99,16 @@ func (s *stagingTask) StagingMessage() StagingMessage {
 }
 
 func (s *stagingTask) MemoryLimit() config.Memory {
-	return config.Memory(s.stagingConfig.MemoryLimitMB) * config.Mebi
+	return config.Memory(s.stagingConfig.Minimum_staging_memory_mb()) * config.Mebi
 }
 
 func (s *stagingTask) DiskLimit() config.Disk {
-	return config.Disk(s.stagingConfig.DiskLimitMB) * config.MB
+	return config.Disk(s.stagingConfig.Minimum_staging_disk_mb()) * config.MB
 }
 
 func (s *stagingTask) Start() error {
 	defer func() {
-		s.Promise_destroy()
+		s.Task.Promises.Promise_destroy()
 		os.RemoveAll(s.workspace.Workspace_dir())
 	}()
 
@@ -113,7 +123,10 @@ func (s *stagingTask) Start() error {
 		s.Logger.Info("staging.task.completed")
 	}
 
-	s.trigger_after_complete(err)
+	newErr := s.trigger_after_complete(err)
+	if newErr != nil {
+		return newErr
+	}
 
 	if err == nil {
 		err = s.resolve_staging_upload()
@@ -122,7 +135,10 @@ func (s *stagingTask) Start() error {
 		}
 	}
 
-	s.trigger_after_upload(err)
+	newErr = s.trigger_after_upload(err)
+	if newErr != nil {
+		err = newErr
+	}
 
 	return err
 }
@@ -131,19 +147,19 @@ func (s *stagingTask) Stop() {
 	s.Logger.Info("staging.task.stopped")
 
 	s.SetAfter_complete_callback(nil)
-	var err error
 	if s.Container.Handle() != "" {
-		err = s.Promise_stop()
+		s.Task.Promises.Promise_stop()
 	}
 
-	s.trigger_after_stop(err)
+	s.trigger_after_stop(errors.New("StagingTaskStoppedError"))
 }
 
 func (s *stagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
 	workspaceDirs := []string{s.workspace.Workspace_dir(), s.workspace.buildpack_dir(), s.workspace.Admin_buildpacks_dir()}
 	mounts := make([]*warden.CreateRequest_BindMount, 0, len(workspaceDirs)+len(s.bindMounts))
 	for _, d := range workspaceDirs {
-		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &d, DstPath: &d})
+		path := d
+		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &path, DstPath: &path})
 	}
 
 	for _, bindMap := range s.bindMounts {
@@ -177,7 +193,12 @@ func (s *stagingTask) resolve_staging_setup() error {
 			s.Container.Update_path_and_ip)
 	}
 
-	s.trigger_after_setup(err)
+	newErr := s.trigger_after_setup(err)
+	if newErr != nil {
+		// use the new error if one exists or flow the old one
+		err = newErr
+	}
+
 	return err
 }
 
@@ -205,340 +226,14 @@ func (s *stagingTask) resolve_staging_upload() error {
 	)
 }
 
-func (s *stagingTask) promise_log_upload_started() error {
-	script := "set -o pipefail\n" +
-		"droplet_size=`du -h " + s.workspace.warden_staged_droplet() + " | cut -f1`\n" +
-		"package_size=`du -h " + s.workspace.downloaded_app_package_path() + " | cut -f1`\n" +
-		"echo \"----->Uploading droplet ($droplet_size)\" | tee -a " + s.workspace.warden_staging_log()
-
-	rsp, err := s.Container.RunScript(script)
-	s.loggregator_emit_result(rsp)
-	return err
-}
-
-func (s *stagingTask) promise_app_upload() error {
-	uploadUri := s.staging_message.Upload_uri()
-	s.Logger.Infod(map[string]interface{}{
-		"source":      s.workspace.staged_droplet_path(),
-		"destination": uploadUri},
-		"staging.droplet-upload.starting")
-
-	start := time.Now()
-	err := utils.HttpUpload("upload[droplet]", s.workspace.staged_droplet_path(), uploadUri.String(), s.Logger)
-
-	if err != nil {
-		s.Logger.Infod(map[string]interface{}{
-			"error":       err,
-			"duration":    time.Now().Sub(start),
-			"destination": uploadUri},
-			"staging.task.droplet-upload-failed")
-	} else {
-		s.Logger.Infod(map[string]interface{}{
-			"duration":    time.Now().Sub(start),
-			"destination": uploadUri},
-			"staging.task.droplet-upload-completed")
-	}
-
-	return err
-}
-
-func (s *stagingTask) promise_app_download() error {
-	downloadUri := s.staging_message.Download_uri()
-	s.Logger.Infod(map[string]interface{}{"uri": downloadUri},
-		"staging.app-download.starting uri")
-	download_destination, err := ioutil.TempFile(s.workspace.Tmp_dir(), "app-package-download.tgz")
-	if err != nil {
-		return err
-	}
-
-	startTime := time.Now()
-	err = utils.HttpDownload(downloadUri.String(), download_destination, nil, s.Logger)
-	if err != nil {
-		s.Logger.Debugd(
-			map[string]interface{}{
-				"duration": time.Now().Sub(startTime),
-				"uri":      downloadUri,
-				"error":    err},
-			"staging.app-download.failed")
-		return err
-	}
-
-	downloadedAppPath := s.workspace.downloaded_app_package_path()
-	os.Rename(download_destination.Name(), downloadedAppPath)
-	os.Chmod(downloadedAppPath, 0744)
-
-	s.Logger.Debugd(
-		map[string]interface{}{
-			"duration":    time.Now().Sub(startTime),
-			"destination": downloadedAppPath},
-		"staging.app-download.completed")
-
-	return nil
-}
-
-func (s *stagingTask) promise_buildpack_cache_upload() error {
-	uploadUri := s.staging_message.Buildpack_cache_upload_uri()
-	s.Logger.Infod(map[string]interface{}{
-		"source":      s.workspace.staged_buildpack_cache_path(),
-		"destination": uploadUri},
-		"staging.buildpack-cache-upload.starting")
-
-	start := time.Now()
-	err := utils.HttpUpload("upload[buildpack]", s.workspace.staged_buildpack_cache_path(), uploadUri.String(), s.Logger)
-
-	if err != nil {
-		s.Logger.Infod(map[string]interface{}{
-			"error":       err,
-			"duration":    time.Now().Sub(start),
-			"destination": uploadUri},
-			"staging.task.buildpack-cache-upload-failed")
-	} else {
-		s.Logger.Infod(map[string]interface{}{
-			"duration":    time.Now().Sub(start),
-			"destination": uploadUri},
-			"staging.task.buildpack-cache-upload-completed")
-	}
-
-	return err
-}
-
-func (s *stagingTask) promise_buildpack_cache_download() error {
-	downloadUri := s.staging_message.Buildpack_cache_download_uri()
-	s.Logger.Infod(map[string]interface{}{
-		"uri": downloadUri},
-		"staging.buildpack-cache-download.starting")
-
-	download_destination, err := ioutil.TempFile(s.workspace.Tmp_dir(), "buildpack-cache")
-	if err != nil {
-		return err
-	}
-
-	startTime := time.Now()
-	err = utils.HttpDownload(downloadUri.String(), download_destination, nil, s.Logger)
-	if err != nil {
-		s.Logger.Debugd(map[string]interface{}{
-			"duration": time.Now().Sub(startTime),
-			"uri":      downloadUri,
-			"error":    err},
-			"staging.buildpack-cache-download.failed")
-		return err
-	}
-
-	downloadedCachePath := s.workspace.downloaded_buildpack_cache_path()
-	os.Rename(download_destination.Name(), downloadedCachePath)
-	os.Chmod(downloadedCachePath, 0744)
-
-	s.Logger.Debugd(map[string]interface{}{
-		"duration":    time.Now().Sub(startTime),
-		"destination": downloadedCachePath},
-		"staging.buildpack-cache-download.completed")
-
-	return nil
-}
-
-func (s *stagingTask) promise_copy_out() error {
-	src := s.workspace.warden_staged_droplet()
-	dst := s.workspace.staged_droplet_dir()
-	s.Logger.Infod(map[string]interface{}{
-		"source":      src,
-		"destination": dst},
-		"staging.droplet.copying-out")
-
-	return s.Copy_out_request(src, dst)
-}
-
-func (s *stagingTask) promise_save_buildpack_cache() error {
-	start := time.Now()
-	err := s.promise_pack_buildpack_cache()
-	if err == nil {
-		err = utils.Sequence_promises(
-			s.promise_copy_out_buildpack_cache,
-			s.promise_buildpack_cache_upload)
-	}
-
-	if err != nil {
-		s.Logger.Warnd(map[string]interface{}{
-			"duration": time.Now().Sub(start),
-			"error":    err},
-			"staging.buildpack-cache.save.failed")
-	} else {
-		s.Logger.Infod(map[string]interface{}{
-			"duration": time.Now().Sub(start)},
-			"staging.buildpack-cache.save.completed")
-	}
-
-	return err
-}
-
-func (s *stagingTask) promise_save_droplet() error {
-	sha1, err := utils.SHA1Digest(s.workspace.staged_droplet_path())
-	if err != nil {
-		return err
-	}
-
-	s.dropletSha1 = string(sha1)
-
-	err = s.dropletRegistry.Get(s.dropletSha1).Local_copy(s.workspace.staged_droplet_path())
-	if err != nil {
-		s.Logger.Errord(map[string]interface{}{"error": err},
-			"staging.droplet.copy-failed")
-
-		return err
-	}
-	return nil
-}
-
-func (s *stagingTask) promise_prepare_staging_log() error {
-	script := fmt.Sprintf("mkdir -p %s/logs && touch %s", s.workspace.warden_staged_dir(),
-		s.workspace.warden_staging_log())
-
-	s.Logger.Infod(map[string]interface{}{"script": script},
-		"staging.task.preparing-log")
-
-	_, err := s.Container.RunScript(script)
-	return err
-}
-
-func (s *stagingTask) promise_app_dir() error {
-	// Some buildpacks seem to make assumption that /app is a non-empty directory
-	// See: https://github.com/heroku/heroku-buildpack-python/blob/master/bin/compile#L46
-	// TODO possibly remove this if pull request is accepted
-	script := "mkdir -p /app && touch /app/support_heroku_buildpacks && chown -R vcap:vcap /app"
-
-	s.Logger.Infod(map[string]interface{}{"script": script},
-		"staging.task.making-app-dir")
-
-	_, err := s.Container.RunScript(script)
-	return err
-}
-
-func (s *stagingTask) promise_stage() error {
-	env := env.NewEnv(NewStagingEnv(s))
-	exportedEnv, err := env.ExportedEnvironmentVariables()
-	if err != nil {
-		return err
-	}
-
-	script := strings.Join([]string{
-		"set -o pipefail;",
-		exportedEnv,
-		s.deaRuby,
-		s.run_plugin_path(),
-		s.workspace.Plugin_config_path(),
-		"| tee -a " + s.workspace.warden_staging_log(),
-	}, " ")
-
-	s.Logger.Debugd(map[string]interface{}{"script": script},
-		"staging.task.execute-staging")
-
-	err = utils.Timeout(s.StagingTimeout()+s.staging_timeout_grace_period(),
-		func() error {
-			rsp, err := s.Container.RunScript(script)
-			s.loggregator_emit_result(rsp)
-			return err
-		})
-
-	return err
-}
-
-func (s *stagingTask) promise_task_log() error {
-	src := s.workspace.warden_staging_log()
-	dst := path.Dir(s.workspace.staging_log_path())
-	s.Logger.Infod(map[string]interface{}{
-		"source":      src,
-		"destination": dst,
-	}, "staging.task-log.copying-out")
-
-	return s.Copy_out_request(src, dst)
-}
-
-func (s *stagingTask) promise_staging_info() error {
-	src := s.workspace.warden_staging_info()
-	dest := path.Dir(s.workspace.staging_info_path())
-	s.Logger.Infod(map[string]interface{}{
-		"source":      src,
-		"destination": dest},
-		"staging.task-info.copying-out")
-
-	return s.Copy_out_request(src, dest)
-}
-
-func (s *stagingTask) promise_unpack_app() error {
-	dst := s.workspace.warden_unstaged_dir()
-	s.Logger.Infod(map[string]interface{}{
-		"destination": dst,
-	}, "staging.task.unpacking-app")
-
-	script := "set -o pipefail\n" +
-		"package_size=`du -h " + s.workspace.downloaded_app_package_path() + " | cut -f1`\n" +
-		"echo \"-----> Downloaded app package ($package_size)\" | tee -a " + s.workspace.warden_staging_log() + "\n" +
-		"unzip -q " + s.workspace.downloaded_app_package_path() + " -d " + dst
-
-	rsp, err := s.Container.RunScript(script)
-	s.loggregator_emit_result(rsp)
-	return err
-}
-
-func (s *stagingTask) promise_pack_app() error {
-	s.Logger.Info("staging.task.packing-droplet")
-
-	script := "cd " + s.workspace.warden_staged_dir() + " && " +
-		"COPYFILE_DISABLE=true tar -czf " + s.workspace.warden_staged_droplet() + " ."
-	_, err := s.Container.RunScript(script)
-	return err
-}
-
-func (s *stagingTask) promise_pack_buildpack_cache() error {
-	// TODO: Ignore if buildpack cache is empty or does not exist
-
-	script := "mkdir -p " + s.workspace.warden_cache() + " && " +
-		"cd " + s.workspace.warden_cache() + " && " +
-		"COPYFILE_DISABLE=true tar -czf " + s.workspace.warden_staged_buildpack_cache() + " ."
-	_, err := s.Container.RunScript(script)
-	return err
-}
-
-func (s *stagingTask) promise_unpack_buildpack_cache() error {
-	if utils.File_Exists(s.workspace.downloaded_buildpack_cache_path()) {
-		s.Logger.Infod(map[string]interface{}{
-			"destination": s.workspace.warden_cache(),
-		}, "staging.buildpack-cache.unpack")
-
-		script := "set -o pipefail\n" +
-			"package_size=`du -h " + s.workspace.downloaded_buildpack_cache_path() + " | cut -f1`\n" +
-			"echo \"-----> Downloaded app buildpack cache ($package_size)\" | tee -a " + s.workspace.warden_staging_log() + "\n" +
-			"mkdir -p " + s.workspace.warden_cache() + "\n" +
-			"tar xfz " + s.workspace.downloaded_buildpack_cache_path() + " -C " + s.workspace.warden_cache()
-
-		rsp, err := s.Container.RunScript(script)
-		s.loggregator_emit_result(rsp)
-		return err
-	}
-
-	return nil
-}
-
-func (s *stagingTask) promise_copy_out_buildpack_cache() error {
-	src := s.workspace.warden_staged_buildpack_cache()
-	dst := s.workspace.staged_droplet_dir()
-	s.Logger.Infod(map[string]interface{}{
-		"source":      src,
-		"destination": dst},
-		"staging.buildpack-cache.copying-out")
-
-	return s.Copy_out_request(src, dst)
-}
-
-func (s *stagingTask) StreamingLogUrl() string {
-	// TODO
-	panic("Not Implemented")
-	//return s.dirServer.StagingTaskFileUrlFor(s.id, workspace.warden_staging_log)
+func (s *stagingTask) StreamingLogUrl(maker StagingTaskUrlMaker) string {
+	return maker.Staging_task_url(s.Id(), s.workspace.warden_staging_log())
 }
 
 func (s *stagingTask) task_info() map[string]interface{} {
 	data := make(map[string]interface{})
 	stagingInfoPath := s.workspace.staging_info_path()
-	if _, err := os.Stat(stagingInfoPath); os.IsExist(err) {
+	if _, err := os.Stat(stagingInfoPath); !os.IsNotExist(err) {
 		bytes, err := ioutil.ReadFile(stagingInfoPath)
 		if err = goyaml.Unmarshal(bytes, &data); err != nil {
 			s.Logger.Errorf("%s", err.Error())
@@ -569,38 +264,42 @@ func (s *stagingTask) Path_in_container(pathSuffix string) string {
 func (s *stagingTask) SetAfter_setup_callback(callback Callback) {
 	s.after_setup_callback = callback
 }
-func (s *stagingTask) trigger_after_setup(err error) {
+func (s *stagingTask) trigger_after_setup(err error) error {
 	if s.after_setup_callback != nil {
-		s.after_setup_callback(err)
+		return s.after_setup_callback(err)
 	}
+	return nil
 }
 
 func (s *stagingTask) SetAfter_complete_callback(callback Callback) {
 	s.after_complete_callback = callback
 }
 
-func (s *stagingTask) trigger_after_complete(err error) {
+func (s *stagingTask) trigger_after_complete(err error) error {
 	if s.after_complete_callback != nil {
-		s.after_complete_callback(err)
+		return s.after_complete_callback(err)
 	}
+	return nil
 }
 
 func (s *stagingTask) SetAfter_upload_callback(callback Callback) {
 	s.after_upload_callback = callback
 }
-func (s *stagingTask) trigger_after_upload(err error) {
+func (s *stagingTask) trigger_after_upload(err error) error {
 	if s.after_upload_callback != nil {
-		s.after_upload_callback(err)
+		return s.after_upload_callback(err)
 	}
+	return nil
 }
 
 func (s *stagingTask) SetAfter_stop_callback(callback Callback) {
 	s.after_stop_callback = callback
 }
-func (s *stagingTask) trigger_after_stop(err error) {
+func (s *stagingTask) trigger_after_stop(err error) error {
 	if s.after_stop_callback != nil {
-		s.after_stop_callback(err)
+		return s.after_stop_callback(err)
 	}
+	return nil
 }
 
 func (s *stagingTask) run_plugin_path() string {
@@ -612,7 +311,7 @@ func (s *stagingTask) StagingTimeout() time.Duration {
 }
 
 func (s *stagingTask) staging_timeout_grace_period() time.Duration {
-	return 60 * time.Second
+	return s.staging_timeout_buffer
 }
 
 func (s *stagingTask) loggregator_emit_result(result *warden.RunResponse) *warden.RunResponse {

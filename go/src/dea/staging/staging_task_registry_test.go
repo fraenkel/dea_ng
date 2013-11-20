@@ -1,8 +1,7 @@
-package staging_test
+package staging
 
 import (
 	cfg "dea/config"
-	. "dea/staging"
 	"dea/testhelpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

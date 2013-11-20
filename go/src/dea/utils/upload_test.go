@@ -5,7 +5,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -60,8 +59,7 @@ var _ = Describe("Upload", func() {
 
 		err := HttpUpload("droplet", src.Name(), "http://1.2.3.4", logger)
 		Expect(err).NotTo(BeNil())
-		netErr := err.(net.Error)
-		Expect(netErr.Timeout()).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("timeout"))
 	})
 
 	It("read timeout when the server is unresponsive", func() {

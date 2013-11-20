@@ -188,3 +188,17 @@ func ConfigFromFile(configPath string) (*Config, error) {
 
 	return &config, nil
 }
+
+func (c StagingConfig) Minimum_staging_memory_mb() uint64 {
+	if c.MemoryLimitMB == 0 {
+		return 1024
+	}
+	return c.MemoryLimitMB
+}
+
+func (c StagingConfig) Minimum_staging_disk_mb() uint64 {
+	if c.DiskLimitMB == 0 {
+		return 2 * 1024
+	}
+	return c.DiskLimitMB
+}

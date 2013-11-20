@@ -50,7 +50,7 @@ func (m *MockStagingTask) Stop() {
 	m.Stopped = true
 }
 
-func (m *MockStagingTask) StreamingLogUrl() string {
+func (m *MockStagingTask) StreamingLogUrl(maker dstaging.StagingTaskUrlMaker) string {
 	return m.Streaming_log_url
 }
 func (m *MockStagingTask) DetectedBuildpack() string {

@@ -48,7 +48,7 @@ var _ = Describe("Directory", func() {
 		instance = starting.NewInstance(attrs, config, nil, "127.0.0.1")
 
 		instance.SetState(starting.STATE_CRASHED)
-		instance.Container = container.MockContainer{MPath: tmpdir}
+		instance.Container = &container.MockContainer{MPath: tmpdir}
 
 		instanceRegistry.Register(instance)
 	})

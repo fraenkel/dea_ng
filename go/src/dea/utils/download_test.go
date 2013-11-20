@@ -6,7 +6,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -102,7 +101,6 @@ var _ = Describe("Download", func() {
 
 		err := HttpDownload("http://1.2.3.4", to_file, sha, logger)
 		Expect(err).NotTo(BeNil())
-		netErr := err.(net.Error)
-		Expect(netErr.Timeout()).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("timeout"))
 	})
 })
