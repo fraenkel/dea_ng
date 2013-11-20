@@ -18,15 +18,15 @@ type taskPromises struct {
 type Task struct {
 	Container container.Container
 	Logger    *steno.Logger
-	Promises  TaskPromises
+	TaskPromises
 }
 
 func NewTask(wardenSocket string, logger *steno.Logger) *Task {
 	p := &taskPromises{}
 	t := &Task{
-		Container: container.NewContainer(wardenSocket),
-		Logger:    logger,
-		Promises:  p,
+		Container:    container.NewContainer(wardenSocket),
+		Logger:       logger,
+		TaskPromises: p,
 	}
 
 	p.task = t
@@ -35,7 +35,7 @@ func NewTask(wardenSocket string, logger *steno.Logger) *Task {
 
 func (t *Task) Destroy() {
 	t.Logger.Info("task.destroying")
-	t.Promises.Promise_destroy()
+	t.Promise_destroy()
 	t.Logger.Info("task.destroy.completed")
 }
 

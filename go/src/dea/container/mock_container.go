@@ -18,9 +18,18 @@ type MockContainer struct {
 
 	MCopyOutSrc  string
 	MCopyOutDest string
+
+	MStopHandle string
+	MStopError  error
 }
 
 func (m *MockContainer) Setup(handle string, hostPort, containerPort uint32) {
+	m.MHandle = handle
+	if m.MNetworkPort == nil {
+		m.MNetworkPort = make(map[string]uint32)
+	}
+	m.MNetworkPort[HOST_PORT] = hostPort
+	m.MNetworkPort[CONTAINER_PORT] = containerPort
 }
 
 func (m *MockContainer) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_limit uint64, memory_limit uint64, network bool) error {
@@ -28,7 +37,8 @@ func (m *MockContainer) Create(bind_mounts []*warden.CreateRequest_BindMount, di
 }
 
 func (m *MockContainer) Stop() error {
-	return nil
+	m.MStopHandle = m.MHandle
+	return m.MStopError
 }
 func (m *MockContainer) CloseAllConnections() {}
 func (m *MockContainer) Destroy()             {}
