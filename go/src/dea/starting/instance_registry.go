@@ -27,11 +27,14 @@ type InstanceRegistry struct {
 	crashInodeUsageRatioThreshold float64
 	sync.Mutex
 	logger *steno.Logger
+
+	statfs func(path string, buf *syscall.Statfs_t) error
 }
 
 type instances []*Instance
 
 type byTimestamp struct {
+	reverse bool
 	instances
 }
 
@@ -39,6 +42,9 @@ func (s byTimestamp) Len() int {
 	return len(s.instances)
 }
 func (s byTimestamp) Less(i, j int) bool {
+	if s.reverse {
+		i, j = j, i
+	}
 	return s.instances[i].StateTimestamp().Before(s.instances[j].StateTimestamp())
 }
 
@@ -54,6 +60,7 @@ func NewInstanceRegistry(config *config.Config) *InstanceRegistry {
 		crashBlockUsageRatioThreshold: config.CrashBlockUsageRatioThreshold,
 		crashInodeUsageRatioThreshold: config.CrashInodeUsageRatioThreshold,
 		logger: steno.NewLogger("InstanceRegistry"),
+		statfs: syscall.Statfs,
 	}
 	crashLifetime := config.CrashLifetime
 	if crashLifetime == 0 {
@@ -157,6 +164,7 @@ func (r *InstanceRegistry) reapOrphanedCrashes() {
 	if file, err := os.Open(r.crashesPath); err == nil {
 		fileInfos, _ := file.Readdir(-1)
 		file.Close()
+
 		for _, fileInfo := range fileInfos {
 			if fileInfo.IsDir() {
 				crashes = append(crashes, fileInfo.Name())
@@ -166,7 +174,7 @@ func (r *InstanceRegistry) reapOrphanedCrashes() {
 
 	for _, instanceId := range crashes {
 		instance := r.LookupInstance(instanceId)
-		if instance != nil {
+		if instance == nil {
 			r.reapCrash(instanceId, "orphaned", nil)
 		}
 	}
@@ -188,7 +196,7 @@ func (r *InstanceRegistry) reapCrashes() {
 
 	now := time.Now()
 	for _, crashedInstances := range crashesByApp {
-		sort.Sort(byTimestamp{crashedInstances})
+		sort.Sort(byTimestamp{reverse: true, instances: crashedInstances})
 		// Remove if not most recent, or too old
 		for idx, instance := range crashedInstances {
 			if idx > 0 || now.Sub(instance.StateTimestamp()) > r.crashLifetime {
@@ -208,7 +216,7 @@ func (r *InstanceRegistry) reapCrashesUnderDiskPressure() {
 				crashed = append(crashed, instance)
 			}
 		}
-		sort.Sort(byTimestamp{crashed})
+		sort.Sort(byTimestamp{instances: crashed})
 
 		// Remove oldest crash
 		if len(crashed) > 0 {
@@ -223,7 +231,7 @@ func (r *InstanceRegistry) reapCrashesUnderDiskPressure() {
 func (r *InstanceRegistry) hasDiskPressure() bool {
 	result := false
 	stat := syscall.Statfs_t{}
-	err := syscall.Statfs(r.crashesPath, &stat)
+	err := r.statfs(r.crashesPath, &stat)
 	if err != nil {
 		r.logger.Error(err.Error())
 		return false
