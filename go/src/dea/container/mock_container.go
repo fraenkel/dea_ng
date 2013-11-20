@@ -13,6 +13,9 @@ type MockContainer struct {
 	MRunScriptStdout string
 	MRunScriptStderr string
 
+	MInfoError    error
+	MInfoResponse *warden.InfoResponse
+
 	MCopyOutSrc  string
 	MCopyOutDest string
 }
@@ -52,7 +55,7 @@ func (m *MockContainer) CopyOut(sourcePath, destinationPath string, uid int) err
 	return nil
 }
 func (m *MockContainer) Info() (*warden.InfoResponse, error) {
-	return nil, nil
+	return m.MInfoResponse, m.MInfoError
 }
 func (m *MockContainer) Update_path_and_ip() error {
 	return nil

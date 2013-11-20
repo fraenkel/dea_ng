@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const StatCollector_INTERVAL = 10
+var statCollector_INTERVAL = 10 * time.Second
 
 type cpu_stat struct {
 	timestamp time.Time
@@ -37,7 +37,7 @@ func (s *StatCollector) start() bool {
 		return false
 	}
 
-	s.timer = utils.Repeat(StatCollector_INTERVAL, func() { s.run_stat_collector() })
+	s.timer = utils.Repeat(statCollector_INTERVAL, func() { s.run_stat_collector() })
 
 	s.run_stat_collector()
 
@@ -66,7 +66,7 @@ func (s *StatCollector) retrieve_stats(now time.Time) {
 			s.container.Handle(), err.Error())
 		return
 	}
-
+	
 	s.UsedMemory = config.Memory(*info.MemoryStat.Rss) * config.Kibi
 	s.UsedDisk = config.Disk(*info.DiskStat.BytesUsed)
 	s.compute_cpu_usage(*info.CpuStat.Usage, now)
