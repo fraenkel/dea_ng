@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 )
@@ -41,6 +42,10 @@ var _ = Describe("DirectoryserverV2", func() {
 		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(testhelpers.Valid_staging_attributes()),
 			[]staging.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
 
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(config.BaseDir)
 	})
 
 	JustBeforeEach(func() {
