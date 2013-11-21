@@ -135,7 +135,7 @@ var _ = Describe("ResourceManager", func() {
 			})
 
 			It("returns the correct remaining memory", func() {
-				Expect(manager.RemainingDisk()).To(BeNumerically("~", nominal_disk_capacity()-float64((1+2+4+8+config.Staging.Minimum_staging_disk_mb()))))
+				Expect(manager.RemainingDisk()).To(BeNumerically("~", nominal_disk_capacity()-float64((1+2+4+8+32+config.Staging.Minimum_staging_disk_mb()))))
 			})
 		})
 
