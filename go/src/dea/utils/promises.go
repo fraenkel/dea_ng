@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 )
 
@@ -80,13 +80,7 @@ func toError(r interface{}) error {
 	if r == nil {
 		return nil
 	}
-
-	switch x := r.(type) {
-	case string:
-		return errors.New(r.(string))
-	case error:
-		return x
-	default:
-		return fmt.Errorf("Unknown: %v", x)
-	}
+	stack := make([]byte, 1024)
+	n := runtime.Stack(stack, false)
+	return fmt.Errorf("Panic: %v\n Stack:\n%s", r, string(stack[:n]))
 }

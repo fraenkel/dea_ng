@@ -48,26 +48,11 @@ var _ = Describe("Promises", func() {
 				Expect(func() { Sequence_promises(panic) }).ToNot(Panic())
 			})
 
-			It("passes a string as the error message", func() {
-				panic := func() error { panic("panic!") }
-				var err error
-				Expect(func() { err = Sequence_promises(panic) }).ToNot(Panic())
-				Expect(err.Error()).To(Equal("panic!"))
-			})
-
-			It("passes an error through", func() {
-				panicErr := errors.New("oh no!")
-				panic := func() error { panic(panicErr) }
-				var err error
-				Expect(func() { err = Sequence_promises(panic) }).ToNot(Panic())
-				Expect(err).To(Equal(panicErr))
-			})
-
-			It("creates an Unknown error for unknown types", func() {
+			It("the error contains the panic'd object as a string", func() {
 				panic := func() error { panic(1) }
 				var err error
 				Expect(func() { err = Sequence_promises(panic) }).ToNot(Panic())
-				Expect(err.Error()).To(ContainSubstring("Unknown:"))
+				Expect(err.Error()).To(ContainSubstring("Panic: 1"))
 			})
 
 		})
@@ -97,36 +82,21 @@ var _ = Describe("Promises", func() {
 		})
 
 		Describe("Panics are converted to errors", func() {
-			It("handles recovers from panics", func() {
+			It("recovers from panics", func() {
 				panic := func() error { panic("panic!") }
 				Expect(func() { Parallel_promises(panic) }).ToNot(Panic())
 			})
 
-			It("handles recovers from multiple", func() {
+			It("recovers from multiple panics", func() {
 				panic := func() error { panic("panic!") }
 				Expect(func() { Parallel_promises(panic, panic, panic) }).ToNot(Panic())
 			})
 
-			It("passes a string as the error message", func() {
+			It("the error contains the panic'd object as a string", func() {
 				panic := func() error { panic("panic!") }
 				var err error
 				Expect(func() { err = Parallel_promises(panic) }).ToNot(Panic())
-				Expect(err.Error()).To(Equal("panic!"))
-			})
-
-			It("passes an error through", func() {
-				panicErr := errors.New("oh no!")
-				panic := func() error { panic(panicErr) }
-				var err error
-				Expect(func() { err = Parallel_promises(panic) }).ToNot(Panic())
-				Expect(err).To(Equal(panicErr))
-			})
-
-			It("creates an Unknown error for unknown types", func() {
-				panic := func() error { panic(1) }
-				var err error
-				Expect(func() { err = Parallel_promises(panic) }).ToNot(Panic())
-				Expect(err.Error()).To(ContainSubstring("Unknown:"))
+				Expect(err.Error()).To(ContainSubstring("Panic: panic!"))
 			})
 
 		})
