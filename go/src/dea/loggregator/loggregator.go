@@ -2,7 +2,6 @@ package loggregator
 
 import (
 	"github.com/cloudfoundry/loggregatorlib/emitter"
-	"github.com/cloudfoundry/loggregatorlib/logmessage"
 )
 
 var theEmitter emitter.Emitter
@@ -24,7 +23,7 @@ func Emit(appId, message string) {
 
 func EmitError(appId, message string) {
 	if theEmitter != nil && appId != "" {
-		theEmitter.EmitLogMessage(theEmitter.NewLogMessage(appId, message, logmessage.LogMessage_ERR))
+		theEmitter.EmitError(appId, message)
 	}
 }
 
@@ -36,6 +35,6 @@ func StagingEmit(appId, message string) {
 
 func StagingEmitError(appId, message string) {
 	if theStagingEmitter != nil && appId != "" {
-		theStagingEmitter.EmitLogMessage(theStagingEmitter.NewLogMessage(appId, message, logmessage.LogMessage_ERR))
+		theStagingEmitter.EmitError(appId, message)
 	}
 }

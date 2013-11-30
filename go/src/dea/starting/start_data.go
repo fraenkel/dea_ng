@@ -110,18 +110,15 @@ func (s *StartData) UnmarshalMap(m map[string]interface{}) error {
 		s.Application_name = getString(m, "name")
 	}
 
-	uris := m["application_uris"].([]interface{})
+	uris := getStrings(m, "application_uris")
 	if uris == nil {
-		uris = m["uris"].([]interface{})
+		uris = getStrings(m, "uris")
 	}
-	if uris != nil {
-		s.Application_uris = make([]string, len(uris))
-		for i := 0; i < len(uris); i++ {
-			s.Application_uris[i] = uris[i].(string)
-		}
-	} else {
-		s.Application_uris = []string{}
+	if uris == nil {
+		uris = []string{}
 	}
+
+	s.Application_uris = uris
 
 	s.Prod = getBool(m, "prod")
 
@@ -255,18 +252,7 @@ func (s *ServiceData) UnmarshalMap(m map[string]interface{}) error {
 		s.Credentials = creds.(map[string]interface{})
 	}
 
-	if t, exists := m["tags"]; exists {
-		switch t.(type) {
-		case []string:
-			s.Tags = t.([]string)
-		case []interface{}:
-			tags := t.([]interface{})
-			s.Tags = make([]string, len(tags))
-			for i := 0; i < len(tags); i++ {
-				s.Tags[i] = tags[i].(string)
-			}
-		}
-	}
+	s.Tags = getStrings(m, "tags")
 
 	s.Syslog_drain_url = getString(m, "syslog_drain_url")
 
@@ -310,7 +296,10 @@ func getBool(m map[string]interface{}, key string) bool {
 
 func getString(m map[string]interface{}, key string) string {
 	if b, exist := m[key]; exist {
-		return b.(string)
+		switch b.(type) {
+		case string:
+			return b.(string)
+		}
 	}
 	return ""
 }
@@ -343,4 +332,21 @@ func getInt(m map[string]interface{}, key string) int {
 		}
 	}
 	return 0
+}
+
+func getStrings(m map[string]interface{}, key string) []string {
+	var ret []string
+	if s, exist := m[key]; exist {
+		switch s.(type) {
+		case []string:
+			ret = s.([]string)
+		case []interface{}:
+			is := s.([]interface{})
+			ret = make([]string, len(is))
+			for i := 0; i < len(is); i++ {
+				ret[i] = is[i].(string)
+			}
+		}
+	}
+	return ret
 }

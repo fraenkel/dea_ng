@@ -270,3 +270,23 @@ func (c *sContainer) HostIp() string {
 func (c *sContainer) NetworkPort(portName string) uint32 {
 	return c.networkPorts[portName]
 }
+
+func CreateBindMounts(dirs []string, bindMaps []map[string]string) []*warden.CreateRequest_BindMount {
+	mounts := make([]*warden.CreateRequest_BindMount, 0, len(dirs)+len(bindMaps))
+	for _, d := range dirs {
+		path := d
+		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &path, DstPath: &path})
+	}
+
+	for _, bindMap := range bindMaps {
+		srcPath := bindMap["src_path"]
+		dstPath, exist := bindMap["dst_path"]
+		if !exist {
+			dstPath = srcPath
+		}
+
+		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &srcPath, DstPath: &dstPath})
+	}
+
+	return mounts
+}

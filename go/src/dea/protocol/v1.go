@@ -84,7 +84,7 @@ type ExitMessage struct {
 	Id              string     `json: "instance"`
 	Index           int        `json:"index"`
 	Reason          string     `json:"reason"`
-	ExitStatus      int32      `json:"exit_status"`
+	ExitStatus      int64      `json:"exit_status"`
 	ExitDescription string     `json:"exit_description"`
 	CrashTimestamp  *time.Time `json:"crash_timestamp"`
 }
@@ -208,6 +208,7 @@ func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
 	}
 
 	if _, exists := request["include_stats"]; exists && i.State() == starting.STATE_RUNNING {
+		stats := i.GetStats()
 		rspStats := FindDropletStats{
 			Name:        i.ApplicationName(),
 			Uris:        i.ApplicationUris(),
@@ -219,9 +220,9 @@ func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
 			FdsQuota:    i.FileDescriptorLimit(),
 			Usage: FindDropletUsage{
 				Time:     time.Now().Format(time.RFC3339),
-				CPU:      i.Computed_pcpu(),
-				MemoryKB: uint64(i.UsedMemory() / config.Kibi),
-				Disk:     i.UsedDisk(),
+				CPU:      stats.ComputedPCPU,
+				MemoryKB: uint64(stats.UsedMemory / config.Kibi),
+				Disk:     stats.UsedDisk,
 			},
 		}
 

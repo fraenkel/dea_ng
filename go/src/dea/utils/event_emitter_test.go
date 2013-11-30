@@ -52,4 +52,21 @@ var _ = Describe("EventEmitter", func() {
 		e.Emit("abc")
 		Expect(*notified).To(Equal(2))
 	})
+
+	It("Supports event structs", func() {
+		e := NewEventEmitter()
+		called := false
+		e.On(EventStruct{"a"}, func() { called = true })
+		e.Emit(EventStruct{"a"})
+		Expect(called).To(BeTrue())
+	})
+
 })
+
+type EventStruct struct {
+	value string
+}
+
+func (e EventStruct) Name() string {
+	return e.value
+}

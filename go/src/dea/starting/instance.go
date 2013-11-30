@@ -4,32 +4,28 @@ import (
 	"dea/config"
 	"dea/container"
 	"dea/droplet"
-	"dea/env"
 	"dea/health_check"
 	"dea/task"
 	"dea/utils"
 	"errors"
-	"fmt"
 	"github.com/cloudfoundry/gordon"
-	steno "github.com/cloudfoundry/gosteno"
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 )
 
-type HealthCheckFailed string
-type MissingStartCommand string
-
-func (e HealthCheckFailed) Error() string {
-	return "didn't start accepting connections"
+type userFacingError struct {
+	s string
 }
 
-func (e MissingStartCommand) Error() string {
-	return "missing start command"
+func (u *userFacingError) Error() string {
+	return u.s
 }
+
+var HealthCheckFailed = &userFacingError{"failed to start accepting connections"}
+var MissingStartCommand = &userFacingError{"missing start command"}
 
 type State string
 
@@ -43,7 +39,7 @@ const (
 	STATE_DELETED  State = "DELETED"
 	STATE_RESUMING State = "RESUMING"
 
-	nproc_LIMIT = 512
+	NPROC_LIMIT = 512
 )
 
 type link_callback func(err error)
@@ -51,6 +47,10 @@ type link_callback func(err error)
 type Transition struct {
 	From State
 	To   State
+}
+
+func (t Transition) Name() string {
+	return string(t.From) + string(t.To)
 }
 
 type Instance struct {
@@ -67,21 +67,23 @@ type Instance struct {
 	instance_path string
 	warden_job_id uint32
 	state         State
-	state_times   map[string]time.Time
+	state_times   map[State]time.Time
 
 	exitStatus      int64
 	exitDescription string
-	logger          *steno.Logger
 	hooks           map[string]string
 	statCollector   StatCollector
 	*task.Task
 	utils.EventEmitter
-	dropletRegistry    *droplet.DropletRegistry
-	stagedInfo         *map[string]interface{}
+	dropletRegistry    droplet.DropletRegistry
+	stagedInfo         map[string]interface{}
 	localIp            string
 	healthCheckTimeout time.Duration
 	healthCheck        health_check.HealthCheck
 	crashesPath        string
+	InstancePromises
+	*sync.Mutex
+	bindMounts []map[string]string
 }
 
 type healthcheckCallback struct {
@@ -114,10 +116,11 @@ func (hcc *healthcheckCallback) Failure() {
 }
 
 func (hcc *healthcheckCallback) Wait() {
+	hcc.condition.L.Lock()
 	hcc.condition.Wait()
 }
 
-func NewInstance(raw_attributes map[string]interface{}, config *config.Config, dr *droplet.DropletRegistry, localIp string) *Instance {
+func NewInstance(raw_attributes map[string]interface{}, config *config.Config, dr droplet.DropletRegistry, localIp string) *Instance {
 	sdata := NewStartData(raw_attributes)
 
 	// Generate unique ID
@@ -136,7 +139,7 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		raw_attributes:      raw_attributes,
 		startData:           sdata,
 		state:               STATE_BORN,
-		state_times:         make(map[string]time.Time),
+		state_times:         make(map[State]time.Time),
 		instance_id:         instance_id,
 		private_instance_id: private_id,
 		exitStatus:          -1,
@@ -144,7 +147,13 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		healthCheckTimeout:  config.MaximumHealthCheckTimeout,
 		crashesPath:         config.CrashesPath,
 		Task:                task.NewTask(config.WardenSocket, nil),
+		EventEmitter:        utils.NewEventEmitter(),
+		dropletRegistry:     dr,
+		Mutex:               &sync.Mutex{},
+		bindMounts:          config.BindMounts,
 	}
+
+	i.InstancePromises = &instancePromises{i}
 
 	if config != nil {
 		i.hooks = config.Hooks
@@ -163,6 +172,8 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 	hostPort := getUInt(raw_attributes, "instance_host_port")
 	containerPort := getUInt(raw_attributes, "instance_container_port")
 	i.Container.Setup(warden_handle, uint32(hostPort), uint32(containerPort))
+
+	i.statCollector = NewStatCollector(i.Container)
 
 	return i
 }
@@ -222,7 +233,7 @@ func (i *Instance) DropletSHA1() string {
 func (i *Instance) DropletUri() string {
 	return i.startData.Droplet_uri
 }
-func (i *Instance) droplet() *droplet.Droplet {
+func (i *Instance) droplet() droplet.Droplet {
 	return i.dropletRegistry.Get(i.DropletSHA1())
 }
 
@@ -256,42 +267,74 @@ func (i *Instance) FileDescriptorLimit() uint64 {
 }
 
 func (i *Instance) SetState(newState State) {
-	transition := Transition{i.State(), newState}
+	transition := Transition{i.state, newState}
+	curTime := time.Now()
+
+	i.Lock()
 
 	i.state = newState
-	curTime := time.Now()
-	i.state_times["current"] = curTime
+	i.state_times[newState] = curTime
 
-	state_time := string(newState)
-	i.state_times[state_time] = curTime
+	i.Unlock()
 
 	i.Emit(transition)
 }
 
 func (i *Instance) State() State {
+	i.Lock()
+	defer i.Unlock()
+
 	return i.state
 }
 
 func (i *Instance) StateTime(state State) time.Time {
-	return i.state_times[string(state)]
+	i.Lock()
+	defer i.Unlock()
+
+	return i.state_times[state]
 
 }
 
 func (i *Instance) StateTimestamp() time.Time {
-	return i.state_times["current"]
+	i.Lock()
+	defer i.Unlock()
+
+	return i.state_times[i.state]
 }
 
-func (i *Instance) ExitStatus() int32 {
-	return int32(i.exitStatus)
+func (i *Instance) SetExitStatus(status int64, description string) {
+	i.Lock()
+	defer i.Unlock()
+
+	i.exitStatus = status
+	i.exitDescription = description
+}
+
+func (i *Instance) ExitStatus() int64 {
+	i.Lock()
+	defer i.Unlock()
+
+	return i.exitStatus
 }
 
 func (i *Instance) ExitDescription() string {
+	i.Lock()
+	defer i.Unlock()
+
 	return i.exitDescription
 }
 
-func (i *Instance) IsAlive() bool {
+func (i *Instance) IsConsumingMemory() bool {
 	switch i.State() {
 	case STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING:
+		return true
+	}
+	return false
+}
+
+func (i *Instance) IsConsumingDisk() bool {
+	switch i.State() {
+	case STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING, STATE_CRASHED:
 		return true
 	}
 	return false
@@ -325,36 +368,16 @@ func (i *Instance) attributes_and_stats() map[string]interface{} {
 	m := make(map[string]interface{})
 	i.startData.MarshalMap(m)
 
-	m["used_memory_in_bytes"] = i.UsedMemory()
-	m["used_disk_in_bytes"] = i.UsedDisk()
-	m["computed_pcpu"] = i.Computed_pcpu
+	stats := i.GetStats()
+	m["used_memory_in_bytes"] = stats.UsedMemory
+	m["used_disk_in_bytes"] = stats.UsedDisk
+	m["computed_pcpu"] = stats.ComputedPCPU
 
 	return m
 }
 
-func (i *Instance) UsedMemory() config.Memory {
-	return i.statCollector.UsedMemory
-}
-
-func (i *Instance) UsedDisk() config.Disk {
-	return i.statCollector.UsedDisk
-}
-
-func (i *Instance) Computed_pcpu() float32 {
-	return i.statCollector.ComputedPCPU
-}
-
-func (i *Instance) promise_copy_out() error {
-	if i.instance_path == "" {
-		new_instance_path := path.Join(i.crashesPath, i.Id())
-		new_instance_path = path.Clean(new_instance_path)
-		if err := i.Copy_out_request("/home/vcap/", new_instance_path); err != nil {
-			return err
-		}
-
-		i.instance_path = new_instance_path
-	}
-	return nil
+func (i *Instance) GetStats() Stats {
+	return *i.statCollector.GetStats()
 }
 
 func (i *Instance) setup_crash_handler() {
@@ -372,48 +395,57 @@ func (i *Instance) setup_crash_handler() {
 	})
 }
 
-func (i *Instance) promise_crash_handler() error {
-	if i.Container.Handle() != "" {
-		err := i.promise_copy_out()
-		if err != nil {
-			return err
-		}
-		i.Promise_destroy()
-
-		i.Container.CloseAllConnections()
-	}
-
-	return nil
-}
-
 func (i *Instance) crash_handler() {
-	err := i.promise_crash_handler()
+	err := i.Promise_crash_handler()
 	if err != nil {
-		i.logger.Warnd(map[string]interface{}{"error": err},
+		i.Logger.Warnd(map[string]interface{}{"error": err},
 			"droplet.crash-handler.error")
 	}
 }
 
 func (i *Instance) Start(callback func(error)) {
-	i.logger.Info("droplet.starting")
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			switch r.(type) {
+			case error:
+				err = r.(error)
+			default:
+				err = errors.New("failed to start")
+			}
+		}
 
-	err := i.promise_state([]State{STATE_BORN}, STATE_STARTING)
+		if err != nil {
+			// An error occured while starting, mark as crashed
+			i.exitDescription = err.Error()
+			i.SetState(STATE_CRASHED)
+		}
+
+		if callback != nil {
+			callback(err)
+		}
+	}()
+
+	i.Logger.Info("droplet.starting")
+
+	err = i.Promise_state([]State{STATE_BORN}, STATE_STARTING)
 	if err != nil {
-		goto done
+		return
 	}
 	// Concurrently download droplet and setup container
 	err = utils.Parallel_promises(
-		i.promise_droplet,
-		i.promise_container)
+		i.Promise_droplet,
+		i.Promise_container)
 	if err != nil {
-		goto done
+		return
 	}
 
-	err = utils.Sequence_promises(i.promise_extract_droplet,
-		func() error { return i.promise_exec_hook_script("before_start") },
-		i.promise_start)
+	err = utils.Sequence_promises(
+		i.Promise_extract_droplet,
+		func() error { return i.Promise_exec_hook_script("before_start") },
+		i.Promise_start)
 	if err != nil {
-		goto done
+		return
 	}
 
 	i.On(Transition{STATE_STARTING, STATE_CRASHED}, func() {
@@ -423,66 +455,43 @@ func (i *Instance) Start(callback func(error)) {
 	// Fire off link so that the health check can be cancelled when the
 	// instance crashes before the health check completes.
 
-	i.link()
+	i.Link()
 
-	_, err = i.promise_health_check()
+	healthy, err := i.Promise_health_check()
 	if err != nil {
-		goto done
+		return
 	}
 
-	err = i.promise_state([]State{STATE_STARTING}, STATE_RUNNING)
-
-	if err == nil {
-		i.logger.Info("droplet.healthy")
-		err = i.promise_exec_hook_script("after_start")
+	if healthy {
+		err = i.Promise_state([]State{STATE_STARTING}, STATE_RUNNING)
+		if err == nil {
+			i.Logger.Info("droplet.healthy")
+			err = i.Promise_exec_hook_script("after_start")
+		}
 	} else {
-		i.logger.Warn("droplet.unhealthy")
-		err = HealthCheckFailed("")
+		i.Logger.Warn("droplet.unhealthy")
+		err = HealthCheckFailed
 	}
-
-done:
-	if err != nil {
-		// An error occured while starting, mark as crashed
-		i.exitDescription = err.Error()
-		i.SetState(STATE_CRASHED)
-	}
-
-	if callback != nil {
-		callback(err)
-	}
-}
-
-func (i *Instance) promise_container() error {
-	bindPath := i.droplet().Droplet_dirname()
-	bindMount := warden.CreateRequest_BindMount{SrcPath: &bindPath, DstPath: &bindPath}
-	bindMounts := []*warden.CreateRequest_BindMount{&bindMount}
-
-	err := i.Container.Create(bindMounts, uint64(i.DiskLimit()), uint64(i.MemoryLimit()), true)
-	if err == nil {
-		err = i.promise_setup_environment()
-	}
-
-	return err
 }
 
 func (i *Instance) Stop() error {
 	startTime := time.Now()
 
-	i.logger.Info("droplet.stopping")
-	i.promise_exec_hook_script("before_stop")
+	i.Logger.Info("droplet.stopping")
+	i.Promise_exec_hook_script("before_stop")
 
-	err := i.promise_state([]State{STATE_RUNNING, STATE_STARTING}, STATE_STOPPING)
+	err := i.Promise_state([]State{STATE_RUNNING, STATE_STARTING}, STATE_STOPPING)
 	if err != nil {
 		goto done
 	}
 
-	err = i.promise_exec_hook_script("after_stop")
+	err = i.Promise_exec_hook_script("after_stop")
 	err = i.Promise_stop()
 	if err != nil {
 		goto done
 	}
 
-	err = i.promise_state([]State{STATE_STOPPING}, STATE_STOPPED)
+	err = i.Promise_state([]State{STATE_STOPPING}, STATE_STOPPED)
 
 done:
 	duration := time.Since(startTime)
@@ -495,10 +504,10 @@ done:
 
 	operation := "stop instance"
 	if err != nil {
-		i.logger.Warnf("Failed: %s (took %s)", operation, duration)
-		i.logger.Warnf("Exception: %s %s", operation, err.Error())
+		i.Logger.Warnf("Failed: %s (took %s)", operation, duration)
+		i.Logger.Warnf("Exception: %s %s", operation, err.Error())
 	} else {
-		i.logger.Infof("Delivered: %s (took %s)", operation, duration)
+		i.Logger.Infof("Delivered: %s (took %s)", operation, duration)
 	}
 
 	if err != nil {
@@ -510,196 +519,29 @@ done:
 	return err
 }
 
-func (i *Instance) promise_droplet() (err error) {
-	if !i.droplet().Exists() {
-		i.logger.Info("droplet.download.starting")
-		start := time.Now()
-		err = i.promise_droplet_download()
-		i.logger.Infod(map[string]interface{}{"took": time.Since(start)},
-			"droplet.download.finished")
-	} else {
-		i.logger.Info("droplet.download.skipped")
-	}
-
-	return err
-}
-
-func (i *Instance) promise_start() error {
-	environment := env.NewEnv(NewRunningEnv(i))
-
-	var start_script string
-	stagedInfo := i.staged_info()
-	if stagedInfo != nil {
-		command := (*stagedInfo)["start_command"].(string)
-		if command == "" {
-			return MissingStartCommand("")
-		}
-
-		sysEnv, err := environment.ExportedSystemEnvironmentVariables()
-		if err != nil {
-			return err
-		}
-		start_script = env.NewStartupScriptGenerator(
-			command,
-			environment.ExportedUserEnvironmentVariables(),
-			sysEnv,
-		).Generate()
-	} else {
-		start_script, err := environment.ExportedEnvironmentVariables()
-		if err != nil {
-			return err
-		}
-		start_script = start_script + "./startup;\nexit"
-	}
-
-	response, err := i.Container.Spawn(start_script, i.FileDescriptorLimit(), nproc_LIMIT, true)
-	if err != nil {
-		return err
-	}
-
-	i.warden_job_id = response.GetJobId()
-	return nil
-}
-
-func (i *Instance) promise_exec_hook_script(key string) error {
-	if script_path, exists := i.hooks[key]; exists {
-		if utils.File_Exists(script_path) {
-			script := make([]string, 0, 10)
-			script = append(script, "umask 077")
-			envVars, err := env.NewEnv(NewRunningEnv(i)).ExportedEnvironmentVariables()
-			if err != nil {
-				i.logger.Warnf("Exception: exec_hook_script hook:%s %s", key, err.Error())
-			}
-			script = append(script, envVars)
-			bytes, err := ioutil.ReadFile(script_path)
-			if err != nil {
-				return err
-			}
-			script = append(script, string(bytes))
-			script = append(script, "exit")
-			_, err = i.Container.RunScript(strings.Join(script, "\n"))
-			return err
-		} else {
-			i.logger.Warnd(map[string]interface{}{"hook": key, "script_path": "script_path"},
-				"droplet.hook-script.missing")
-		}
-	}
-	return nil
-}
-
-func (i *Instance) promise_state(from []State, to State) error {
-	for _, s := range from {
-		if i.State() == s {
-			i.SetState(to)
-			return nil
-		}
-	}
-	return errors.New("Cannot tranistion from " + string(i.State()) + " to " + string(to))
-}
-
-func (i *Instance) promise_extract_droplet() error {
-	script := fmt.Sprintf("cd /home/vcap/ && tar zxf %s", i.droplet().Droplet_path())
-	_, err := i.Container.RunScript(script)
-	return err
-}
-
-func (i *Instance) promise_droplet_download() error {
-	return i.droplet().Download(i.DropletUri())
-}
-
-func (i *Instance) promise_setup_environment() error {
-	script := "cd / && mkdir -p home/vcap/app && chown vcap:vcap home/vcap/app && ln -s home/vcap/app /app"
-	_, err := i.Container.RunScript(script)
-	return err
-}
-
 func (i *Instance) setup_stat_collector() {
 	i.EventEmitter.On(Transition{STATE_RESUMING, STATE_RUNNING}, func() {
-		i.statCollector.start()
+		i.statCollector.Start()
 	})
 
 	i.EventEmitter.On(Transition{STATE_STARTING, STATE_RUNNING}, func() {
-		i.statCollector.start()
+		i.statCollector.Start()
 	})
 
 	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_STOPPING}, func() {
-		i.statCollector.stop()
+		i.statCollector.Stop()
 	})
 
 	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_CRASHED}, func() {
-		i.statCollector.stop()
+		i.statCollector.Stop()
 	})
 }
 
 func (i *Instance) setup_link() {
 	// Resuming to running state
 	i.EventEmitter.On(Transition{STATE_RESUMING, STATE_RUNNING}, func() {
-		i.link()
+		i.Link()
 	})
-}
-
-func (i *Instance) promise_link() (*warden.LinkResponse, error) {
-	rsp, err := i.Container.Link(i.warden_job_id)
-	if err == nil {
-		i.logger.Infod(map[string]interface{}{"exit_status": rsp.GetExitStatus()},
-			"droplet.warden.link.completed")
-	}
-	return rsp, err
-}
-
-func (i *Instance) link() {
-	response, err := i.promise_link()
-	if err != nil {
-		i.exitStatus = -1
-		i.exitDescription = "unknown"
-	} else {
-		i.exitStatus = int64(response.GetExitStatus())
-		i.exitDescription = determine_exit_description(response)
-	}
-
-	switch i.State() {
-	case STATE_STARTING:
-		i.SetState(STATE_CRASHED)
-	case STATE_RUNNING:
-		uptime := time.Now().Sub(i.StateTime(STATE_RUNNING))
-		i.logger.Infod(map[string]interface{}{"uptime": uptime},
-			"droplet.instance.uptime")
-
-		i.SetState(STATE_CRASHED)
-	default:
-		// Linking likely completed because of stop
-	}
-}
-
-func (i *Instance) promise_read_instance_manifest(container_path string) (map[string]interface{}, error) {
-	if container_path == "" {
-		return map[string]interface{}{}, nil
-	}
-
-	manifest_path := container_relative_path(container_path, "droplet.yaml")
-	manifest := make(map[string]interface{})
-	err := utils.Yaml_Load(manifest_path, &manifest)
-	return manifest, err
-}
-
-func (i *Instance) promise_port_open(port uint32) bool {
-	host := i.localIp
-	i.logger.Debugd(map[string]interface{}{"host": host, "port": port},
-		"droplet.healthcheck.port")
-
-	callback := newHealthCheckCallback()
-	i.healthCheck = health_check.NewPortOpen(host, port, 500*time.Millisecond, callback, i.healthCheckTimeout)
-	callback.Wait()
-	return *callback.result
-}
-
-func (i *Instance) promise_state_file_ready(path string) bool {
-	i.logger.Debugd(map[string]interface{}{"path": path},
-		"droplet.healthcheck.file")
-	callback := newHealthCheckCallback()
-	i.healthCheck = health_check.NewStateFileReady(path, 500*time.Millisecond, callback, 5*60*time.Second)
-	callback.Wait()
-	return *callback.result
 }
 
 func (i *Instance) cancel_health_check() {
@@ -707,31 +549,6 @@ func (i *Instance) cancel_health_check() {
 		i.healthCheck.Destroy()
 		i.healthCheck = nil
 	}
-}
-
-func (i *Instance) promise_health_check() (bool, error) {
-	i.logger.Debug("droplet.health-check.get-container-info")
-	err := i.Container.Update_path_and_ip()
-	if err != nil {
-		i.logger.Errorf("droplet.health-check.container-info-failed: %s", err.Error())
-		return false, err
-
-	}
-	i.logger.Debug("droplet.health-check.container-info-ok")
-
-	containerPath := i.Container.Path()
-	manifest, err := i.promise_read_instance_manifest(containerPath)
-	if err != nil {
-		return false, err
-	}
-
-	if manifest["state_file"] != nil {
-		manifest_path := container_relative_path(containerPath, manifest["state_file"].(string))
-		return i.promise_state_file_ready(manifest_path), nil
-	} else if len(i.ApplicationUris()) > 0 {
-		return i.promise_port_open(i.ContainerPort()), nil
-	}
-	return true, nil
 }
 
 func (i Instance) ContainerPort() uint32 {
@@ -742,7 +559,7 @@ func (i Instance) HostPort() uint32 {
 	return i.Container.NetworkPort(container.HOST_PORT)
 }
 
-func (i *Instance) staged_info() *map[string]interface{} {
+func (i *Instance) staged_info() map[string]interface{} {
 	if i.stagedInfo == nil {
 		tmpdir, err := ioutil.TempDir("", "instance")
 		if err != nil {
@@ -760,7 +577,7 @@ func (i *Instance) staged_info() *map[string]interface{} {
 		if err != nil {
 			return nil
 		}
-		i.stagedInfo = stagedInfo
+		i.stagedInfo = *stagedInfo
 	}
 
 	return i.stagedInfo

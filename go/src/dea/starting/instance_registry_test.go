@@ -19,7 +19,7 @@ import (
 
 var _ = Describe("InstanceRegistry", func() {
 	var config cfg.Config
-	var dropletRegistry *droplet.DropletRegistry
+	var dropletRegistry droplet.DropletRegistry
 	var instance_registry *InstanceRegistry
 
 	var attributes map[string]interface{}
@@ -241,12 +241,12 @@ var _ = Describe("InstanceRegistry", func() {
 			instance1 = register_crashed_instance(instance_registry, map[string]interface{}{
 				"application_id": "1",
 			})
-			instance1.state_times["current"] = now.Add(5 * time.Second)
+			instance1.state_times[instance1.State()] = now.Add(5 * time.Second)
 
 			instance2 := register_crashed_instance(instance_registry, map[string]interface{}{
 				"application_id": "2",
 			})
-			instance2.state_times["current"] = now.Add(-15 * time.Second)
+			instance2.state_times[instance2.State()] = now.Add(-15 * time.Second)
 
 			instance_registry.reapCrashes()
 
@@ -258,9 +258,9 @@ var _ = Describe("InstanceRegistry", func() {
 			now := time.Now()
 			instance1 := register_crashed_instance(instance_registry, nil)
 			instance2 := register_crashed_instance(instance_registry, nil)
-			instance2.state_times["current"] = now.Add(-1 * time.Second)
+			instance2.state_times[instance2.State()] = now.Add(-1 * time.Second)
 			instance3 := register_crashed_instance(instance_registry, nil)
-			instance3.state_times["current"] = now.Add(-2 * time.Second)
+			instance3.state_times[instance3.State()] = now.Add(-2 * time.Second)
 
 			instance_registry.reapCrashes()
 
@@ -309,7 +309,7 @@ var _ = Describe("InstanceRegistry", func() {
 
 			instance1 := register_crashed_instance(instance_registry, nil)
 			instance2 := register_crashed_instance(instance_registry, nil)
-			instance2.state_times["current"] = time.Now().Add(1 * time.Second)
+			instance2.state_times[instance2.State()] = time.Now().Add(1 * time.Second)
 
 			instance_registry.reapCrashesUnderDiskPressure()
 
@@ -325,7 +325,7 @@ var _ = Describe("InstanceRegistry", func() {
 
 			instance1 := register_crashed_instance(instance_registry, nil)
 			instance2 := register_crashed_instance(instance_registry, nil)
-			instance2.state_times["current"] = time.Now().Add(1 * time.Second)
+			instance2.state_times[instance2.State()] = time.Now().Add(1 * time.Second)
 
 			instance_registry.reapCrashesUnderDiskPressure()
 

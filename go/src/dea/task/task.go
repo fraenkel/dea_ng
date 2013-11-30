@@ -19,6 +19,7 @@ type Task struct {
 	Container container.Container
 	Logger    *steno.Logger
 	TaskPromises
+	bindMounts []map[string]string
 }
 
 func NewTask(wardenSocket string, logger *steno.Logger) *Task {

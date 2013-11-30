@@ -25,7 +25,7 @@ type Staging struct {
 	id               string
 	stagingRegistry  *staging.StagingTaskRegistry
 	config           *config.Config
-	dropletRegistry  *droplet.DropletRegistry
+	dropletRegistry  droplet.DropletRegistry
 	urlMaker         staging.StagingTaskUrlMaker
 	staging_sid      *int
 	staging_id_sid   *int
@@ -34,7 +34,7 @@ type Staging struct {
 
 func NewStaging(appManager AppManager, nats yagnats.NATSClient, id string,
 	stagingTaskRegistry *staging.StagingTaskRegistry,
-	config *config.Config, dropletRegistry *droplet.DropletRegistry, maker staging.StagingTaskUrlMaker) *Staging {
+	config *config.Config, dropletRegistry droplet.DropletRegistry, maker staging.StagingTaskUrlMaker) *Staging {
 	return &Staging{
 		enabled:         config.Staging.Enabled,
 		appManager:      appManager,

@@ -12,7 +12,7 @@ type StateFileReady struct {
 	path     string
 	retry    time.Duration
 	deferred HealthCheckCallback
-	end_time time.Time
+	End_time time.Time
 	done     bool
 }
 
@@ -21,7 +21,7 @@ func NewStateFileReady(path string, retryInterval time.Duration, hc HealthCheckC
 		path:     path,
 		retry:    retryInterval,
 		deferred: hc,
-		end_time: time.Now().Add(timeout),
+		End_time: time.Now().Add(timeout),
 	}
 
 	go sfr.check_state_file()
@@ -43,9 +43,15 @@ func (s StateFileReady) check_state_file() {
 				var state = make(map[string]interface{})
 				err = json.Unmarshal(bytes, &state)
 				if err == nil {
-					if state["state"] == "RUNNING" {
+					switch state["state"] {
+					case "RUNNING":
 						s.done = true
 						s.deferred.Success()
+					case "CRASHED":
+						s.done = true
+						s.deferred.Failure()
+					}
+					if s.done {
 						return
 					}
 				}
@@ -57,7 +63,7 @@ func (s StateFileReady) check_state_file() {
 		}
 	}
 
-	if time.Now().Before(s.end_time) {
+	if time.Now().Before(s.End_time) {
 		time.AfterFunc(s.retry, s.check_state_file)
 	} else {
 		s.done = true

@@ -59,7 +59,7 @@ type bootstrap struct {
 	pidFile             *dea.PidFile
 	instanceRegistry    *starting.InstanceRegistry
 	stagingTaskRegistry *staging.StagingTaskRegistry
-	dropletRegistry     *droplet.DropletRegistry
+	dropletRegistry     droplet.DropletRegistry
 	logger              *steno.Logger
 	component           *common.VcapComponent
 	signalChannel       chan<- os.Signal

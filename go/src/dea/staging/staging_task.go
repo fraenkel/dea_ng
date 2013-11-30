@@ -1,6 +1,7 @@
 package staging
 
 import (
+cnr "dea/container"
 	"dea/config"
 	"dea/droplet"
 	"dea/loggregator"
@@ -48,7 +49,7 @@ type stagingTask struct {
 	bindMounts      []map[string]string
 	staging_message StagingMessage
 	workspace       StagingTaskWorkspace
-	dropletRegistry *droplet.DropletRegistry
+	dropletRegistry droplet.DropletRegistry
 	deaRuby         string
 	*task.Task
 	dropletSha1             string
@@ -61,7 +62,7 @@ type stagingTask struct {
 }
 
 func NewStagingTask(config *config.Config, staging_message StagingMessage, buildpacksInUse []StagingBuildpack,
-	dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) StagingTask {
+	dropletRegistry droplet.DropletRegistry, logger *steno.Logger) StagingTask {
 	p := &stagingPromises{}
 	s := &stagingTask{
 		id:                     staging_message.Task_id(),
@@ -156,23 +157,7 @@ func (s *stagingTask) Stop() {
 
 func (s *stagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
 	workspaceDirs := []string{s.workspace.Workspace_dir(), s.workspace.buildpack_dir(), s.workspace.Admin_buildpacks_dir()}
-	mounts := make([]*warden.CreateRequest_BindMount, 0, len(workspaceDirs)+len(s.bindMounts))
-	for _, d := range workspaceDirs {
-		path := d
-		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &path, DstPath: &path})
-	}
-
-	for _, bindMap := range s.bindMounts {
-		srcPath := bindMap["src_path"]
-		dstPath, exist := bindMap["dst_path"]
-		if !exist {
-			dstPath = srcPath
-		}
-
-		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &srcPath, DstPath: &dstPath})
-	}
-
-	return mounts
+	return cnr.CreateBindMounts(workspaceDirs, s.bindMounts)
 }
 
 func (s *stagingTask) resolve_staging_setup() error {

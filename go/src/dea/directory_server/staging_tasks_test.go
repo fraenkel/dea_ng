@@ -159,6 +159,6 @@ func staging_task_file_path(server *DirectoryServerV2, task_id string, file_path
 	return urlPath
 }
 
-func NewMockStagingTask(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, *droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
+func NewMockStagingTask(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
 	return &teststaging.MockStagingTask{}
 }

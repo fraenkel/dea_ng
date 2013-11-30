@@ -20,32 +20,24 @@ func (e *MockEmitter) Emit(appId, msg string) {
 	e.Messages[appId] = append(msgs, msg)
 }
 
-func (e *MockEmitter) EmitLogMessage(logmsg *logm.LogMessage) {
-	var msgMap map[string][]string
-
-	switch logmsg.GetMessageType() {
-	case logm.LogMessage_OUT:
-		if e.Messages == nil {
-			e.Messages = make(map[string][]string)
-		}
-		msgMap = e.Messages
-
-	case logm.LogMessage_ERR:
-		if e.ErrorMessages == nil {
-			e.ErrorMessages = make(map[string][]string)
-		}
-		msgMap = e.ErrorMessages
+func (e *MockEmitter) EmitError(appId, msg string) {
+	if e.ErrorMessages == nil {
+		e.ErrorMessages = make(map[string][]string)
 	}
-
-	appId := logmsg.GetAppId()
-	msgs := msgMap[appId]
+	msgs := e.ErrorMessages[appId]
 	if msgs == nil {
 		msgs = make([]string, 0, 5)
 	}
-
-	msgMap[appId] = append(msgs, string(logmsg.GetMessage()))
+	e.ErrorMessages[appId] = append(msgs, msg)
 }
 
-func (e *MockEmitter) NewLogMessage(appId, message string, mt logm.LogMessage_MessageType) *logm.LogMessage {
-	return &logm.LogMessage{AppId: &appId, Message: []byte(message), MessageType: &mt}
+func (e *MockEmitter) EmitLogMessage(logmsg *logm.LogMessage) {
+	switch logmsg.GetMessageType() {
+	case logm.LogMessage_OUT:
+		e.Emit(logmsg.GetAppId(), string(logmsg.GetMessage()))
+
+	case logm.LogMessage_ERR:
+		e.EmitError(logmsg.GetAppId(), string(logmsg.GetMessage()))
+	}
+
 }

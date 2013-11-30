@@ -15,7 +15,7 @@ import (
 
 var _ = Describe("Droplet", func() {
 	var tmpdir string
-	var droplet *Droplet
+	var droplet Droplet
 	var sha1Hash string
 	payload := []byte("droplet")
 
@@ -32,18 +32,18 @@ var _ = Describe("Droplet", func() {
 	})
 
 	It("should export its sha1", func() {
-		Expect(hex.EncodeToString(droplet.sha1)).To(Equal(sha1Hash))
+		Expect(hex.EncodeToString(droplet.SHA1())).To(Equal(sha1Hash))
 	})
 
 	It("should make sure its directory exists", func() {
-		Expect(utils.File_Exists(droplet.Droplet_dirname())).To(BeTrue())
+		Expect(utils.File_Exists(droplet.Dir())).To(BeTrue())
 	})
 
 	Describe("destroy", func() {
 		It("should remove the associated directory", func() {
-			Expect(utils.File_Exists(droplet.Droplet_dirname())).To(BeTrue())
+			Expect(utils.File_Exists(droplet.Dir())).To(BeTrue())
 			droplet.Destroy()
-			Expect(utils.File_Exists(droplet.Droplet_dirname())).To(BeFalse())
+			Expect(utils.File_Exists(droplet.Dir())).To(BeFalse())
 		})
 	})
 
@@ -67,7 +67,7 @@ var _ = Describe("Droplet", func() {
 					server := httptest.NewServer(http.NotFoundHandler())
 					defer server.Close()
 					droplet.Download(server.URL + "/droplet")
-					Expect(utils.File_Exists(droplet.Droplet_path())).To(BeFalse())
+					Expect(utils.File_Exists(droplet.Path())).To(BeFalse())
 				})
 
 				It("should fail when response payload has invalid SHA1", func() {
@@ -98,13 +98,13 @@ var _ = Describe("Droplet", func() {
 
 			AfterEach(func() {
 				server.Close()
-				os.Remove(droplet.Droplet_path())
+				os.Remove(droplet.Path())
 			})
 
 			It("should download without error", func() {
 				err := droplet.Download(server.URL + "/droplet")
 				Expect(err).To(BeNil())
-				Expect(utils.File_Exists(droplet.Droplet_path())).To(BeTrue())
+				Expect(utils.File_Exists(droplet.Path())).To(BeTrue())
 			})
 
 			Context("when the same dea is running multiple instances of the app", func() {
@@ -120,7 +120,7 @@ var _ = Describe("Droplet", func() {
 			Context("when the droplet is already downloaded", func() {
 				Context("and the sha matches", func() {
 					BeforeEach(func() {
-						ioutil.WriteFile(droplet.Droplet_path(), payload, 0755)
+						ioutil.WriteFile(droplet.Path(), payload, 0755)
 					})
 
 					It("does not download the file", func() {
@@ -132,7 +132,7 @@ var _ = Describe("Droplet", func() {
 
 				Context("and the sha does not matches", func() {
 					BeforeEach(func() {
-						ioutil.WriteFile(droplet.Droplet_path(), []byte("bogus"), 0755)
+						ioutil.WriteFile(droplet.Path(), []byte("bogus"), 0755)
 					})
 
 					It("does not download the file", func() {
@@ -161,7 +161,7 @@ var _ = Describe("Droplet", func() {
 			It("saves file in droplet path", func() {
 				err := droplet.Local_copy(source_file)
 				Expect(err).To(BeNil())
-				Expect(utils.File_Exists(droplet.Droplet_path())).To(BeTrue())
+				Expect(utils.File_Exists(droplet.Path())).To(BeTrue())
 				bytes, err := ioutil.ReadFile(source_file)
 				Expect(err).To(BeNil())
 				Expect(bytes).To(Equal(some_data))
@@ -176,7 +176,7 @@ var _ = Describe("Droplet", func() {
 			It("saves file in droplet path", func() {
 				err := droplet.Local_copy(source_file)
 				Expect(err).NotTo(BeNil())
-				Expect(utils.File_Exists(droplet.Droplet_path())).To(BeFalse())
+				Expect(utils.File_Exists(droplet.Path())).To(BeFalse())
 			})
 		})
 

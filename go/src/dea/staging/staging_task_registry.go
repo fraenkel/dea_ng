@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-type StagingTaskCreator func(*cfg.Config, StagingMessage, []StagingBuildpack, *droplet.DropletRegistry, *steno.Logger) StagingTask
+type StagingTaskCreator func(*cfg.Config, StagingMessage, []StagingBuildpack, droplet.DropletRegistry, *steno.Logger) StagingTask
 
 type StagingTaskRegistry struct {
 	sync.Mutex
@@ -23,7 +23,7 @@ func NewStagingTaskRegistry(creator StagingTaskCreator) *StagingTaskRegistry {
 }
 
 func (s *StagingTaskRegistry) NewStagingTask(config *cfg.Config, staging_message StagingMessage,
-	dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) StagingTask {
+	dropletRegistry droplet.DropletRegistry, logger *steno.Logger) StagingTask {
 	buildpacks := s.BuildpacksInUse()
 	return s.taskCreator(config, staging_message, buildpacks, dropletRegistry, logger)
 }

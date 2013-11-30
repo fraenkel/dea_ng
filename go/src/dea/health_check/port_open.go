@@ -11,7 +11,7 @@ type PortOpen struct {
 	port     uint32
 	retry    time.Duration
 	deferred HealthCheckCallback
-	end_time time.Time
+	End_time time.Time
 	done     bool
 	conn     net.Conn
 }
@@ -24,7 +24,7 @@ func NewPortOpen(host string, port uint32, retryInterval time.Duration,
 		port:     port,
 		retry:    retryInterval,
 		deferred: hc,
-		end_time: time.Now().Add(timeout),
+		End_time: time.Now().Add(timeout),
 	}
 
 	go portOpen.attempt_connect()
@@ -40,7 +40,7 @@ func (p PortOpen) attempt_connect() {
 			p.deferred.Success()
 			p.Destroy()
 		} else {
-			if time.Now().Before(p.end_time) {
+			if time.Now().Before(p.End_time) {
 				time.AfterFunc(p.retry, p.attempt_connect)
 			} else {
 				p.done = true

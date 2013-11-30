@@ -307,7 +307,7 @@ func (r *InstanceRegistry) AppIdToCount() map[string]int {
 func (r *InstanceRegistry) ReservedMemory() config.Memory {
 	var sum config.Memory = 0
 	for _, i := range r.Instances() {
-		if i.IsAlive() {
+		if i.IsConsumingMemory() {
 			sum = sum + i.MemoryLimit()
 		}
 	}
@@ -317,7 +317,7 @@ func (r *InstanceRegistry) ReservedMemory() config.Memory {
 func (r *InstanceRegistry) UsedMemory() config.Memory {
 	var sum config.Memory = 0
 	for _, i := range r.Instances() {
-		sum = sum + i.UsedMemory()
+		sum = sum + i.GetStats().UsedMemory
 	}
 	return sum
 }
@@ -325,7 +325,7 @@ func (r *InstanceRegistry) UsedMemory() config.Memory {
 func (r *InstanceRegistry) ReservedDisk() config.Disk {
 	var sum config.Disk = 0
 	for _, i := range r.Instances() {
-		if i.IsAlive() {
+		if i.IsConsumingDisk() {
 			sum = sum + i.DiskLimit()
 		}
 	}

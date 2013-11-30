@@ -17,7 +17,7 @@ var _ = Describe("DropletRegistry", func() {
 
 		registry := NewDropletRegistry(tmpDir)
 		registry.Put("abcdef")
-		var d *Droplet = registry.Get("abcdef")
+		var d Droplet = registry.Get("abcdef")
 		Expect(d).NotTo(BeNil())
 	})
 
@@ -40,7 +40,7 @@ var _ = Describe("DropletRegistry", func() {
 		for _, p := range paths {
 			sha1 := path.Base(p)
 			droplet := registry.Get(sha1)
-			Expect(hex.EncodeToString(droplet.sha1)).To(Equal(sha1))
+			Expect(hex.EncodeToString(droplet.SHA1())).To(Equal(sha1))
 		}
 	})
 

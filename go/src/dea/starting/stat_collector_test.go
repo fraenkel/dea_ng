@@ -13,7 +13,7 @@ import (
 var _ = Describe("StatCollector", func() {
 	var container cnr.MockContainer
 	var infoResponse warden.InfoResponse
-	var collector *StatCollector
+	var collector StatCollector
 
 	BeforeEach(func() {
 		state := "state"
@@ -40,7 +40,7 @@ var _ = Describe("StatCollector", func() {
 	})
 
 	AfterEach(func() {
-		collector.stop()
+		collector.Stop()
 	})
 
 	JustBeforeEach(func() {
@@ -48,37 +48,37 @@ var _ = Describe("StatCollector", func() {
 	})
 
 	It("has 0 used memory", func() {
-		Expect(collector.UsedMemory).To(Equal(cfg.Memory(0)))
+		Expect(collector.GetStats().UsedMemory).To(Equal(cfg.Memory(0)))
 	})
 
 	It("has 0 used disk", func() {
-		Expect(collector.UsedDisk).To(Equal(cfg.Disk(0)))
+		Expect(collector.GetStats().UsedDisk).To(Equal(cfg.Disk(0)))
 	})
 
 	It("has 0 computed pcu", func() {
-		Expect(collector.ComputedPCPU).To(Equal(float32(0)))
+		Expect(collector.GetStats().ComputedPCPU).To(Equal(float32(0)))
 	})
 
 	Describe("start", func() {
 		Context("first time started", func() {
 			It("retrieves stats", func() {
-				collector.start()
-				Expect(collector.UsedMemory).ToNot(Equal(cfg.Memory(0)))
+				collector.Start()
+				Expect(collector.GetStats().UsedMemory).ToNot(Equal(cfg.Memory(0)))
 			})
 
 			It("runs #retrieve_stats every X seconds", func() {
 				statCollector_INTERVAL = 30 * time.Millisecond
-				collector.start()
+				collector.Start()
 				time.Sleep(100 * time.Millisecond)
 
-				Expect(len(collector.cpu_samples)).To(Equal(2))
+				Expect(len(collector.GetStats().cpu_samples)).To(Equal(2))
 			})
 		})
 
 		Context("when already started", func() {
 			It("returns false", func() {
-				Expect(collector.start()).To(BeTrue())
-				Expect(collector.start()).To(BeFalse())
+				Expect(collector.Start()).To(BeTrue())
+				Expect(collector.Start()).To(BeFalse())
 			})
 		})
 
@@ -88,17 +88,17 @@ var _ = Describe("StatCollector", func() {
 		Context("when already running", func() {
 			It("stops the collector", func() {
 				statCollector_INTERVAL = 30 * time.Millisecond
-				collector.start()
-				collector.stop()
+				collector.Start()
+				collector.Stop()
 				time.Sleep(50 * time.Millisecond)
 
-				Expect(len(collector.cpu_samples)).To(Equal(1))
+				Expect(len(collector.GetStats().cpu_samples)).To(Equal(1))
 			})
 		})
 
 		Context("when not running", func() {
 			It("does nothing", func() {
-				Expect(func() { collector.stop() }).ToNot(Panic())
+				Expect(func() { collector.Stop() }).ToNot(Panic())
 			})
 		})
 	})
@@ -106,19 +106,19 @@ var _ = Describe("StatCollector", func() {
 	Describe("retrieve_stats", func() {
 		Context("basic usage", func() {
 			JustBeforeEach(func() {
-				collector.retrieve_stats(time.Now())
+				collector.Retrieve_stats(time.Now())
 			})
 
 			It("has 2Kb used memory", func() {
-				Expect(collector.UsedMemory).To(Equal(cfg.Memory(2 * cfg.Kibi)))
+				Expect(collector.GetStats().UsedMemory).To(Equal(cfg.Memory(2 * cfg.Kibi)))
 			})
 
 			It("has 42 bytes used on disk", func() {
-				Expect(collector.UsedDisk).To(Equal(cfg.Disk(42)))
+				Expect(collector.GetStats().UsedDisk).To(Equal(cfg.Disk(42)))
 			})
 
 			It("has 0 computed pcu", func() {
-				Expect(collector.ComputedPCPU).To(Equal(float32(0)))
+				Expect(collector.GetStats().ComputedPCPU).To(Equal(float32(0)))
 			})
 
 		})
@@ -129,18 +129,18 @@ var _ = Describe("StatCollector", func() {
 			})
 
 			It("does not propagate the error", func() {
-				Expect(func() { collector.retrieve_stats(time.Now()) }).ToNot(Panic())
+				Expect(func() { collector.Retrieve_stats(time.Now()) }).ToNot(Panic())
 			})
 
 			It("keeps the same stats", func() {
-				memory_before := collector.UsedMemory
-				disk_before := collector.UsedDisk
-				pcpu_before := collector.ComputedPCPU
+				memory_before := collector.GetStats().UsedMemory
+				disk_before := collector.GetStats().UsedDisk
+				pcpu_before := collector.GetStats().ComputedPCPU
 
-				collector.retrieve_stats(time.Now())
-				Expect(collector.UsedMemory).To(Equal(memory_before))
-				Expect(collector.UsedDisk).To(Equal(disk_before))
-				Expect(collector.ComputedPCPU).To(Equal(pcpu_before))
+				collector.Retrieve_stats(time.Now())
+				Expect(collector.GetStats().UsedMemory).To(Equal(memory_before))
+				Expect(collector.GetStats().UsedDisk).To(Equal(disk_before))
+				Expect(collector.GetStats().ComputedPCPU).To(Equal(pcpu_before))
 			})
 		})
 
@@ -148,12 +148,12 @@ var _ = Describe("StatCollector", func() {
 
 			It("uses it to compute CPU usage", func() {
 				now := time.Now()
-				collector.retrieve_stats(now)
+				collector.Retrieve_stats(now)
 				usage := uint64(10000000000)
 				container.MInfoResponse.CpuStat.Usage = &usage
-				collector.retrieve_stats(now.Add(statCollector_INTERVAL))
+				collector.Retrieve_stats(now.Add(statCollector_INTERVAL))
 
-				Expect(collector.ComputedPCPU).To(Equal(float32((usage - 5000000) / uint64(statCollector_INTERVAL))))
+				Expect(collector.GetStats().ComputedPCPU).To(Equal(float32((usage - 5000000) / uint64(statCollector_INTERVAL))))
 			})
 		})
 	})

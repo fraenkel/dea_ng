@@ -23,12 +23,12 @@ var _ = Describe("Staging", func() {
 	var config cfg.Config
 	var subject *Staging
 	var stagingRegistry *staging.StagingTaskRegistry
-	var dropletRegistry *droplet.DropletRegistry
+	var dropletRegistry droplet.DropletRegistry
 	var nats *fakeyagnats.FakeYagnats
 	var staging_task *tstaging.MockStagingTask
 	var appManager mockAppManager
 
-	panicNewStagingTask := func(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, *droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
+	panicNewStagingTask := func(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
 		panic("nasty error")
 	}
 
@@ -143,7 +143,7 @@ var _ = Describe("Staging", func() {
 			var message yagnats.Message
 
 			newMockStagingTask := func(config *cfg.Config, staging_message staging.StagingMessage,
-				buildpacksInUse []staging.StagingBuildpack, dropletRegistry *droplet.DropletRegistry, logger *steno.Logger) staging.StagingTask {
+				buildpacksInUse []staging.StagingBuildpack, dropletRegistry droplet.DropletRegistry, logger *steno.Logger) staging.StagingTask {
 				return staging_task
 			}
 

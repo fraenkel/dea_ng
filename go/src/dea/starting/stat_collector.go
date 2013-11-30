@@ -16,23 +16,35 @@ type cpu_stat struct {
 
 var logger = utils.Logger("StatCollector", nil)
 
-type StatCollector struct {
-	container    container.Container
-	timer        *time.Timer
+type Stats struct {
 	UsedMemory   config.Memory
 	UsedDisk     config.Disk
 	ComputedPCPU float32
-
-	cpu_samples []cpu_stat
+	cpu_samples  []cpu_stat
 }
 
-func NewStatCollector(container container.Container) *StatCollector {
-	collector := &StatCollector{container: container, cpu_samples: make([]cpu_stat, 0, 3)}
+type StatCollector interface {
+	Start() bool
+	Stop()
+	GetStats() *Stats
+	Retrieve_stats(now time.Time)
+}
+
+type statCollector struct {
+	container container.Container
+	timer     *time.Timer
+	stats     *Stats
+}
+
+func NewStatCollector(container container.Container) StatCollector {
+	collector := &statCollector{container: container,
+		stats: &Stats{cpu_samples: make([]cpu_stat, 0, 2)},
+	}
 
 	return collector
 }
 
-func (s *StatCollector) start() bool {
+func (s *statCollector) Start() bool {
 	if s.timer != nil {
 		return false
 	}
@@ -45,44 +57,52 @@ func (s *StatCollector) start() bool {
 
 }
 
-func (s *StatCollector) stop() {
+func (s *statCollector) Stop() {
 	if s.timer != nil {
 		s.timer.Stop()
 		s.timer = nil
 	}
 }
 
-func (s *StatCollector) run_stat_collector() {
-	s.retrieve_stats(time.Now())
+func (s *statCollector) run_stat_collector() {
+	s.Retrieve_stats(time.Now())
 	if s.timer == nil {
-		s.start()
+		s.Start()
 	}
 }
 
-func (s *StatCollector) retrieve_stats(now time.Time) {
+func (s *statCollector) GetStats() *Stats {
+	return s.stats
+}
+
+func (s *statCollector) Retrieve_stats(now time.Time) {
 	info, err := s.container.Info()
 	if err != nil {
 		logger.Errorf("stat-collector.info-retrieval.failed handle:%s error:%s",
 			s.container.Handle(), err.Error())
 		return
 	}
-	
-	s.UsedMemory = config.Memory(*info.MemoryStat.Rss) * config.Kibi
-	s.UsedDisk = config.Disk(*info.DiskStat.BytesUsed)
-	s.compute_cpu_usage(*info.CpuStat.Usage, now)
+
+	stats := Stats{
+		UsedMemory:  config.Memory(*info.MemoryStat.Rss) * config.Kibi,
+		UsedDisk:    config.Disk(*info.DiskStat.BytesUsed),
+		cpu_samples: make([]cpu_stat, 0, 2),
+	}
+	s.compute_cpu_usage(&stats, *info.CpuStat.Usage, now)
+	s.stats = &stats
 }
 
-func (s *StatCollector) compute_cpu_usage(usage uint64, now time.Time) {
-	s.cpu_samples = append(s.cpu_samples, cpu_stat{now, usage})
-	if len(s.cpu_samples) > 2 {
-		s.cpu_samples = s.cpu_samples[1:]
+func (s *statCollector) compute_cpu_usage(stats *Stats, usage uint64, now time.Time) {
+	if len(s.stats.cpu_samples) > 0 {
+		stats.cpu_samples = append(stats.cpu_samples, s.stats.cpu_samples[len(s.stats.cpu_samples)-1])
 	}
+	stats.cpu_samples = append(stats.cpu_samples, cpu_stat{now, usage})
 
-	if len(s.cpu_samples) == 2 {
-		used := s.cpu_samples[1].usage - s.cpu_samples[0].usage
-		elapsed := s.cpu_samples[1].timestamp.Sub(s.cpu_samples[0].timestamp)
+	if len(stats.cpu_samples) == 2 {
+		used := stats.cpu_samples[1].usage - stats.cpu_samples[0].usage
+		elapsed := stats.cpu_samples[1].timestamp.Sub(stats.cpu_samples[0].timestamp)
 		if elapsed > 0 {
-			s.ComputedPCPU = float32(used / uint64(elapsed.Nanoseconds()))
+			stats.ComputedPCPU = float32(used / uint64(elapsed.Nanoseconds()))
 		}
 	}
 }
