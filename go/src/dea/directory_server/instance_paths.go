@@ -14,13 +14,13 @@ import (
 var instance_paths = "/instance_paths/"
 
 type instancePaths struct {
-	instanceRegistry *starting.InstanceRegistry
+	instanceRegistry starting.InstanceRegistry
 	hmacServer       hmacDirectoryServer
 	max_age_secs     int64
 }
 
 //GET /instance_paths/<instance_id>
-func newInstancePaths(registry *starting.InstanceRegistry, hmacServer hmacDirectoryServer, max_url_age_secs int64) *instancePaths {
+func newInstancePaths(registry starting.InstanceRegistry, hmacServer hmacDirectoryServer, max_url_age_secs int64) *instancePaths {
 	return &instancePaths{
 		instanceRegistry: registry,
 		hmacServer:       hmacServer,

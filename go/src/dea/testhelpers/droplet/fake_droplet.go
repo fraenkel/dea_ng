@@ -2,24 +2,19 @@ package droplet
 
 import (
 	d "dea/droplet"
-	"encoding/hex"
 	"path"
 )
 
 type FakeDropletRegistry struct {
-	Droplet *FakeDroplet
+	Droplet FakeDroplet
 }
 
 func (fdr *FakeDropletRegistry) Get(sha1 string) d.Droplet {
-	return fdr.Droplet
+	return &fdr.Droplet
 }
 
 func (fdr *FakeDropletRegistry) Remove(sha1 string) d.Droplet {
-	return fdr.Droplet
-}
-
-func (fdr *FakeDropletRegistry) Put(sha1 string) {
-	fdr.Droplet = &FakeDroplet{Sha1: []byte(sha1)}
+	return &fdr.Droplet
 }
 
 func (fdr *FakeDropletRegistry) Size() int {
@@ -31,7 +26,7 @@ func (fdr *FakeDropletRegistry) SHA1s() []string {
 }
 
 type FakeDroplet struct {
-	Sha1           []byte
+	Sha1           string
 	BaseDir        string
 	DropletExists  bool
 	DownloadError  error
@@ -39,14 +34,14 @@ type FakeDroplet struct {
 }
 
 func NewFakeDroplet(sha1 string) d.Droplet {
-	return &FakeDroplet{Sha1: []byte(sha1)}
+	return &FakeDroplet{Sha1: sha1}
 }
 
-func (fd *FakeDroplet) SHA1() []byte {
+func (fd *FakeDroplet) SHA1() string {
 	return fd.Sha1
 }
 func (fd *FakeDroplet) Dir() string {
-	return path.Join(fd.BaseDir, hex.EncodeToString(fd.Sha1))
+	return path.Join(fd.BaseDir, fd.Sha1)
 }
 func (fd *FakeDroplet) Path() string {
 	return path.Join(fd.Dir(), d.DROPLET_BASENAME)

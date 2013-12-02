@@ -2,7 +2,7 @@ package main
 
 import (
 	"dea"
-	"dea/config"
+	cfg "dea/config"
 	ds "dea/directory_server"
 	"dea/droplet"
 	"dea/loggregator"
@@ -42,22 +42,32 @@ const (
 
 var signalsOfInterest = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2}
 
+type signalHandler interface {
+	handleSignal(s os.Signal)
+}
+
 type snapShot struct {
 	time          int64
 	instances     []map[string]interface{}
 	staging_tasks []map[string]interface{}
 }
 
+type Bootstrap interface {
+	Setup() error
+	Start()
+	Shutdown()
+	Terminate()
+}
+
 type bootstrap struct {
-	config              *config.Config
+	config              *cfg.Config
 	nats                *dea.Nats
 	responders          []responders.Responder
 	evacuationProcessed bool
 	shutdown_processed  bool
 	routerClient        rtr.RouterClient
-	varz                *common.Varz
 	pidFile             *dea.PidFile
-	instanceRegistry    *starting.InstanceRegistry
+	instanceRegistry    starting.InstanceRegistry
 	stagingTaskRegistry *staging.StagingTaskRegistry
 	dropletRegistry     droplet.DropletRegistry
 	logger              *steno.Logger
@@ -69,6 +79,8 @@ type bootstrap struct {
 	directoryServerV2   *ds.DirectoryServerV2
 	resource_manager    resmgr.ResourceManager
 	registrationTicker  *time.Ticker
+	signalHandler
+	Bootstrap
 }
 
 func main() {
@@ -78,27 +90,33 @@ func main() {
 		"", "Path of the YAML configuration of the co-located DEA.")
 	flag.Parse()
 
-	config, err := config.ConfigFromFile(configPath)
+	config, err := cfg.ConfigFromFile(configPath)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	bootstrap := bootstrap{config: config}
-	err = bootstrap.setup()
+	b := newBootstrap(config)
+	err = b.Setup()
 	if err != nil {
 		panic(err.Error())
 	}
 
-	bootstrap.start()
+	b.Start()
 }
 
-func (b bootstrap) setup() error {
+func newBootstrap(c *cfg.Config) *bootstrap {
+	b := &bootstrap{config: c}
+	b.signalHandler = b
+	b.Bootstrap = b
+	return b
+}
+
+func (b *bootstrap) Setup() error {
 	config := b.config
-	logger, err := setupLogger(config.Logging)
+	logger, err := b.setupLogger()
 	if err != nil {
 		return err
 	}
-	b.logger = logger
 
 	if config.Loggregator.Router != "" {
 		e, err := emitter.NewEmitter(config.Loggregator.Router, "DEA",
@@ -118,12 +136,40 @@ func (b bootstrap) setup() error {
 		loggregator.SetStagingEmitter(stgemitter)
 	}
 
-	b.dropletRegistry = droplet.NewDropletRegistry(path.Join(config.BaseDir, "droplets"))
-	b.instanceRegistry = starting.NewInstanceRegistry(config)
-	b.stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+	b.setupRegistries()
 
 	b.resource_manager = resmgr.NewResourceManager(b.instanceRegistry, b.stagingTaskRegistry,
 		&b.config.Resources)
+
+	err = b.setupDirectoryServers()
+	if err != nil {
+		return err
+	}
+
+	b.setupSignalHandlers()
+	b.setupDirectories()
+	b.setupPidFile()
+	b.setupSweepers()
+
+	b.setupNats()
+
+	b.setupComponent()
+
+	return nil
+}
+
+func (b *bootstrap) setupNats() {
+	b.nats = dea.NewNats(b.config.NatsConfig)
+}
+
+func (b *bootstrap) setupRegistries() {
+	b.dropletRegistry = droplet.NewDropletRegistry(path.Join(b.config.BaseDir, "droplets"))
+	b.instanceRegistry = starting.NewInstanceRegistry(b.config)
+	b.stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+}
+
+func (b *bootstrap) setupDirectoryServers() error {
+	var err error
 
 	localIp, err := localip.LocalIP()
 	if err != nil {
@@ -131,31 +177,30 @@ func (b bootstrap) setup() error {
 	}
 	b.localIp = localIp
 
-	b.directoryServer, err = ds.NewDirectoryServerV1(localIp, config.DirectoryServer.V1Port,
+	b.directoryServer, err = ds.NewDirectoryServerV1(localIp, b.config.DirectoryServer.V1Port,
 		ds.NewDirectory(b.instanceRegistry))
 	if err != nil {
 		return err
 	}
 
-	b.directoryServerV2, err = ds.NewDirectoryServerV2(localIp, config.Domain, config.DirectoryServer)
+	b.directoryServerV2, err = ds.NewDirectoryServerV2(localIp, b.config.Domain, b.config.DirectoryServer)
 	if err != nil {
 		return err
 	}
 	b.directoryServerV2.Configure_endpoints(b.instanceRegistry, b.stagingTaskRegistry)
-
-	b.setupSignalHandlers()
-	b.setupPidFile()
-	b.setupSweepers()
-
-	b.nats = dea.NewNats(b.config.NatsConfig)
-
 	return nil
 }
 
-func setupLogger(c config.LoggingConfig) (*steno.Logger, error) {
-	l, err := steno.GetLogLevel(c.Level)
-	if err != nil {
-		return nil, err
+func (b *bootstrap) setupLogger() (*steno.Logger, error) {
+	c := b.config.Logging
+	l := steno.LOG_INFO
+
+	if c.Level != "" {
+		var err error
+		l, err = steno.GetLogLevel(c.Level)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	s := make([]steno.Sink, 0)
@@ -176,24 +221,29 @@ func setupLogger(c config.LoggingConfig) (*steno.Logger, error) {
 	}
 
 	steno.Init(stenoConfig)
-	return steno.NewLogger("DEA"), nil
+	logger := steno.NewLogger("DEA")
+	b.logger = logger
+
+	logger.Info("Dea started")
+
+	return logger, nil
 }
 
-func setupDirectories(config *config.Config) {
+func (b *bootstrap) setupDirectories() {
 	dirs := []string{"db", "droplets", "instances", "tmp", "staging"}
 	for _, d := range dirs {
-		os.MkdirAll(path.Join(config.BaseDir, d), 0755)
+		os.MkdirAll(path.Join(b.config.BaseDir, d), 0755)
 	}
 
-	os.MkdirAll(path.Join(config.BaseDir, "crashes"), 0755)
+	os.MkdirAll(b.config.CrashesPath, 0755)
 }
 
-func (bootstrap *bootstrap) setupPidFile() error {
-	pidFile, err := dea.NewPidFile(bootstrap.config.PidFile)
+func (b *bootstrap) setupPidFile() error {
+	pidFile, err := dea.NewPidFile(b.config.PidFile)
 	if err != nil {
 		return err
 	}
-	bootstrap.pidFile = pidFile
+	b.pidFile = pidFile
 	return nil
 }
 
@@ -217,7 +267,9 @@ func (b *bootstrap) setupSweepers() {
 }
 
 func (b *bootstrap) stopSweepers() {
-	b.heartbeatTicker.Stop()
+	if b.heartbeatTicker != nil {
+		b.heartbeatTicker.Stop()
+	}
 }
 
 func (b *bootstrap) sendHeartbeat(instances []*starting.Instance) {
@@ -244,54 +296,45 @@ func (b *bootstrap) setupSignalHandlers() {
 	b.signalChannel = c
 	go func() {
 		s := <-c
-		close(c)
-
-		switch s {
-		case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
-			b.shutdown()
-		case syscall.SIGUSR1:
-			b.trap_usr1()
-		case syscall.SIGUSR2:
-			b.evacuate()
-		}
+		b.signalHandler.handleSignal(s)
 	}()
 	signal.Notify(c, signalsOfInterest...)
+}
+
+func (b *bootstrap) handleSignal(s os.Signal) {
+	switch s {
+	case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
+		b.Shutdown()
+	case syscall.SIGUSR1:
+		b.trap_usr1()
+	case syscall.SIGUSR2:
+		b.evacuate()
+	}
 }
 
 func (b *bootstrap) trap_usr1() {
 	b.ignoreSignals()
+	b.sendShutdownMessage()
 	for _, r := range b.responders {
 		r.Stop()
 	}
-	b.sendShutdownMessage()
 }
 
 func (b *bootstrap) ignoreSignals() {
-	close(b.signalChannel)
-	b.signalChannel = nil
-	c := make(chan os.Signal, 1)
-
-	go func() {
-		for {
-			s := <-c
-			b.logger.Warn("Caught SIG" + s.String() + ", ignoring.")
-		}
-	}()
-	signal.Notify(c, signalsOfInterest...)
+	signal.Stop(b.signalChannel)
 }
 
-func (b *bootstrap) shutdown() {
+func (b *bootstrap) Shutdown() {
 	if b.shutdown_processed {
 		return
 	}
 
 	b.shutdown_processed = true
+	b.ignoreSignals()
 	b.logger.Info("Shutting down")
 	if !b.isEvacuating() {
 		b.sendShutdownMessage()
 	}
-
-	close(b.signalChannel)
 
 	for _, r := range b.responders {
 		r.Stop()
@@ -312,8 +355,7 @@ func (b *bootstrap) shutdown() {
 	b.logger.Info("All instances and staging tasks stopped, exiting.")
 	// Terminate after nats sends all queued messages
 	b.nats.Stop()
-	b.terminate()
-
+	b.Bootstrap.Terminate()
 }
 
 func (b *bootstrap) sendShutdownMessage() {
@@ -354,6 +396,12 @@ func (b *bootstrap) send_instance_stop_message(instance *starting.Instance) {
 }
 
 func (b *bootstrap) evacuate() {
+	if b.evacuationProcessed {
+		b.logger.Info("Evacuation already processed, doing nothing.")
+		return
+	}
+
+	b.evacuationProcessed = true
 	b.logger.Info("Evacuating apps")
 
 	b.sendShutdownMessage()
@@ -375,23 +423,24 @@ func (b *bootstrap) evacuate() {
 	}
 
 	time.AfterFunc(b.config.EvacuationDelay, func() {
-		b.shutdown()
+		b.Bootstrap.Shutdown()
 	})
 }
 
-func (b *bootstrap) terminate() {
+func (b *bootstrap) Terminate() {
 	b.pidFile.Release()
 	os.Exit(0)
 }
 
-func (b *bootstrap) start() {
+func (b *bootstrap) Start() {
 	b.load_snapshot()
 
 	b.startComponent()
-	b.routerClient = rtr.NewRouterClient(b.config, b.nats, b.component.UUID, b.localIp)
+
 	b.startNats()
 	b.directoryServer.Start()
 
+	b.setupRouterClient()
 	b.greetRouter()
 
 	b.routerClient.Register_directory_server(
@@ -399,8 +448,10 @@ func (b *bootstrap) start() {
 		b.directoryServerV2.External_hostname())
 	b.directoryServerV2.Start()
 
-	b.setupVarz()
+	b.start_finish()
+}
 
+func (b *bootstrap) start_finish() {
 	bytes, err := json.Marshal(protocol.NewHelloMessage(b.component.UUID,
 		b.localIp, b.directoryServer.Port))
 	if err != nil {
@@ -422,26 +473,14 @@ func (b *bootstrap) start() {
 	}
 }
 
+func (b *bootstrap) setupRouterClient() {
+	b.routerClient = rtr.NewRouterClient(b.config, b.nats, b.component.UUID, b.localIp)
+}
+
 func (b *bootstrap) startComponent() error {
-	statusConfig := b.config.Status
-	component := &common.VcapComponent{
-		Type:        "DEA",
-		Index:       b.config.Index,
-		Credentials: []string{statusConfig.User, statusConfig.Password},
-		Varz:        b.varz,
-		Healthz:     &common.Healthz{},
-		Logger:      b.logger,
-	}
-	host, err := localip.LocalIP()
-	if err != nil {
-		return err
-	}
-	component.Host = fmt.Sprintf("%s:%d", host, statusConfig.Port)
+	common.StartComponent(b.component)
+	common.Register(b.component, b.nats.NatsClient)
 
-	common.StartComponent(component)
-	common.Register(component, b.nats.NatsClient)
-
-	b.component = component
 	return nil
 }
 
@@ -467,15 +506,26 @@ func (b *bootstrap) greetRouter() {
 	})
 }
 
-func (b *bootstrap) setupVarz() {
+func (b *bootstrap) setupComponent() *time.Timer {
 	varz := &common.Varz{}
-	varz.UniqueVarz = map[string][]string{
+	varz.UniqueVarz = map[string]interface{}{
 		"stacks": b.config.Stacks,
 	}
 
-	b.varz = varz
+	statusConfig := b.config.Status
+	component := &common.VcapComponent{
+		Type:        "DEA",
+		Index:       b.config.Index,
+		Credentials: []string{statusConfig.User, statusConfig.Password},
+		Varz:        varz,
+		Healthz:     &common.Healthz{},
+		Logger:      b.logger,
+		Host:        fmt.Sprintf("%s:%d", b.localIp, statusConfig.Port),
+	}
 
-	utils.Repeat(DEFAULT_HEARTBEAT_INTERVAL, b.periodic_varz_update)
+	b.component = component
+
+	return utils.Repeat(DEFAULT_HEARTBEAT_INTERVAL, b.periodic_varz_update)
 }
 
 func (b *bootstrap) isEvacuating() bool {
@@ -553,6 +603,9 @@ func (b *bootstrap) StartApp(data map[string]interface{}) {
 
 func (b *bootstrap) create_instance(attributes map[string]interface{}) *starting.Instance {
 	instance := starting.NewInstance(attributes, b.config, b.dropletRegistry, b.localIp)
+	if instance == nil {
+		return nil
+	}
 
 	err := instance.Validate()
 	if err != nil {
@@ -560,10 +613,10 @@ func (b *bootstrap) create_instance(attributes map[string]interface{}) *starting
 		return nil
 	}
 
-	memory := float64(instance.MemoryLimit() / config.Mebi)
-	disk := float64(instance.DiskLimit() / config.MB)
+	memory := float64(instance.MemoryLimit() / cfg.Mebi)
+	disk := float64(instance.DiskLimit() / cfg.MB)
 	if !b.resource_manager.CanReserve(memory, disk) {
-		b.logger.Errorf("Unable to start instance: %s for app: %s, not enough resources available.", attributes["instance_index"], attributes["application_id"])
+		b.logger.Errorf("Unable to start instance: %d for app: %s, not enough resources available.", attributes["instance_index"], attributes["application_id"])
 		return nil
 	}
 
@@ -718,8 +771,8 @@ func (b *bootstrap) HandleDeaStatus(msg *yagnats.Message) {
 }
 
 func (b *bootstrap) HandleDeaDirectedStart(msg *yagnats.Message) {
-	var d map[string]interface{}
-	if err := json.Unmarshal(msg.Payload, d); err == nil {
+	d := map[string]interface{}{}
+	if err := json.Unmarshal(msg.Payload, &d); err == nil {
 		b.StartApp(d)
 	} else {
 		b.logger.Errorf("HandleDeaDirectedStart: marshal failed, %s", err.Error())
@@ -873,11 +926,8 @@ func (b *bootstrap) periodic_varz_update() {
 
 	b.component.Varz.Lock()
 	defer b.component.Varz.Unlock()
+
 	d := b.component.Varz.UniqueVarz.(map[string]interface{})
-	if d == nil {
-		d := make(map[string]interface{})
-		b.component.Varz.UniqueVarz = d
-	}
 
 	stagers := 0
 	if reservable_stagers > 0 {

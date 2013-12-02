@@ -3,6 +3,7 @@ package utils_test
 import (
 	"crypto/sha1"
 	. "dea/utils"
+	"encoding/hex"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -15,7 +16,7 @@ var _ = Describe("Files", func() {
 			bytes := []byte("some bytes")
 			digest := sha1.New()
 			digest.Write(bytes)
-			expected := digest.Sum(nil)
+			expected := hex.EncodeToString(digest.Sum(nil))
 
 			file, _ := ioutil.TempFile("", "sha1")
 			defer os.RemoveAll(file.Name())

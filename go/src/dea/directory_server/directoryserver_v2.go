@@ -68,7 +68,7 @@ func (ds *DirectoryServerV2) Port() uint16 {
 	return uint16(n)
 }
 
-func (ds *DirectoryServerV2) Configure_endpoints(instanceRegistry *starting.InstanceRegistry, stagingTaskRegistry *staging.StagingTaskRegistry) {
+func (ds *DirectoryServerV2) Configure_endpoints(instanceRegistry starting.InstanceRegistry, stagingTaskRegistry *staging.StagingTaskRegistry) {
 	ds.instancepaths = newInstancePaths(instanceRegistry, ds, 60*60)
 	ds.stagingtasks = newStagingTasks(stagingTaskRegistry, ds, 60*60)
 }

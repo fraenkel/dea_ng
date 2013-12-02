@@ -153,17 +153,22 @@ func ConfigFromFile(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	err = Finalize(&config)
+	return &config, err
+}
+
+func Finalize(config *Config) error {
 	// Convert NatsUri -> NatsConfig
 	if config.natsUri != "" {
 		natsURL, err := url.Parse(config.natsUri)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		hostInfo := strings.SplitN(natsURL.Host, ":", 2)
 		port, err := strconv.ParseUint(hostInfo[1], 0, 16)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		config.NatsConfig.Host = hostInfo[0]
 		config.NatsConfig.Port = uint16(port)
@@ -186,7 +191,7 @@ func ConfigFromFile(configPath string) (*Config, error) {
 	config.Intervals.Advertise *= time.Second
 	config.Intervals.Heartbeat *= time.Second
 
-	return &config, nil
+	return nil
 }
 
 func (c StagingConfig) Minimum_staging_memory_mb() uint64 {

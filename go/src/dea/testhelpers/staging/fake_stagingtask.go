@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type MockStagingTask struct {
+type FakeStagingTask struct {
 	StagingMsg        dstaging.StagingMessage
 	StagingCfg        cfg.StagingConfig
 	Streaming_log_url string
@@ -21,45 +21,45 @@ type MockStagingTask struct {
 	StopCallback      dstaging.Callback
 }
 
-func (m *MockStagingTask) Id() string {
+func (m *FakeStagingTask) Id() string {
 	return m.StagingMessage().Task_id()
 }
 
-func (m *MockStagingTask) StagingMessage() dstaging.StagingMessage {
+func (m *FakeStagingTask) StagingMessage() dstaging.StagingMessage {
 	return m.StagingMsg
 }
 
-func (m *MockStagingTask) StagingConfig() cfg.StagingConfig {
+func (m *FakeStagingTask) StagingConfig() cfg.StagingConfig {
 	return m.StagingCfg
 }
 
-func (m *MockStagingTask) MemoryLimit() cfg.Memory {
+func (m *FakeStagingTask) MemoryLimit() cfg.Memory {
 	return cfg.Memory(m.StagingCfg.MemoryLimitMB) * cfg.Mebi
 }
 
-func (m *MockStagingTask) DiskLimit() cfg.Disk {
+func (m *FakeStagingTask) DiskLimit() cfg.Disk {
 	return cfg.Disk(m.StagingCfg.DiskLimitMB) * cfg.MB
 }
 
-func (m *MockStagingTask) Start() error {
+func (m *FakeStagingTask) Start() error {
 	m.Started = true
 	return nil
 }
 
-func (m *MockStagingTask) Stop() {
+func (m *FakeStagingTask) Stop() {
 	m.Stopped = true
 }
 
-func (m *MockStagingTask) StreamingLogUrl(maker dstaging.StagingTaskUrlMaker) string {
+func (m *FakeStagingTask) StreamingLogUrl(maker dstaging.StagingTaskUrlMaker) string {
 	return m.Streaming_log_url
 }
-func (m *MockStagingTask) DetectedBuildpack() string {
+func (m *FakeStagingTask) DetectedBuildpack() string {
 	return ""
 }
-func (m *MockStagingTask) DropletSHA1() string {
+func (m *FakeStagingTask) DropletSHA1() string {
 	return m.Droplet_Sha1
 }
-func (m *MockStagingTask) Path_in_container(pathSuffix string) string {
+func (m *FakeStagingTask) Path_in_container(pathSuffix string) string {
 	cPath := m.ContainerPath
 	if cPath == "" {
 		return ""
@@ -69,18 +69,18 @@ func (m *MockStagingTask) Path_in_container(pathSuffix string) string {
 	return strings.Join([]string{cPath, "tmp", "rootfs", pathSuffix}, "/")
 }
 
-func (m *MockStagingTask) SetAfter_setup_callback(callback dstaging.Callback) {
+func (m *FakeStagingTask) SetAfter_setup_callback(callback dstaging.Callback) {
 	m.SetupCallback = callback
 }
-func (m *MockStagingTask) SetAfter_complete_callback(callback dstaging.Callback) {
+func (m *FakeStagingTask) SetAfter_complete_callback(callback dstaging.Callback) {
 	m.CompleteCallback = callback
 }
-func (m *MockStagingTask) SetAfter_upload_callback(callback dstaging.Callback) {
+func (m *FakeStagingTask) SetAfter_upload_callback(callback dstaging.Callback) {
 	m.UploadCallback = callback
 }
-func (m *MockStagingTask) SetAfter_stop_callback(callback dstaging.Callback) {
+func (m *FakeStagingTask) SetAfter_stop_callback(callback dstaging.Callback) {
 	m.StopCallback = callback
 }
-func (m *MockStagingTask) StagingTimeout() time.Duration {
+func (m *FakeStagingTask) StagingTimeout() time.Duration {
 	return m.StagingCfg.MaxStagingDuration
 }

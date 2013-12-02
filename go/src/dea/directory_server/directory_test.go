@@ -18,7 +18,7 @@ import (
 var _ = Describe("Directory", func() {
 	var config *cfg.Config
 	var server *httptest.Server
-	var instanceRegistry *starting.InstanceRegistry
+	var instanceRegistry starting.InstanceRegistry
 	var instance *starting.Instance
 	var directory *Directory
 	var tmpdir, app_dir string

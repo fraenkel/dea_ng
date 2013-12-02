@@ -24,7 +24,7 @@ type ResourceManager interface {
 type resourceManager struct {
 	memoryCapacityMB    float64
 	diskCapacityMB      float64
-	instanceRegistry    *starting.InstanceRegistry
+	instanceRegistry    starting.InstanceRegistry
 	stagingTaskRegistry *staging.StagingTaskRegistry
 }
 
@@ -49,7 +49,7 @@ func getFloat64(configVal, defaultVal float64) float64 {
 	return defaultVal
 }
 
-func NewResourceManager(iRegistry *starting.InstanceRegistry,
+func NewResourceManager(iRegistry starting.InstanceRegistry,
 	stRegistry *staging.StagingTaskRegistry,
 	config *config.ResourcesConfig) ResourceManager {
 

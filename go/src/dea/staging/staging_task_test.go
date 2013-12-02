@@ -884,9 +884,8 @@ detected_buildpack: Ruby/Rack
 			dropletPath := stgTask.workspace.staged_droplet_path()
 			os.MkdirAll(path.Dir(dropletPath), 0755)
 			ioutil.WriteFile(dropletPath, []byte("test"), 0755)
-			s, _ := utils.SHA1Digest(dropletPath)
-			sha1 = string(s)
-			stgTask.dropletRegistry.Put(sha1)
+			sha1, _ = utils.SHA1Digest(dropletPath)
+			stgTask.dropletRegistry.Get(sha1)
 		})
 
 		It("saves droplet and droplet sha", func() {

@@ -51,7 +51,6 @@ func Valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 	}
 
 	services := make([]map[string]interface{}, 0, 3)
-	attrs["services"] = services
 	if lots_of_services {
 		services = append(services, valid_service_attributes("syslog://log.example.com"))
 		services = append(services, valid_service_attributes(""))
@@ -59,6 +58,7 @@ func Valid_instance_attributes(lots_of_services bool) map[string]interface{} {
 	} else {
 		services = append(services, valid_service_attributes(""))
 	}
+	attrs["services"] = services
 
 	return attrs
 }

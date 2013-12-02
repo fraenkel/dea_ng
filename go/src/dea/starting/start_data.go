@@ -1,6 +1,7 @@
 package starting
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 )
@@ -50,11 +51,13 @@ type StartData struct {
 	ServicesData []ServiceData
 }
 
-func NewStartData(m map[string]interface{}) StartData {
+func NewStartData(m map[string]interface{}) (StartData, error) {
 	sd := StartData{}
-	sd.UnmarshalMap(m)
+	if err := sd.UnmarshalMap(m); err != nil {
+		return sd, err
+	}
 
-	return sd
+	return sd, nil
 }
 
 func (s StartData) Index() int {
@@ -161,12 +164,30 @@ func (s *StartData) UnmarshalMap(m map[string]interface{}) error {
 		}
 	}
 
-	s.LimitsData.UnmarshalMap(m["limits"])
+	if err := s.LimitsData.UnmarshalMap(m["limits"]); err != nil {
+		return err
+	}
 
-	serviceData := m["services"].([]map[string]interface{})
+	var serviceData []map[string]interface{}
+	switch m["services"].(type) {
+	case []interface{}:
+		ss := m["services"].([]interface{})
+		serviceData = make([]map[string]interface{}, len(ss))
+		for _, v := range ss {
+			sd := v.(map[string]interface{})
+			serviceData = append(serviceData, sd)
+		}
+	case []map[string]interface{}:
+		serviceData = m["services"].([]map[string]interface{})
+	default:
+		return errors.New("Unexpected service data type: " + reflect.ValueOf(m["services"]).Kind().String())
+	}
+
 	s.ServicesData = make([]ServiceData, len(serviceData))
 	for i := 0; i < len(serviceData); i++ {
-		s.ServicesData[i].UnmarshalMap(serviceData[i])
+		if err := s.ServicesData[i].UnmarshalMap(serviceData[i]); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -199,7 +220,9 @@ func (s *StartData) MarshalMap(m map[string]interface{}) error {
 	services := make([]map[string]interface{}, len(s.ServicesData))
 	m["services"] = services
 	for i, s := range s.ServicesData {
-		s.MarshalMap(services[i])
+		smap := make(map[string]interface{})
+		s.MarshalMap(smap)
+		services[i] = smap
 	}
 
 	return nil

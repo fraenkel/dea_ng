@@ -5,7 +5,7 @@ import (
 	"dea/droplet"
 	"dea/staging"
 	"dea/testhelpers"
-	teststaging "dea/testhelpers/staging"
+	tstaging "dea/testhelpers/staging"
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,7 +23,7 @@ var _ = Describe("StagingTasks", func() {
 	var config *cfg.Config
 	var server *DirectoryServerV2
 	var stagingTaskRegistry *staging.StagingTaskRegistry
-	var stagingTask *teststaging.MockStagingTask
+	var stagingTask *tstaging.FakeStagingTask
 
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
@@ -31,7 +31,7 @@ var _ = Describe("StagingTasks", func() {
 		config, _ = cfg.ConfigFromFile(cfgPath)
 
 		stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
-		stagingTask = &teststaging.MockStagingTask{StagingMsg: staging.NewStagingMessage(testhelpers.Valid_staging_attributes())}
+		stagingTask = &tstaging.FakeStagingTask{StagingMsg: staging.NewStagingMessage(testhelpers.Valid_staging_attributes())}
 	})
 
 	JustBeforeEach(func() {
@@ -160,5 +160,5 @@ func staging_task_file_path(server *DirectoryServerV2, task_id string, file_path
 }
 
 func NewMockStagingTask(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
-	return &teststaging.MockStagingTask{}
+	return &tstaging.FakeStagingTask{}
 }

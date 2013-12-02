@@ -30,14 +30,14 @@ var MissingStartCommand = &userFacingError{"missing start command"}
 type State string
 
 const (
-	STATE_BORN     State = "BORN"
-	STATE_STARTING State = "STARTING"
-	STATE_RUNNING  State = "RUNNING"
-	STATE_STOPPING State = "STOPPING"
-	STATE_STOPPED  State = "STOPPED"
-	STATE_CRASHED  State = "CRASHED"
-	STATE_DELETED  State = "DELETED"
-	STATE_RESUMING State = "RESUMING"
+	STATE_BORN     State = "born"
+	STATE_STARTING State = "starting"
+	STATE_RUNNING  State = "running"
+	STATE_STOPPING State = "stopping"
+	STATE_STOPPED  State = "stopped"
+	STATE_CRASHED  State = "crashed"
+	STATE_DELETED  State = "deleted"
+	STATE_RESUMING State = "resuming"
 
 	NPROC_LIMIT = 512
 )
@@ -72,7 +72,7 @@ type Instance struct {
 	exitStatus      int64
 	exitDescription string
 	hooks           map[string]string
-	statCollector   StatCollector
+	StatCollector
 	*task.Task
 	utils.EventEmitter
 	dropletRegistry    droplet.DropletRegistry
@@ -121,7 +121,10 @@ func (hcc *healthcheckCallback) Wait() {
 }
 
 func NewInstance(raw_attributes map[string]interface{}, config *config.Config, dr droplet.DropletRegistry, localIp string) *Instance {
-	sdata := NewStartData(raw_attributes)
+	sdata, err := NewStartData(raw_attributes)
+	if err != nil {
+		return nil
+	}
 
 	// Generate unique ID
 	instance_id := getString(raw_attributes, "instance_id")
@@ -138,7 +141,6 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 	i := &Instance{
 		raw_attributes:      raw_attributes,
 		startData:           sdata,
-		state:               STATE_BORN,
 		state_times:         make(map[State]time.Time),
 		instance_id:         instance_id,
 		private_instance_id: private_id,
@@ -152,7 +154,6 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		Mutex:               &sync.Mutex{},
 		bindMounts:          config.BindMounts,
 	}
-
 	i.InstancePromises = &instancePromises{i}
 
 	if config != nil {
@@ -168,12 +169,14 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		"application_name":    i.ApplicationName(),
 	})
 
+	i.SetState(STATE_BORN)
+
 	warden_handle := getString(raw_attributes, "warden_handle")
 	hostPort := getUInt(raw_attributes, "instance_host_port")
 	containerPort := getUInt(raw_attributes, "instance_container_port")
 	i.Container.Setup(warden_handle, uint32(hostPort), uint32(containerPort))
 
-	i.statCollector = NewStatCollector(i.Container)
+	i.StatCollector = NewStatCollector(i.Container)
 
 	return i
 }
@@ -368,6 +371,13 @@ func (i *Instance) attributes_and_stats() map[string]interface{} {
 	m := make(map[string]interface{})
 	i.startData.MarshalMap(m)
 
+	// add state information
+	m["state"] = i.state
+	m["state_timestamp"] = i.state_times[i.state].Unix()
+	for k, v := range i.state_times {
+		m["state_"+string(k)+"_timestamp"] = v.Unix()
+	}
+
 	stats := i.GetStats()
 	m["used_memory_in_bytes"] = stats.UsedMemory
 	m["used_disk_in_bytes"] = stats.UsedDisk
@@ -377,7 +387,7 @@ func (i *Instance) attributes_and_stats() map[string]interface{} {
 }
 
 func (i *Instance) GetStats() Stats {
-	return *i.statCollector.GetStats()
+	return i.StatCollector.GetStats()
 }
 
 func (i *Instance) setup_crash_handler() {
@@ -521,19 +531,19 @@ done:
 
 func (i *Instance) setup_stat_collector() {
 	i.EventEmitter.On(Transition{STATE_RESUMING, STATE_RUNNING}, func() {
-		i.statCollector.Start()
+		i.StatCollector.Start()
 	})
 
 	i.EventEmitter.On(Transition{STATE_STARTING, STATE_RUNNING}, func() {
-		i.statCollector.Start()
+		i.StatCollector.Start()
 	})
 
 	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_STOPPING}, func() {
-		i.statCollector.Stop()
+		i.StatCollector.Stop()
 	})
 
 	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_CRASHED}, func() {
-		i.statCollector.Stop()
+		i.StatCollector.Stop()
 	})
 }
 

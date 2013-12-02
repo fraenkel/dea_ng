@@ -32,7 +32,7 @@ var _ = Describe("Droplet", func() {
 	})
 
 	It("should export its sha1", func() {
-		Expect(hex.EncodeToString(droplet.SHA1())).To(Equal(sha1Hash))
+		Expect(droplet.SHA1()).To(Equal(sha1Hash))
 	})
 
 	It("should make sure its directory exists", func() {

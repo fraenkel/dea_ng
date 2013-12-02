@@ -15,7 +15,7 @@ import (
 var _ = Describe("ResourceManager", func() {
 	var config cfg.Config
 	var manager ResourceManager
-	var instanceRegistry *starting.InstanceRegistry
+	var instanceRegistry starting.InstanceRegistry
 	var stagingRegistry *staging.StagingTaskRegistry
 	var memory_mb uint64
 	var memory_overcommit_factor float64

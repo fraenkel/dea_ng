@@ -20,7 +20,7 @@ import (
 var _ = Describe("InstanceRegistry", func() {
 	var config cfg.Config
 	var dropletRegistry droplet.DropletRegistry
-	var instance_registry *InstanceRegistry
+	var instance_registry *instanceRegistry
 
 	var attributes map[string]interface{}
 	var attributes1 map[string]interface{}
@@ -38,7 +38,7 @@ var _ = Describe("InstanceRegistry", func() {
 	JustBeforeEach(func() {
 		instance = NewInstance(attributes, &config, dropletRegistry, "127.0.0.1")
 		instance1 = NewInstance(attributes1, &config, dropletRegistry, "127.0.0.1")
-		instance_registry = NewInstanceRegistry(&config)
+		instance_registry = NewInstanceRegistry(&config).(*instanceRegistry)
 	})
 
 	Describe("change_instance_id", func() {
@@ -171,7 +171,7 @@ var _ = Describe("InstanceRegistry", func() {
 		return !utils.File_Exists(crash_path)
 	}
 
-	register_crashed_instance := func(registry *InstanceRegistry, options map[string]interface{}) *Instance {
+	register_crashed_instance := func(registry InstanceRegistry, options map[string]interface{}) *Instance {
 		attrs := thelpers.Valid_instance_attributes(false)
 		if options != nil {
 			for k, v := range options {

@@ -25,7 +25,7 @@ var _ = Describe("Staging", func() {
 	var stagingRegistry *staging.StagingTaskRegistry
 	var dropletRegistry droplet.DropletRegistry
 	var nats *fakeyagnats.FakeYagnats
-	var staging_task *tstaging.MockStagingTask
+	var staging_task *tstaging.FakeStagingTask
 	var appManager mockAppManager
 
 	panicNewStagingTask := func(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
@@ -38,7 +38,7 @@ var _ = Describe("Staging", func() {
 		dropletRegistry = droplet.NewDropletRegistry(tmpdir)
 		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 		nats = fakeyagnats.New()
-		staging_task = &tstaging.MockStagingTask{
+		staging_task = &tstaging.FakeStagingTask{
 			StagingMsg: staging.NewStagingMessage(map[string]interface{}{
 				"app_id":  "some_app_id",
 				"task_id": "task-id"}),

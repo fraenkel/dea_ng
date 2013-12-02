@@ -88,7 +88,7 @@ func (p *stagingPromises) promise_app_download() error {
 	}
 
 	startTime := time.Now()
-	err = utils.HttpDownload(downloadUri.String(), download_destination, nil, s.Logger)
+	err = utils.HttpDownload(downloadUri.String(), download_destination, "", s.Logger)
 	if err != nil {
 		s.Logger.Debugd(
 			map[string]interface{}{
@@ -152,7 +152,7 @@ func (p *stagingPromises) promise_buildpack_cache_download() error {
 	}
 
 	startTime := time.Now()
-	err = utils.HttpDownload(downloadUri.String(), download_destination, nil, s.Logger)
+	err = utils.HttpDownload(downloadUri.String(), download_destination, "", s.Logger)
 	if err != nil {
 		s.Logger.Debugd(map[string]interface{}{
 			"duration": time.Now().Sub(startTime),

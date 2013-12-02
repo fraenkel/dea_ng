@@ -3,6 +3,7 @@ package utils_test
 import (
 	"crypto/sha1"
 	. "dea/utils"
+	"encoding/hex"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -22,7 +23,7 @@ func (br DownloadResponder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 var _ = Describe("Download", func() {
 	var (
-		sha     = []byte("DEADBEEF")
+		sha     = "DEADBEEF"
 		to_file *os.File
 		logger  = Logger("download_test", nil)
 	)
@@ -45,8 +46,8 @@ var _ = Describe("Download", func() {
 
 		shaDigest := sha1.New()
 		shaDigest.Write(body)
-
-		err := HttpDownload(server.URL+"/droplet", to_file, shaDigest.Sum(nil), logger)
+		sha1 := hex.EncodeToString(shaDigest.Sum(nil))
+		err := HttpDownload(server.URL+"/droplet", to_file, sha1, logger)
 		Expect(err).To(BeNil())
 
 		actualBody, err := ioutil.ReadFile(to_file.Name())
@@ -60,7 +61,7 @@ var _ = Describe("Download", func() {
 			server := httptest.NewServer(DownloadResponder{body})
 			defer server.Close()
 
-			err := HttpDownload(server.URL+"/droplet", to_file, nil, logger)
+			err := HttpDownload(server.URL+"/droplet", to_file, "", logger)
 			Expect(err).To(BeNil())
 
 			actualBody, err := ioutil.ReadFile(to_file.Name())

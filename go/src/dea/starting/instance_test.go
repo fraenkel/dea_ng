@@ -6,10 +6,10 @@ import (
 	"dea/health_check"
 	thelpers "dea/testhelpers"
 	tdroplet "dea/testhelpers/droplet"
+	tlogger "dea/testhelpers/logger"
 	"encoding/json"
 	"errors"
 	"github.com/cloudfoundry/gordon"
-	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -282,7 +282,7 @@ var _ = Describe("Instance", func() {
 		var collector fakeCollector
 		JustBeforeEach(func() {
 			collector = fakeCollector{}
-			instance.statCollector = &collector
+			instance.StatCollector = &collector
 			instance.setup_stat_collector()
 		})
 
@@ -327,7 +327,7 @@ var _ = Describe("Instance", func() {
 		var collector fakeCollector
 		JustBeforeEach(func() {
 			collector = fakeCollector{}
-			instance.statCollector = &collector
+			instance.StatCollector = &collector
 			instance.setup_stat_collector()
 		})
 
@@ -530,10 +530,10 @@ var _ = Describe("Instance", func() {
 			})
 
 			It("should log the failure", func() {
-				logger := &fakeL{}
+				logger := &tlogger.FakeL{}
 				instance.Logger.L = logger
 				instance.Promise_health_check()
-				Expect(logger.logs["error"]).To(Equal("droplet.health-check.container-info-failed: error"))
+				Expect(logger.Logs["error"]).To(Equal("droplet.health-check.container-info-failed: error"))
 			})
 		})
 	})
@@ -556,7 +556,7 @@ var _ = Describe("Instance", func() {
 			instance.Container = &container
 			fakepromises.realPromises = instance.InstancePromises
 			instance.InstancePromises = fakepromises
-			dropletRegistry.Put(instance.DropletSHA1())
+			dropletRegistry.Get(instance.DropletSHA1())
 		})
 
 		AfterEach(func() {
@@ -614,8 +614,7 @@ var _ = Describe("Instance", func() {
 
 			It("fails when download fails", func() {
 				msg := "download failed"
-				droplet := dropletRegistry.Droplet
-				droplet.DownloadError = errors.New(msg)
+				dropletRegistry.Droplet = tdroplet.FakeDroplet{DownloadError: errors.New(msg)}
 
 				err := startInstance()
 				Expect(err).ToNot(BeNil())
@@ -872,7 +871,7 @@ var _ = Describe("Instance", func() {
 			instance.Container = &container
 			fakepromises.realPromises = instance.InstancePromises
 			instance.InstancePromises = fakepromises
-			dropletRegistry.Put(instance.DropletSHA1())
+			dropletRegistry.Get(instance.DropletSHA1())
 		})
 
 		AfterEach(func() {
@@ -1340,25 +1339,10 @@ func (f *fakeCollector) Start() bool {
 func (f *fakeCollector) Stop() {
 	f.stopped = true
 }
-func (f *fakeCollector) GetStats() *Stats {
-	return &f.stats
+func (f *fakeCollector) GetStats() Stats {
+	return f.stats
 }
 func (f *fakeCollector) Retrieve_stats(now time.Time) {
-}
-
-type fakeL struct {
-	logs map[string]string
-}
-
-func (f *fakeL) Level() steno.LogLevel {
-	return steno.LOG_ALL
-}
-
-func (f *fakeL) Log(x steno.LogLevel, m string, d map[string]interface{}) {
-	if f.logs == nil {
-		f.logs = make(map[string]string)
-	}
-	f.logs[x.Name] = m
 }
 
 type fakePromises struct {

@@ -20,13 +20,13 @@ type Stats struct {
 	UsedMemory   config.Memory
 	UsedDisk     config.Disk
 	ComputedPCPU float32
-	cpu_samples  []cpu_stat
+	Cpu_samples  []cpu_stat
 }
 
 type StatCollector interface {
 	Start() bool
 	Stop()
-	GetStats() *Stats
+	GetStats() Stats
 	Retrieve_stats(now time.Time)
 }
 
@@ -38,7 +38,7 @@ type statCollector struct {
 
 func NewStatCollector(container container.Container) StatCollector {
 	collector := &statCollector{container: container,
-		stats: &Stats{cpu_samples: make([]cpu_stat, 0, 2)},
+		stats: &Stats{Cpu_samples: make([]cpu_stat, 0, 2)},
 	}
 
 	return collector
@@ -71,8 +71,8 @@ func (s *statCollector) run_stat_collector() {
 	}
 }
 
-func (s *statCollector) GetStats() *Stats {
-	return s.stats
+func (s *statCollector) GetStats() Stats {
+	return *s.stats
 }
 
 func (s *statCollector) Retrieve_stats(now time.Time) {
@@ -86,21 +86,21 @@ func (s *statCollector) Retrieve_stats(now time.Time) {
 	stats := Stats{
 		UsedMemory:  config.Memory(*info.MemoryStat.Rss) * config.Kibi,
 		UsedDisk:    config.Disk(*info.DiskStat.BytesUsed),
-		cpu_samples: make([]cpu_stat, 0, 2),
+		Cpu_samples: make([]cpu_stat, 0, 2),
 	}
 	s.compute_cpu_usage(&stats, *info.CpuStat.Usage, now)
 	s.stats = &stats
 }
 
 func (s *statCollector) compute_cpu_usage(stats *Stats, usage uint64, now time.Time) {
-	if len(s.stats.cpu_samples) > 0 {
-		stats.cpu_samples = append(stats.cpu_samples, s.stats.cpu_samples[len(s.stats.cpu_samples)-1])
+	if len(s.stats.Cpu_samples) > 0 {
+		stats.Cpu_samples = append(stats.Cpu_samples, s.stats.Cpu_samples[len(s.stats.Cpu_samples)-1])
 	}
-	stats.cpu_samples = append(stats.cpu_samples, cpu_stat{now, usage})
+	stats.Cpu_samples = append(stats.Cpu_samples, cpu_stat{now, usage})
 
-	if len(stats.cpu_samples) == 2 {
-		used := stats.cpu_samples[1].usage - stats.cpu_samples[0].usage
-		elapsed := stats.cpu_samples[1].timestamp.Sub(stats.cpu_samples[0].timestamp)
+	if len(stats.Cpu_samples) == 2 {
+		used := stats.Cpu_samples[1].usage - stats.Cpu_samples[0].usage
+		elapsed := stats.Cpu_samples[1].timestamp.Sub(stats.Cpu_samples[0].timestamp)
 		if elapsed > 0 {
 			stats.ComputedPCPU = float32(used / uint64(elapsed.Nanoseconds()))
 		}

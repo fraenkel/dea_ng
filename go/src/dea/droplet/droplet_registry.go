@@ -8,7 +8,6 @@ import (
 type DropletRegistry interface {
 	Get(sha1 string) Droplet
 	Remove(sha1 string) Droplet
-	Put(sha1 string)
 	Size() int
 	SHA1s() []string
 }
@@ -27,7 +26,7 @@ func NewDropletRegistry(baseDir string) DropletRegistry {
 		names, _ := file.Readdirnames(-1)
 		file.Close()
 		for _, name := range names {
-			registry.Put(name)
+			registry.put(name)
 		}
 	}
 
@@ -38,7 +37,11 @@ func (d *dropletRegistry) Get(sha1 string) Droplet {
 	d.Lock()
 	defer d.Unlock()
 
-	return d.m[sha1]
+	drop := d.m[sha1]
+	if drop == nil {
+		drop, _ = d.put(sha1)
+	}
+	return drop
 }
 
 func (d *dropletRegistry) Remove(sha1 string) Droplet {
@@ -51,14 +54,14 @@ func (d *dropletRegistry) Remove(sha1 string) Droplet {
 	return nil
 }
 
-func (d *dropletRegistry) Put(sha1 string) {
-	d.Lock()
-	defer d.Unlock()
-
+func (d *dropletRegistry) put(sha1 string) (Droplet, error) {
 	droplet, err := NewDroplet(d.baseDir, sha1)
-	if err == nil {
-		d.m[sha1] = droplet
+	if err != nil {
+		return nil, err
 	}
+
+	d.m[sha1] = droplet
+	return droplet, nil
 }
 
 func (d *dropletRegistry) Size() int {

@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"bytes"
 	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	steno "github.com/cloudfoundry/gosteno"
@@ -12,7 +12,7 @@ import (
 	"os"
 )
 
-func HttpDownload(uri string, destination *os.File, sha1_expected []byte, logger *steno.Logger) error {
+func HttpDownload(uri string, destination *os.File, sha1_expected string, logger *steno.Logger) error {
 	defer destination.Close()
 
 	client := newHttpClient()
@@ -47,8 +47,8 @@ func HttpDownload(uri string, destination *os.File, sha1_expected []byte, logger
 	context["droplet_http_status"] = http_status
 
 	if http_status == http.StatusOK {
-		sha1_actual := shaDigest.Sum(nil)
-		if sha1_expected == nil || bytes.Equal(sha1_expected, sha1_actual) {
+		sha1_actual := hex.EncodeToString(shaDigest.Sum(nil))
+		if sha1_expected == "" || sha1_expected == sha1_actual {
 			logger.Info("Download succeeded")
 			return nil
 		}

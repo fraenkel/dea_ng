@@ -19,7 +19,7 @@ import (
 var _ = Describe("DirectoryserverV2", func() {
 	var config *cfg.Config
 	var server *DirectoryServerV2
-	var instanceRegistry *starting.InstanceRegistry
+	var instanceRegistry starting.InstanceRegistry
 	var instance *starting.Instance
 	var stagingTaskRegistry *staging.StagingTaskRegistry
 	var stagingTask staging.StagingTask

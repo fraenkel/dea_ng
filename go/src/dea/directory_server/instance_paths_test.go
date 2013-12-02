@@ -20,7 +20,7 @@ import (
 var _ = Describe("InstancePaths", func() {
 	var config *cfg.Config
 	var server *DirectoryServerV2
-	var instanceRegistry *starting.InstanceRegistry
+	var instanceRegistry starting.InstanceRegistry
 	var instance *starting.Instance
 
 	BeforeEach(func() {

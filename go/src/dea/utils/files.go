@@ -2,20 +2,22 @@ package utils
 
 import (
 	"crypto/sha1"
+	"encoding/hex"
 	"io"
 	"os"
 )
 
-func SHA1Digest(src string) ([]byte, error) {
+func SHA1Digest(src string) (string, error) {
 	shaDigest := sha1.New()
 	file, err := os.Open(src)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer file.Close()
 
 	_, err = io.Copy(shaDigest, file)
-	return shaDigest.Sum(nil), nil
+	sha1 := hex.EncodeToString(shaDigest.Sum(nil))
+	return sha1, nil
 }
 
 func File_Exists(path string) bool {

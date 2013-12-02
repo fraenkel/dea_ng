@@ -23,11 +23,11 @@ type dirRequest struct {
 }
 
 type Directory struct {
-	instanceRegistry *starting.InstanceRegistry
+	instanceRegistry starting.InstanceRegistry
 	logger           *steno.Logger
 }
 
-func NewDirectory(instanceRegistry *starting.InstanceRegistry) *Directory {
+func NewDirectory(instanceRegistry starting.InstanceRegistry) *Directory {
 	return &Directory{
 		instanceRegistry: instanceRegistry,
 		logger:           utils.Logger("Directory", nil),

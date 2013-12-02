@@ -71,7 +71,7 @@ var _ = Describe("StatCollector", func() {
 				collector.Start()
 				time.Sleep(100 * time.Millisecond)
 
-				Expect(len(collector.GetStats().cpu_samples)).To(Equal(2))
+				Expect(len(collector.GetStats().Cpu_samples)).To(Equal(2))
 			})
 		})
 
@@ -92,7 +92,7 @@ var _ = Describe("StatCollector", func() {
 				collector.Stop()
 				time.Sleep(50 * time.Millisecond)
 
-				Expect(len(collector.GetStats().cpu_samples)).To(Equal(1))
+				Expect(len(collector.GetStats().Cpu_samples)).To(Equal(1))
 			})
 		})
 

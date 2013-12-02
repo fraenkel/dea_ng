@@ -81,7 +81,7 @@ type ExitMessage struct {
 	CCPartition     string     `json:"cc_partition"`
 	Droplet         string     `json:"droplet"`
 	Version         string     `json:"version"`
-	Id              string     `json: "instance"`
+	Id              string     `json:"instance"`
 	Index           int        `json:"index"`
 	Reason          string     `json:"reason"`
 	ExitStatus      int64      `json:"exit_status"`

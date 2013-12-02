@@ -22,7 +22,7 @@ var _ = Describe("StagingLocator", func() {
 	var nats *fakeyagnats.FakeYagnats
 	var config cfg.Config
 	var subject *StagingLocator
-	var instanceRegistry *starting.InstanceRegistry
+	var instanceRegistry starting.InstanceRegistry
 	var stagingRegistry *staging.StagingTaskRegistry
 
 	var resourceManager resmgr.ResourceManager
@@ -140,7 +140,7 @@ var _ = Describe("StagingLocator", func() {
 
 			BeforeEach(func() {
 				config.Stacks = stacks
-				resourceManager = testrm.MockResourceManager{
+				resourceManager = testrm.FakeResourceManager{
 					Memory:    availableMemory,
 					Disk:      availableDisk,
 					AppCounts: appCounts,
