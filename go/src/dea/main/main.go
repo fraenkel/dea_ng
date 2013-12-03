@@ -14,7 +14,6 @@ import (
 	"dea/starting"
 	"dea/utils"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"github.com/cloudfoundry/gorouter/common"
 	steno "github.com/cloudfoundry/gosteno"
@@ -26,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime/debug"
 	"strconv"
 	"syscall"
 	"time"
@@ -84,21 +84,25 @@ type bootstrap struct {
 }
 
 func main() {
-	var configPath string
-	flag.StringVar(&configPath,
-		"conf",
-		"", "Path of the YAML configuration of the co-located DEA.")
-	flag.Parse()
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <config path>\n", os.Args[0])
+		os.Exit(1)
+	}
 
+	configPath := os.Args[1]
 	config, err := cfg.ConfigFromFile(configPath)
 	if err != nil {
-		panic(err.Error())
+		fmt.Fprintf(os.Stderr, "Config not found at '%s'\n%s", configPath, err.Error())
+		os.Exit(1)
 	}
+
+	fmt.Printf("%v\n %v\n", config, config.NatsConfig)
 
 	b := newBootstrap(config)
 	err = b.Setup()
 	if err != nil {
-		panic(err.Error())
+		fmt.Fprintf(os.Stderr, "Setup failed\n%s", configPath, err.Error())
+		os.Exit(1)
 	}
 
 	b.Start()
@@ -304,6 +308,7 @@ func (b *bootstrap) setupSignalHandlers() {
 func (b *bootstrap) handleSignal(s os.Signal) {
 	switch s {
 	case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
+		debug.PrintStack()
 		b.Shutdown()
 	case syscall.SIGUSR1:
 		b.trap_usr1()
@@ -438,6 +443,7 @@ func (b *bootstrap) Start() {
 	b.startComponent()
 
 	b.startNats()
+
 	b.directoryServer.Start()
 
 	b.setupRouterClient()
