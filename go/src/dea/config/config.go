@@ -3,10 +3,7 @@ package config
 import (
 	"io/ioutil"
 	"launchpad.net/goyaml"
-	"net/url"
 	"path"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -36,34 +33,34 @@ const (
 )
 
 type LoggingConfig struct {
-	File   string "file"
-	Syslog string "syslog"
-	Level  string "level"
+	File   string `yaml:"file"`
+	Syslog string `yaml:"syslog"`
+	Level  string `yaml:"level"`
 }
 
 type LoggregatorConfig struct {
-	Router       string "router"
-	SharedSecret string "shared_secret"
+	Router       string `yaml:"router"`
+	SharedSecret string `yaml:"shared_secret"`
 }
 
 type ResourcesConfig struct {
-	MemoryMB               uint64  "memory_mb"
-	MemoryOvercommitFactor float64 "memory_overcommit_factor"
-	DiskMB                 uint64  "disk_mb"
-	DiskOvercommitFactor   float64 "disk_overcommit_factor"
+	MemoryMB               uint64  `yaml:"memory_mb"`
+	MemoryOvercommitFactor float64 `yaml:"memory_overcommit_factor"`
+	DiskMB                 uint64  `yaml:"disk_mb"`
+	DiskOvercommitFactor   float64 `yaml:"disk_overcommit_factor"`
 }
 
 type PlatformConfig struct {
-	Cache string "cache"
+	Cache string `yaml:"cache"`
 }
 
 type StagingConfig struct {
-	Enabled            bool              "enabled"
-	Platform           PlatformConfig    "platform_config"
-	Environment        map[string]string "environment"
-	MemoryLimitMB      uint64            "memory_limit_mb"
-	DiskLimitMB        uint64            "disk_limit_mb"
-	MaxStagingDuration time.Duration     "max_staging_duration"
+	Enabled            bool              `yaml:"enabled"`
+	Platform           PlatformConfig    `yaml:"platform_config"`
+	Environment        map[string]string `yaml:"environment"`
+	MemoryLimitMB      uint64            `yaml:"memory_limit_mb"`
+	DiskLimitMB        uint64            `yaml:"disk_limit_mb"`
+	MaxStagingDuration time.Duration     `yaml:"max_staging_duration"`
 }
 
 var defaultStagingConfig = StagingConfig{
@@ -71,24 +68,24 @@ var defaultStagingConfig = StagingConfig{
 }
 
 type DirServerConfig struct {
-	Protocol         string "protocol"
-	DeaPort          uint16 "file_api_port"
-	V1Port           uint16 "v1_port"
-	V2Port           uint16 "v2_port"
-	StreamingTimeout uint32 "streaming_timeout"
+	Protocol         string `yaml:"protocol"`
+	DeaPort          uint16 `yaml:"file_api_port"`
+	V1Port           uint16 `yaml:"v1_port"`
+	V2Port           uint16 `"yaml:"v2_port"`
+	StreamingTimeout uint32 `yaml:"streaming_timeout"`
 }
 
 type NatsConfig struct {
-	Host string "host"
-	Port uint16 "port"
-	User string "user"
-	Pass string "pass"
+	Host string
+	Port uint16
+	User string
+	Pass string
 }
 
 type StatusConfig struct {
-	Port     uint16 "port"
-	User     string "user"
-	Password string "password"
+	Port     uint16 `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
 }
 
 var defaultNatsConfig = NatsConfig{
@@ -99,47 +96,43 @@ var defaultNatsConfig = NatsConfig{
 }
 
 type IntervalConfig struct {
-	Heartbeat time.Duration "heartbeat"
-	Advertise time.Duration "advertise"
+	Heartbeat time.Duration `yaml:"heartbeat"`
+	Advertise time.Duration `yaml:"advertise"`
 }
 
 type Config struct {
-	BaseDir                       string              "base_dir"
-	BuildpackDir                  string              "buildpack_dir"
-	Logging                       LoggingConfig       "logging"
-	Loggregator                   LoggregatorConfig   "loggregator"
-	Resources                     ResourcesConfig     "resources"
-	natsUri                       string              "nats_uri"
-	NatsConfig                    NatsConfig          "nats"
-	PidFile                       string              "pid_filename"
-	WardenSocket                  string              "warden_socket"
-	EvacuationDelay               time.Duration       "evacuation_delay_secs"
-	MaximumHealthCheckTimeout     time.Duration       "maximum_health_check_timeout"
-	Index                         uint                "index"
-	Staging                       StagingConfig       "staging"
-	Stacks                        []string            "stacks"
-	Intervals                     IntervalConfig      "intervals"
-	Status                        StatusConfig        "status"
-	CrashesPath                   string              "crashes_path"
-	CrashLifetime                 time.Duration       "crash_lifetime_secs"
-	BindMounts                    []map[string]string "bind_mounts"
-	CrashBlockUsageRatioThreshold float64             "crash_block_usage_ratio_threshold"
-	CrashInodeUsageRatioThreshold float64             "crash_inode_usage_ratio_threshold"
-	Domain                        string              "domain"
-	DirectoryServer               DirServerConfig     "directory_server"
-	DeaRuby                       string              "dea_ruby"
-	Hooks                         map[string]string   "hooks"
+	BaseDir                       string                 `yaml:"base_dir"`
+	BuildpackDir                  string                 `yaml:"buildpack_dir"`
+	Logging                       LoggingConfig          `yaml:"logging"`
+	Loggregator                   LoggregatorConfig      `yaml:"loggregator"`
+	Resources                     ResourcesConfig        `yaml:"resources"`
+	NatsServers                   []string               `yaml:"nats_servers"`
+	PidFile                       string                 `yaml:"pid_filename"`
+	WardenSocket                  string                 `yaml:"warden_socket"`
+	EvacuationDelay               time.Duration          `yaml:"evacuation_delay_secs"`
+	MaximumHealthCheckTimeout     time.Duration          `yaml:"maximum_health_check_timeout"`
+	Index                         uint                   `yaml:"index"`
+	Staging                       StagingConfig          `yaml:"staging"`
+	Stacks                        []string               `yaml:"stacks"`
+	Intervals                     IntervalConfig         `yaml:"intervals"`
+	Status                        StatusConfig           `yaml:"status"`
+	CrashesPath                   string                 `yaml:"crashes_path"`
+	CrashLifetime                 time.Duration          `yaml:"crash_lifetime_secs"`
+	BindMounts                    []map[string]string    `yaml:"bind_mounts"`
+	CrashBlockUsageRatioThreshold float64                `yaml:"crash_block_usage_ratio_threshold"`
+	CrashInodeUsageRatioThreshold float64                `yaml:"crash_inode_usage_ratio_threshold"`
+	Domain                        string                 `yaml:"domain"`
+	DirectoryServer               DirServerConfig        `yaml:"directory_server"`
+	DeaRuby                       string                 `yaml:"dea_ruby"`
+	Hooks                         map[string]string      `yaml:"hooks"`
+	PlacementProperties           map[string]interface{} `yaml:"placement_properties"`
 }
 
-func ConfigFromFile(configPath string) (*Config, error) {
-	configBytes, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
+type ConfigLoader func(c *Config) error
 
-	config := Config{
+func NewConfig(loader ConfigLoader) (Config, error) {
+	c := Config{
 		Status:                        StatusConfig{},
-		NatsConfig:                    defaultNatsConfig,
 		Resources:                     ResourcesConfig{},
 		CrashLifetime:                 60 * 60,
 		EvacuationDelay:               30,
@@ -147,38 +140,40 @@ func ConfigFromFile(configPath string) (*Config, error) {
 		CrashBlockUsageRatioThreshold: 0.8,
 		CrashInodeUsageRatioThreshold: 0.8,
 		MaximumHealthCheckTimeout:     60,
+		PlacementProperties:           map[string]interface{}{},
+		Staging: StagingConfig{
+			MemoryLimitMB: 1024,
+			DiskLimitMB:   2 * 1024,
+		},
 	}
 
-	if err := goyaml.Unmarshal(configBytes, &config); err != nil {
-		return nil, err
+	var err error
+	if loader != nil {
+		err = loader(&c)
 	}
 
-	err = Finalize(&config)
-	return &config, err
+	if err == nil {
+		err = finalize(&c)
+	}
+
+	return c, err
 }
 
-func Finalize(config *Config) error {
-	// Convert NatsUri -> NatsConfig
-	if config.natsUri != "" {
-		natsURL, err := url.Parse(config.natsUri)
+func LoadConfig(configPath string) (Config, error) {
+	return NewConfig(func(c *Config) error {
+		configBytes, err := ioutil.ReadFile(configPath)
 		if err != nil {
 			return err
 		}
-
-		hostInfo := strings.SplitN(natsURL.Host, ":", 2)
-		port, err := strconv.ParseUint(hostInfo[1], 0, 16)
-		if err != nil {
+		if err := goyaml.Unmarshal(configBytes, c); err != nil {
 			return err
 		}
-		config.NatsConfig.Host = hostInfo[0]
-		config.NatsConfig.Port = uint16(port)
 
-		if natsURL.User != nil {
-			config.NatsConfig.User = natsURL.User.Username()
-			config.NatsConfig.Pass, _ = natsURL.User.Password()
-		}
-	}
+		return nil
+	})
+}
 
+func finalize(config *Config) error {
 	if config.CrashesPath == "" {
 		config.CrashesPath = path.Join(config.BaseDir, "crashes")
 	}
@@ -192,18 +187,4 @@ func Finalize(config *Config) error {
 	config.Intervals.Heartbeat *= time.Second
 
 	return nil
-}
-
-func (c StagingConfig) Minimum_staging_memory_mb() uint64 {
-	if c.MemoryLimitMB == 0 {
-		return 1024
-	}
-	return c.MemoryLimitMB
-}
-
-func (c StagingConfig) Minimum_staging_disk_mb() uint64 {
-	if c.DiskLimitMB == 0 {
-		return 2 * 1024
-	}
-	return c.DiskLimitMB
 }

@@ -21,9 +21,10 @@ type ServiceData struct {
 
 	Options map[string]interface{}
 
-	Provider string
-	Vendor   string
-	Plan     string
+	Provider    string
+	Vendor      string
+	Plan        string
+	Plan_option string
 
 	Version string
 }
@@ -72,6 +73,10 @@ func (s StartData) Limits() map[string]uint64 {
 
 func (s StartData) MemoryLimit() uint64 {
 	return uint64(s.LimitsData.MemMb)
+}
+
+func (s StartData) DiskLimit() uint64 {
+	return uint64(s.LimitsData.DiskMb)
 }
 
 func (s StartData) Name() string {
@@ -142,27 +147,7 @@ func (s *StartData) UnmarshalMap(m map[string]interface{}) error {
 
 	s.Start_command = getString(m, "start_command")
 
-	if env, exist := m["environment"]; exist {
-		s.Env = env.(map[string]string)
-	} else {
-		env := make(map[string]string)
-		s.Env = env
-		rv := reflect.ValueOf(m["env"])
-		if !rv.IsNil() && (rv.Kind() == reflect.Array || rv.Kind() == reflect.Slice) {
-			for i := 0; i < rv.Len(); i++ {
-				elemV := rv.Index(i)
-				if elemV.Kind() == reflect.Interface {
-					elemV = elemV.Elem()
-				}
-				pair := strings.SplitN(elemV.String(), "=", 2)
-				val := ""
-				if len(pair) == 2 {
-					val = pair[1]
-				}
-				env[pair[0]] = val
-			}
-		}
-	}
+	s.Env = marshalEnvironment(m)
 
 	if err := s.LimitsData.UnmarshalMap(m["limits"]); err != nil {
 		return err
@@ -174,8 +159,9 @@ func (s *StartData) UnmarshalMap(m map[string]interface{}) error {
 		ss := m["services"].([]interface{})
 		serviceData = make([]map[string]interface{}, len(ss))
 		for _, v := range ss {
-			sd := v.(map[string]interface{})
-			serviceData = append(serviceData, sd)
+			if cv := convertMap(v); cv != nil {
+				serviceData = append(serviceData, cv)
+			}
 		}
 	case []map[string]interface{}:
 		serviceData = m["services"].([]map[string]interface{})
@@ -191,6 +177,68 @@ func (s *StartData) UnmarshalMap(m map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+func marshalEnvironment(m map[string]interface{}) map[string]string {
+	if environ, exist := m["environment"]; exist {
+		if env, ok := environ.(map[string]string); ok {
+			return env
+		}
+
+		rv := reflect.ValueOf(environ)
+		if rv.IsNil() || rv.Kind() != reflect.Map {
+			return nil
+		}
+
+		env := make(map[string]string)
+		for _, kv := range rv.MapKeys() {
+			kval := rv.MapIndex(kv)
+			env[kv.Elem().String()] = kval.Elem().String()
+		}
+
+		return env
+	}
+
+	// see if the env key is present
+	rv := reflect.ValueOf(m["env"])
+	if rv.IsNil() || !(rv.Kind() == reflect.Array || rv.Kind() == reflect.Slice) {
+		return nil
+	}
+
+	env := make(map[string]string)
+	for i := 0; i < rv.Len(); i++ {
+		elemV := rv.Index(i)
+		if elemV.Kind() == reflect.Interface {
+			elemV = elemV.Elem()
+		}
+		pair := strings.SplitN(elemV.String(), "=", 2)
+		val := ""
+		if len(pair) == 2 {
+			val = pair[1]
+		}
+		env[pair[0]] = val
+	}
+
+	return env
+}
+
+func convertMap(m interface{}) map[string]interface{} {
+	if mout, ok := m.(map[string]interface{}); ok {
+		return mout
+	}
+
+	mrv := reflect.ValueOf(m)
+	if mrv.Kind() != reflect.Map {
+		return nil
+	}
+
+	out := make(map[string]interface{})
+	for _, kv := range mrv.MapKeys() {
+		valv := mrv.MapIndex(kv)
+		out[kv.Elem().String()] = valv.Interface()
+	}
+
+	return out
 }
 
 func (s *StartData) MarshalMap(m map[string]interface{}) error {
@@ -235,13 +283,14 @@ func (l *LimitsData) UnmarshalMap(m interface{}) error {
 		l.MemMb = umap["mem"]
 		l.DiskMb = umap["disk"]
 		l.Fds = umap["fds"]
-	case map[string]interface{}:
-		imap := m.(map[string]interface{})
-		l.MemMb = getUInt(imap, "mem")
-		l.DiskMb = getUInt(imap, "disk")
-		l.Fds = getUInt(imap, "fds")
 	default:
-		return &reflect.ValueError{"MarshalMap", reflect.ValueOf(m).Kind()}
+		if rv := reflect.ValueOf(m); rv.Kind() != reflect.Map {
+			return &reflect.ValueError{"Limits.MarshalMap", rv.Kind()}
+		}
+
+		l.MemMb = getUInt(m, "mem")
+		l.DiskMb = getUInt(m, "disk")
+		l.Fds = getUInt(m, "fds")
 	}
 
 	return nil
@@ -272,7 +321,7 @@ func (s *ServiceData) UnmarshalMap(m map[string]interface{}) error {
 	s.Name = getString(m, "name")
 	s.Label = getString(m, "label")
 	if creds, exists := m["credentials"]; exists {
-		s.Credentials = creds.(map[string]interface{})
+		s.Credentials = convertMap(creds)
 	}
 
 	s.Tags = getStrings(m, "tags")
@@ -280,12 +329,13 @@ func (s *ServiceData) UnmarshalMap(m map[string]interface{}) error {
 	s.Syslog_drain_url = getString(m, "syslog_drain_url")
 
 	if opts, exists := m["options"]; exists {
-		s.Options = opts.(map[string]interface{})
+		s.Options = convertMap(opts)
 	}
 
 	s.Provider = getString(m, "provider")
 	s.Vendor = getString(m, "vendor")
 	s.Plan = getString(m, "plan")
+	s.Plan_option = getString(m, "plan_option")
 
 	s.Version = getString(m, "version")
 
@@ -304,6 +354,7 @@ func (s *ServiceData) MarshalMap(m map[string]interface{}) error {
 	m["provider"] = s.Provider
 	m["vendor"] = s.Vendor
 	m["plan"] = s.Plan
+	m["plan_option"] = s.Plan_option
 
 	m["version"] = s.Version
 
@@ -327,18 +378,24 @@ func getString(m map[string]interface{}, key string) string {
 	return ""
 }
 
-func getUInt(m map[string]interface{}, key string) uint64 {
-	if i, exist := m[key]; exist {
-		rv := reflect.ValueOf(i)
-		switch i.(type) {
-		case int, int8, int32, int64:
-			return uint64(rv.Int())
-		case uint, uint8, uint32, uint64:
-			return rv.Uint()
-		case float32, float64:
-			return uint64(rv.Float())
-		}
+func getUInt(m interface{}, key string) uint64 {
+	mrv := reflect.ValueOf(m)
+	krv := reflect.ValueOf(key)
+	rv := mrv.MapIndex(krv)
+
+	if rv.Kind() == reflect.Interface {
+		rv = rv.Elem()
 	}
+
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int32, reflect.Int64:
+		return uint64(rv.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint32, reflect.Uint64:
+		return rv.Uint()
+	case reflect.Float32, reflect.Float64:
+		return uint64(rv.Float())
+	}
+
 	return 0
 }
 
@@ -352,6 +409,21 @@ func getInt(m map[string]interface{}, key string) int {
 			return int(rv.Uint())
 		case float32, float64:
 			return int(rv.Float())
+		}
+	}
+	return 0
+}
+
+func getInt64(m map[string]interface{}, key string) int64 {
+	if i, exist := m[key]; exist {
+		rv := reflect.ValueOf(i)
+		switch i.(type) {
+		case int, int8, int32, int64:
+			return rv.Int()
+		case uint, uint8, uint32, uint64:
+			return int64(rv.Uint())
+		case float32, float64:
+			return int64(rv.Float())
 		}
 	}
 	return 0

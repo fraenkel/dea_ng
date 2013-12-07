@@ -82,12 +82,12 @@ var _ = Describe("InstanceRegistry", func() {
 		})
 
 		It("should log to the loggregator", func() {
-			mockEmitter := temitter.MockEmitter{}
-			loggregator.SetEmitter(&mockEmitter)
+			fakeEmitter := temitter.FakeEmitter{}
+			loggregator.SetEmitter(&fakeEmitter)
 
 			instance_registry.Register(instance)
-			Expect(mockEmitter.Messages).To(HaveLen(1))
-			Expect(mockEmitter.Messages[instance.ApplicationId()][0]).To(Equal("Registering instance"))
+			Expect(fakeEmitter.Messages).To(HaveLen(1))
+			Expect(fakeEmitter.Messages[instance.ApplicationId()][0]).To(Equal("Registering instance"))
 		})
 	})
 
@@ -108,12 +108,12 @@ var _ = Describe("InstanceRegistry", func() {
 		})
 
 		It("should log to the loggregator", func() {
-			mockEmitter := temitter.MockEmitter{}
-			loggregator.SetEmitter(&mockEmitter)
+			fakeEmitter := temitter.FakeEmitter{}
+			loggregator.SetEmitter(&fakeEmitter)
 
 			instance_registry.Unregister(instance)
-			Expect(mockEmitter.Messages).To(HaveLen(1))
-			Expect(mockEmitter.Messages[instance.ApplicationId()][0]).To(Equal("Removing instance"))
+			Expect(fakeEmitter.Messages).To(HaveLen(1))
+			Expect(fakeEmitter.Messages[instance.ApplicationId()][0]).To(Equal("Removing instance"))
 		})
 	})
 
@@ -193,6 +193,97 @@ var _ = Describe("InstanceRegistry", func() {
 
 		return instance
 	}
+
+	Describe("instances_filtered_by_message", func() {
+		merge := func(m map[string]interface{}, adds map[string]interface{}) {
+			for k, v := range adds {
+				m[k] = v
+			}
+		}
+
+		BeforeEach(func() {
+			merge(attributes, map[string]interface{}{
+				"application_id":      "1",
+				"application_version": "abc",
+				"instance_id":         "id1",
+				"instance_index":      0,
+			})
+			merge(attributes1, map[string]interface{}{
+				"application_id":      "1",
+				"application_version": "def",
+				"instance_id":         "id2",
+				"instance_index":      1,
+			})
+		})
+		JustBeforeEach(func() {
+			instance.SetState(STATE_RUNNING)
+			instance_registry.Register(instance)
+			instance_registry.Register(instance1)
+		})
+
+		filtered_instances := func(message map[string]interface{}) []*Instance {
+			instances := make([]*Instance, 0, 2)
+			instance_registry.Instances_filtered_by_message(message, func(i *Instance) {
+				instances = append(instances, i)
+			})
+
+			return instances
+		}
+
+		Context("when the app id doesn't match anything", func() {
+			It("does not yield anything", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": ""})).To(HaveLen(0))
+			})
+		})
+
+		Context("when the app id matches some instances", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1"})).To(Equal([]*Instance{instance, instance1}))
+			})
+		})
+
+		Context("when filtered by version", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "version": "abc"})).To(Equal([]*Instance{instance}))
+			})
+		})
+
+		Context("when filtered by instances", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "instances": []string{"id2"}})).To(Equal([]*Instance{instance1}))
+			})
+		})
+
+		Context("when filtered by instance_ids", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "instance_ids": []string{"id2"}})).To(Equal([]*Instance{instance1}))
+			})
+		})
+
+		Context("when filtered by indices", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "indices": []int{0}})).To(Equal([]*Instance{instance}))
+			})
+		})
+
+		Context("when filtered by state", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "states": []string{"RUNNING", "STARTING"}})).To(Equal([]*Instance{instance}))
+			})
+		})
+
+		Context("when filtered by version, instances, indices, state", func() {
+			It("returns matching instances of the app", func() {
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1",
+					"version":   "abc",
+					"instances": []string{"id1"},
+					"indices":   []int{0, 1},
+					"states":    []string{"RUNNING", "BORN"},
+				})).To(Equal([]*Instance{instance}))
+			})
+		})
+
+	})
 
 	Describe("crash reaping of orphans", func() {
 		var tmpdir string
@@ -348,16 +439,16 @@ var _ = Describe("InstanceRegistry", func() {
 		})
 
 		It("logs to the loggregator", func() {
-			mockEmitter := temitter.MockEmitter{}
-			loggregator.SetEmitter(&mockEmitter)
+			fakeEmitter := temitter.FakeEmitter{}
+			loggregator.SetEmitter(&fakeEmitter)
 
 			instance_registry.Register(instance)
 			instance_registry.reapCrash(instance.instance_id, "no reason", func() {
 				instance_registry.reapCrashesUnderDiskPressure()
 			})
 
-			Expect(mockEmitter.Messages).To(HaveLen(1))
-			Expect(mockEmitter.Messages[instance.ApplicationId()][1]).To(Equal("Removing crash for app with id 37"))
+			Expect(fakeEmitter.Messages).To(HaveLen(1))
+			Expect(fakeEmitter.Messages[instance.ApplicationId()][1]).To(Equal("Removing crash for app with id 37"))
 		})
 	})
 

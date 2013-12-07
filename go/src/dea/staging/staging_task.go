@@ -1,8 +1,8 @@
 package staging
 
 import (
-cnr "dea/container"
 	"dea/config"
+	cnr "dea/container"
 	"dea/droplet"
 	"dea/loggregator"
 	"dea/task"
@@ -38,7 +38,6 @@ type StagingTask interface {
 	Path_in_container(pathSuffix string) string
 	SetAfter_setup_callback(callback Callback)
 	SetAfter_complete_callback(callback Callback)
-	SetAfter_upload_callback(callback Callback)
 	SetAfter_stop_callback(callback Callback)
 	StagingTimeout() time.Duration
 }
@@ -55,7 +54,6 @@ type stagingTask struct {
 	dropletSha1             string
 	after_setup_callback    Callback
 	after_complete_callback Callback
-	after_upload_callback   Callback
 	after_stop_callback     Callback
 	StagingPromises
 	staging_timeout_buffer time.Duration
@@ -100,11 +98,22 @@ func (s *stagingTask) StagingMessage() StagingMessage {
 }
 
 func (s *stagingTask) MemoryLimit() config.Memory {
-	return config.Memory(s.stagingConfig.Minimum_staging_memory_mb()) * config.Mebi
+	stagemem := s.stagingConfig.MemoryLimitMB
+	if startmem := s.StagingMessage().StartData().MemoryLimit(); startmem > stagemem {
+		stagemem = startmem
+	}
+
+	return config.Memory(stagemem) * config.Mebi
 }
 
 func (s *stagingTask) DiskLimit() config.Disk {
-	return config.Disk(s.stagingConfig.Minimum_staging_disk_mb()) * config.MB
+	stagedisk := s.stagingConfig.DiskLimitMB
+
+	if startdisk := s.StagingMessage().StartData().DiskLimit(); startdisk > stagedisk {
+		stagedisk = startdisk
+	}
+
+	return config.Disk(stagedisk) * config.MB
 }
 
 func (s *stagingTask) Start() error {
@@ -124,11 +133,6 @@ func (s *stagingTask) Start() error {
 		s.Logger.Info("staging.task.completed")
 	}
 
-	newErr := s.trigger_after_complete(err)
-	if newErr != nil {
-		return newErr
-	}
-
 	if err == nil {
 		err = s.resolve_staging_upload()
 		if err != nil {
@@ -136,9 +140,9 @@ func (s *stagingTask) Start() error {
 		}
 	}
 
-	newErr = s.trigger_after_upload(err)
+	newErr := s.trigger_after_complete(err)
 	if newErr != nil {
-		err = newErr
+		return newErr
 	}
 
 	return err
@@ -263,16 +267,6 @@ func (s *stagingTask) SetAfter_complete_callback(callback Callback) {
 func (s *stagingTask) trigger_after_complete(err error) error {
 	if s.after_complete_callback != nil {
 		return s.after_complete_callback(err)
-	}
-	return nil
-}
-
-func (s *stagingTask) SetAfter_upload_callback(callback Callback) {
-	s.after_upload_callback = callback
-}
-func (s *stagingTask) trigger_after_upload(err error) error {
-	if s.after_upload_callback != nil {
-		return s.after_upload_callback(err)
 	}
 	return nil
 }

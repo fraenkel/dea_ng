@@ -21,7 +21,7 @@ import (
 var _ = Describe("DeaLocator", func() {
 	dea_id := "unique-dea-id"
 	var config cfg.Config
-	var subject *DeaLocator
+	var deaLocator *DeaLocator
 	var resourceManager resmgr.ResourceManager
 	var instanceRegistry starting.InstanceRegistry
 	var stagingRegistry *staging.StagingTaskRegistry
@@ -37,24 +37,24 @@ var _ = Describe("DeaLocator", func() {
 	})
 
 	JustBeforeEach(func() {
-		subject = NewDeaLocator(nats, dea_id, resourceManager, &config)
+		deaLocator = NewDeaLocator(nats, dea_id, resourceManager, &config)
 	})
 
 	AfterEach(func() {
-		subject.Stop()
+		deaLocator.Stop()
 		os.RemoveAll(config.BaseDir)
 	})
 
 	Describe("start", func() {
 		Describe("subscription for 'dea.locate'", func() {
 			It("subscribes to 'dea.locate' message", func() {
-				subject.Start()
+				deaLocator.Start()
 				Expect(len(nats.Subscriptions["dea.locate"])).To(Equal(1))
 			})
 		})
 
 		It("it publishes dea.advertise on dea.locate message", func() {
-			subject.Start()
+			deaLocator.Start()
 
 			publish(nats, "dea.locate", nil, "")
 
@@ -71,7 +71,7 @@ var _ = Describe("DeaLocator", func() {
 				config.Intervals.Advertise = 10 * time.Millisecond
 			})
 			It("starts sending every 10ms", func() {
-				subject.Start()
+				deaLocator.Start()
 				time.Sleep(30 * time.Millisecond)
 
 				advertised := nats.PublishedMessages["dea.advertise"]
@@ -86,7 +86,7 @@ var _ = Describe("DeaLocator", func() {
 			})
 
 			It("starts sending every 5 seconds", func() {
-				Expect(subject.advertiseIntervals).To(Equal(default_advertise_interval))
+				Expect(deaLocator.advertiseIntervals).To(Equal(default_advertise_interval))
 			})
 		})
 	})
@@ -98,19 +98,19 @@ var _ = Describe("DeaLocator", func() {
 
 		Context("when subscription was made", func() {
 			It("unsubscribes from 'dea.locate' message", func() {
-				subject.Start()
+				deaLocator.Start()
 				subs := nats.Subscriptions["dea.locate"]
 				Expect(len(subs)).To(Equal(1))
 				sub := subs[0]
 
-				subject.Stop()
+				deaLocator.Stop()
 				Expect(len(nats.Unsubscriptions)).To(Equal(1))
 				Expect(nats.Unsubscriptions[0]).To(Equal(sub.ID))
 			})
 
 			It("stops sending 'dea.advertise' periodically", func() {
-				subject.Start()
-				subject.Stop()
+				deaLocator.Start()
+				deaLocator.Stop()
 				before := len(nats.PublishedMessages["dea.advertise"])
 				time.Sleep(20 * time.Millisecond)
 				after := len(nats.PublishedMessages["dea.advertise"])
@@ -120,7 +120,7 @@ var _ = Describe("DeaLocator", func() {
 
 		Context("when subscription was not made", func() {
 			It("does not unsubscribe", func() {
-				subject.Stop()
+				deaLocator.Stop()
 				Expect(len(nats.Unsubscriptions)).To(Equal(0))
 			})
 
@@ -128,37 +128,69 @@ var _ = Describe("DeaLocator", func() {
 	})
 
 	Describe("advertise", func() {
-		Context("when config specifies stacks", func() {
-			availableMemory := 12345.0
-			availableDisk := 45678.0
-			appCounts := map[string]int{
-				"app_id_1": 1,
-				"app_id_2": 3,
+		var placement map[string]interface{}
+
+		availableMemory := 12345.0
+		availableDisk := 45678.0
+		appCounts := map[string]int{
+			"app_id_1": 1,
+			"app_id_2": 3,
+		}
+		stacks := []string{"stack-1", "stack-2"}
+
+		BeforeEach(func() {
+			placement = map[string]interface{}{}
+			config.PlacementProperties = placement
+			config.Stacks = stacks
+
+			resourceManager = testrm.FakeResourceManager{
+				Memory:    availableMemory,
+				Disk:      availableDisk,
+				AppCounts: appCounts,
 			}
-			stacks := []string{"stack-1", "stack-2"}
+		})
 
+		advertise := func() protocol.AdvertiseMessage {
+			deaLocator.Advertise()
+			advertised := nats.PublishedMessages["dea.advertise"]
+			Expect(len(advertised)).To(Equal(1))
+			advertiseMsg := protocol.AdvertiseMessage{}
+			err := json.Unmarshal(advertised[0].Payload, &advertiseMsg)
+			Expect(err).To(BeNil())
+			return advertiseMsg
+		}
+
+		It("publishes 'dea.advertise' message with stacks", func() {
+			msg := advertise()
+			Expect(msg.Stacks).To(Equal(stacks))
+		})
+
+		It("publishes 'dea.advertise' message with available memory", func() {
+			msg := advertise()
+			Expect(msg.AvailableMemory).To(Equal(availableMemory))
+		})
+
+		It("publishes 'dea.advertise' message with available disk", func() {
+			msg := advertise()
+			Expect(msg.AvailableDisk).To(Equal(availableDisk))
+		})
+
+		Context("when config has placement properties", func() {
 			BeforeEach(func() {
-				config.Stacks = stacks
-				resourceManager = testrm.FakeResourceManager{
-					Memory:    availableMemory,
-					Disk:      availableDisk,
-					AppCounts: appCounts,
-				}
+				placement["zone"] = "zone1"
 			})
 
-			It("publishes 'dea.advertise' message", func() {
-				subject.Start()
-				subject.Advertise()
-				subject.Stop()
-				advertised := nats.PublishedMessages["dea.advertise"]
-				Expect(len(advertised)).To(Equal(1))
-				advertiseMsg := protocol.AdvertiseMessage{}
-				err := json.Unmarshal(advertised[0].Payload, &advertiseMsg)
-				Expect(err).To(BeNil())
-				expectedMsg := protocol.NewAdvertiseMessage(dea_id, stacks, availableMemory, availableDisk, appCounts)
-				Expect(advertiseMsg).To(Equal(*expectedMsg))
+			It("publishes 'dea.advertise' message with placement properties including zone", func() {
+				msg := advertise()
+				Expect(msg.PlacementProperties).To(Equal(placement))
 			})
+		})
 
+		Context("when config has empty placement properties", func() {
+			It("publishes 'dea.advertise' message with placement properties without zone", func() {
+				msg := advertise()
+				Expect(msg.PlacementProperties).To(Equal(placement))
+			})
 		})
 
 		Context("when a failure happens", func() {
@@ -168,9 +200,7 @@ var _ = Describe("DeaLocator", func() {
 					Expect(r).To(BeNil())
 				}()
 				nats.PublishError = errors.New("Something terrible happened")
-				subject.Start()
-				subject.Advertise()
-				subject.Stop()
+				advertise()
 			})
 		})
 	})

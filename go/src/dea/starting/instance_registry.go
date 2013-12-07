@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -21,6 +22,7 @@ const (
 type InstanceRegistry interface {
 	Instances() []*Instance
 	InstancesForApplication(app_id string) map[string]*Instance
+	Instances_filtered_by_message(data map[string]interface{}, f func(*Instance))
 	Register(instance *Instance)
 	Unregister(instance *Instance)
 	ChangeInstanceId(instance *Instance)
@@ -358,4 +360,82 @@ func (r *instanceRegistry) ToHash() map[string]map[string]interface{} {
 		apps[i.Id()] = i.attributes_and_stats()
 	}
 	return result
+}
+
+func (r *instanceRegistry) Instances_filtered_by_message(data map[string]interface{}, f func(*Instance)) {
+	app_id, exist := data["droplet"].(string)
+
+	if !exist {
+		r.logger.Warn("Filter message missing app_id")
+		return
+	}
+	r.logger.Debug2f("Filter message for app_id: %s", app_id)
+
+	instances := r.InstancesForApplication(app_id)
+	if instances == nil {
+		r.logger.Debug2f("No instances found for app_id: %s", app_id)
+		return
+	}
+
+	// Optional search filters
+	version, _ := data["version"].(string)
+	instance_ids, _ := data["instances"].([]string)
+	if ids, exists := data["instance_ids"].([]string); exists {
+		instance_ids = append(instance_ids, ids...)
+	}
+
+	indices, _ := data["indices"].([]int)
+	stateStrings, _ := data["states"].([]string)
+	var states []State
+	if stateStrings != nil {
+		states = make([]State, 0, len(stateStrings))
+		for _, ss := range stateStrings {
+			states = append(states, State(strings.ToLower(ss)))
+		}
+	}
+
+	for _, i := range instances {
+		matched := true
+
+		if version != "" {
+			matched = matched && (i.ApplicationVersion() == version)
+		}
+
+		if instance_ids != nil {
+			idMatch := false
+			for _, id := range instance_ids {
+				if id == i.Id() {
+					idMatch = true
+					break
+				}
+			}
+			matched = matched && idMatch
+		}
+
+		if indices != nil {
+			idxMatch := false
+			for _, idx := range indices {
+				if idx == i.Index() {
+					idxMatch = true
+					break
+				}
+			}
+			matched = matched && idxMatch
+		}
+
+		if states != nil {
+			statesMatch := false
+			for _, state := range states {
+				if state == i.State() {
+					statesMatch = true
+					break
+				}
+			}
+			matched = matched && statesMatch
+		}
+
+		if matched {
+			f(i)
+		}
+	}
 }

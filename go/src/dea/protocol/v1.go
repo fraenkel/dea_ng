@@ -110,20 +110,22 @@ func NewExitMessage(i starting.Instance, reason string) *ExitMessage {
 }
 
 type AdvertiseMessage struct {
-	ID              string         `json:"id"`
-	Stacks          []string       `json:"stacks"`
-	AvailableMemory float64        `json:"available_memory"`
-	AvailableDisk   float64        `json:"available_disk"`
-	AppCounts       map[string]int `json:"app_id_to_count"`
+	ID                  string                 `json:"id"`
+	Stacks              []string               `json:"stacks"`
+	AvailableMemory     float64                `json:"available_memory"`
+	AvailableDisk       float64                `json:"available_disk"`
+	AppCounts           map[string]int         `json:"app_id_to_count"`
+	PlacementProperties map[string]interface{} `json:"placement_properties"`
 }
 
-func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableDisk float64, appCounts map[string]int) *AdvertiseMessage {
+func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableDisk float64, appCounts map[string]int, placementProperties map[string]interface{}) *AdvertiseMessage {
 	return &AdvertiseMessage{
-		ID:              id,
-		Stacks:          stacks,
-		AvailableMemory: availableMemory,
-		AvailableDisk:   availableDisk,
-		AppCounts:       appCounts,
+		ID:                  id,
+		Stacks:              stacks,
+		AvailableMemory:     availableMemory,
+		AvailableDisk:       availableDisk,
+		AppCounts:           appCounts,
+		PlacementProperties: placementProperties,
 	}
 }
 

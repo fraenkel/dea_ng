@@ -62,7 +62,8 @@ var _ = Describe("ResourceManager", func() {
 
 	BeforeEach(func() {
 		tmpdir, _ := ioutil.TempDir("", "resource_manager")
-		config = cfg.Config{BaseDir: tmpdir}
+		config, _ = cfg.NewConfig(nil)
+		config.BaseDir = tmpdir
 		instanceRegistry = starting.NewInstanceRegistry(&config)
 		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 	})
@@ -108,7 +109,7 @@ var _ = Describe("ResourceManager", func() {
 			})
 
 			It("returns the correct remaining memory", func() {
-				Expect(manager.RemainingMemory()).To(BeNumerically("~", nominal_memory_capacity()-float64((1+2+4+8+config.Staging.Minimum_staging_memory_mb()))))
+				Expect(manager.RemainingMemory()).To(BeNumerically("~", nominal_memory_capacity()-float64((1+2+4+8+config.Staging.MemoryLimitMB))))
 			})
 		})
 
@@ -135,7 +136,7 @@ var _ = Describe("ResourceManager", func() {
 			})
 
 			It("returns the correct remaining memory", func() {
-				Expect(manager.RemainingDisk()).To(BeNumerically("~", nominal_disk_capacity()-float64((1+2+4+8+32+config.Staging.Minimum_staging_disk_mb()))))
+				Expect(manager.RemainingDisk()).To(BeNumerically("~", nominal_disk_capacity()-float64((1+2+4+8+32+config.Staging.DiskLimitMB))))
 			})
 		})
 
@@ -225,7 +226,7 @@ var _ = Describe("ResourceManager", func() {
 		})
 
 		It("is the ratio of available memory to total memory", func() {
-			Expect(manager.AvailableMemoryRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.Minimum_staging_memory_mb())/nominal_memory_capacity()))
+			Expect(manager.AvailableMemoryRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.MemoryLimitMB)/nominal_memory_capacity()))
 		})
 	})
 
@@ -236,37 +237,39 @@ var _ = Describe("ResourceManager", func() {
 		})
 
 		It("is the ratio of available disk to total disk", func() {
-			Expect(manager.AvailableDiskRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.Minimum_staging_disk_mb())/nominal_disk_capacity()))
+			Expect(manager.AvailableDiskRatio()).To(BeNumerically("~", 1-float64(512+config.Staging.DiskLimitMB)/nominal_disk_capacity()))
 		})
 	})
 
-	Describe("could_reserve?", func() {
-		var remaining_memory float64
-		var remaining_disk float64
+	Describe("check if there are available resources", func() {
+		Describe("could_reserve?", func() {
+			var remaining_memory float64
+			var remaining_disk float64
 
-		BeforeEach(func() {
-			instanceRegistry.Register(createMemDiskInstance(512, 1024, starting.STATE_RUNNING))
-			stagingRegistry.Register(createStagingTask())
+			BeforeEach(func() {
+				instanceRegistry.Register(createMemDiskInstance(512, 1024, starting.STATE_RUNNING))
+				stagingRegistry.Register(createStagingTask())
 
-			remaining_memory = nominal_memory_capacity() - float64(512+config.Staging.Minimum_staging_memory_mb())
-			remaining_disk = nominal_disk_capacity() - float64(1024+config.Staging.Minimum_staging_disk_mb())
-		})
-
-		Context("when the given amounts of memory and disk are available (including extra 'headroom' memory)", func() {
-			It("can reserve", func() {
-				Expect(manager.CanReserve(remaining_memory-1, remaining_disk-1)).To(BeTrue())
+				remaining_memory = nominal_memory_capacity() - float64(512+config.Staging.MemoryLimitMB)
+				remaining_disk = nominal_disk_capacity() - float64(1024+config.Staging.DiskLimitMB)
 			})
-		})
 
-		Context("when too much memory is being used", func() {
-			It("can't reserve", func() {
-				Expect(manager.CanReserve(remaining_memory, 1)).To(BeFalse())
+			Context("when the given amounts of memory and disk are available (including extra 'headroom' memory)", func() {
+				It("can reserve", func() {
+					Expect(manager.CanReserve(remaining_memory-1, remaining_disk-1)).To(BeTrue())
+				})
 			})
-		})
 
-		Context("when too much disk is being used", func() {
-			It("can't reserve", func() {
-				Expect(manager.CanReserve(1, remaining_disk)).To(BeFalse())
+			Context("when too much memory is being used", func() {
+				It("can't reserve", func() {
+					Expect(manager.CanReserve(remaining_memory+1, 1)).To(BeFalse())
+				})
+			})
+
+			Context("when too much disk is being used", func() {
+				It("can't reserve", func() {
+					Expect(manager.CanReserve(1, remaining_disk+1)).To(BeFalse())
+				})
 			})
 		})
 	})

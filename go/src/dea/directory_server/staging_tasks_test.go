@@ -28,7 +28,8 @@ var _ = Describe("StagingTasks", func() {
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
 		cfgPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/dea.yml"))
-		config, _ = cfg.ConfigFromFile(cfgPath)
+		c, _ := cfg.LoadConfig(cfgPath)
+		config = &c
 
 		stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
 		stagingTask = &tstaging.FakeStagingTask{StagingMsg: staging.NewStagingMessage(testhelpers.Valid_staging_attributes())}

@@ -15,6 +15,7 @@ type ResourceManager interface {
 	ReservedMemory() float64
 	UsedMemory() float64
 	CanReserve(memory, disk float64) bool
+	GetConstrainedResource(memory config.Memory, disk config.Disk) string
 	RemainingDisk() float64
 	NumberReservable(memory, disk uint64) uint
 	AvailableMemoryRatio() float64
@@ -94,8 +95,18 @@ func (rm *resourceManager) UsedMemory() float64 {
 }
 
 func (rm *resourceManager) CanReserve(memory, disk float64) bool {
-	return rm.RemainingMemory() > memory &&
-		rm.RemainingDisk() > disk
+	return rm.RemainingMemory() >= memory &&
+		rm.RemainingDisk() >= disk
+}
+
+func (rm *resourceManager) GetConstrainedResource(memory config.Memory, disk config.Disk) string {
+	if float64(memory/config.Mebi) > rm.RemainingMemory() {
+		return "memory"
+	}
+	if float64(disk/config.MB) > rm.RemainingDisk() {
+		return "disk"
+	}
+	return ""
 }
 
 func (rm *resourceManager) reserved_disk() float64 {

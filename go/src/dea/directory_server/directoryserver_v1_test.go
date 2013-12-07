@@ -10,13 +10,13 @@ import (
 )
 
 var _ = Describe("Directory", func() {
-	var config *cfg.Config
+	var config cfg.Config
 	var server *DirectoryServerV1
 
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
 		cfgPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/dea.yml"))
-		config, _ = cfg.ConfigFromFile(cfgPath)
+		config, _ = cfg.LoadConfig(cfgPath)
 	})
 
 	JustBeforeEach(func() {

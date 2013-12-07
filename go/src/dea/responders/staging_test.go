@@ -4,8 +4,10 @@ import (
 	cfg "dea/config"
 	"dea/droplet"
 	"dea/loggregator"
-	"dea/staging"
+	stg "dea/staging"
+	tboot "dea/testhelpers/boot"
 	temitter "dea/testhelpers/emitter"
+	trm "dea/testhelpers/resource_manager"
 	tstaging "dea/testhelpers/staging"
 	"encoding/json"
 	"errors"
@@ -20,39 +22,68 @@ import (
 
 var _ = Describe("Staging", func() {
 	dea_id := "unique-dea-id"
+	app_id := "my_app_id"
+	task_id := "task-id"
 	var config cfg.Config
-	var subject *Staging
-	var stagingRegistry *staging.StagingTaskRegistry
-	var dropletRegistry droplet.DropletRegistry
-	var nats *fakeyagnats.FakeYagnats
+	var boot tboot.FakeBootstrap
 	var staging_task *tstaging.FakeStagingTask
-	var appManager mockAppManager
+	var nats *fakeyagnats.FakeYagnats
+	var stagingRegistry *stg.StagingTaskRegistry
+	var snapshot tboot.FakeSnapshot
+	var fakeim tboot.FakeInstanceManager
+	var staging *Staging
+	var resmgr trm.FakeResourceManager
 
-	panicNewStagingTask := func(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
+	panicNewStagingTask := func(*cfg.Config, stg.StagingMessage, []stg.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) stg.StagingTask {
 		panic("nasty error")
+	}
+
+	newStagingTask := func() *tstaging.FakeStagingTask {
+		task := &tstaging.FakeStagingTask{
+			StagingMsg: stg.NewStagingMessage(map[string]interface{}{
+				"app_id":  "some_app_id",
+				"task_id": task_id,
+			}),
+			Droplet_Sha1: "some-droplet-sha",
+			StagingCfg: cfg.StagingConfig{
+				MemoryLimitMB: 1,
+				DiskLimitMB:   2,
+			},
+		}
+		return task
 	}
 
 	BeforeEach(func() {
 		tmpdir, _ := ioutil.TempDir("", "staging")
-		config = cfg.Config{BaseDir: tmpdir, WardenSocket: "/tmp/bogus"}
-		dropletRegistry = droplet.NewDropletRegistry(tmpdir)
-		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+		config, _ = cfg.NewConfig(nil)
+		config.BaseDir = tmpdir
+		config.WardenSocket = "/tmp/bogus"
+
 		nats = fakeyagnats.New()
-		staging_task = &tstaging.FakeStagingTask{
-			StagingMsg: staging.NewStagingMessage(map[string]interface{}{
-				"app_id":  "some_app_id",
-				"task_id": "task-id"}),
-			Droplet_Sha1: "some-droplet-sha",
-		}
-		appManager = mockAppManager{}
+		stagingRegistry = stg.NewStagingTaskRegistry(stg.NewStagingTask)
+		snapshot = tboot.FakeSnapshot{}
+		fakeim = tboot.FakeInstanceManager{}
+		resmgr = trm.FakeResourceManager{}
+
+		staging_task = newStagingTask()
 	})
 
 	JustBeforeEach(func() {
-		subject = NewStaging(&appManager, nats, dea_id, stagingRegistry, &config, dropletRegistry, nil)
+		boot = tboot.FakeBootstrap{
+			Cfg:             config,
+			IManager:        &fakeim,
+			DropRegistry:    droplet.NewDropletRegistry(config.BaseDir),
+			StagingRegistry: stagingRegistry,
+			NatsClient:      nats,
+			Snap:            &snapshot,
+			ResMgr:          &resmgr,
+		}
+
+		staging = NewStaging(&boot, dea_id, nil)
 	})
 
 	AfterEach(func() {
-		subject.Stop()
+		staging.Stop()
 		os.RemoveAll(config.BaseDir)
 	})
 
@@ -63,7 +94,7 @@ var _ = Describe("Staging", func() {
 			})
 
 			It("does not subscribe to anything", func() {
-				subject.Start()
+				staging.Start()
 				Expect(len(nats.Subscriptions)).To(Equal(0))
 			})
 		})
@@ -74,17 +105,17 @@ var _ = Describe("Staging", func() {
 			})
 
 			It("subscribes to 'staging' message", func() {
-				subject.Start()
+				staging.Start()
 				Expect(len(nats.Subscriptions["staging"])).To(Equal(1))
 			})
 
 			It("subscribes to 'staging.<dea-id>.start' message", func() {
-				subject.Start()
+				staging.Start()
 				Expect(len(nats.Subscriptions["staging."+dea_id+".start"])).To(Equal(1))
 			})
 
 			It("subscribes to 'staging.stop' message", func() {
-				subject.Start()
+				staging.Start()
 				Expect(len(nats.Subscriptions["staging.stop"])).To(Equal(1))
 			})
 
@@ -98,14 +129,14 @@ var _ = Describe("Staging", func() {
 
 		Context("when subscription was made", func() {
 			JustBeforeEach(func() {
-				subject.Start()
+				staging.Start()
 			})
 
 			It("unsubscribes from 'staging' message", func() {
 				subs := nats.Subscriptions["staging"]
 				Expect(len(subs)).To(Equal(1))
 				sub := subs[0]
-				subject.Stop()
+				staging.Stop()
 				Expect(len(nats.Unsubscriptions)).ToNot(Equal(0))
 				Expect(nats.Unsubscriptions).To(ContainElement(sub.ID))
 			})
@@ -114,7 +145,7 @@ var _ = Describe("Staging", func() {
 				subs := nats.Subscriptions["staging."+dea_id+".start"]
 				Expect(len(subs)).To(Equal(1))
 				sub := subs[0]
-				subject.Stop()
+				staging.Stop()
 				Expect(len(nats.Unsubscriptions)).ToNot(Equal(0))
 				Expect(nats.Unsubscriptions).To(ContainElement(sub.ID))
 			})
@@ -123,7 +154,7 @@ var _ = Describe("Staging", func() {
 				subs := nats.Subscriptions["staging.stop"]
 				Expect(len(subs)).To(Equal(1))
 				sub := subs[0]
-				subject.Stop()
+				staging.Stop()
 				Expect(len(nats.Unsubscriptions)).ToNot(Equal(0))
 				Expect(nats.Unsubscriptions).To(ContainElement(sub.ID))
 			})
@@ -131,7 +162,7 @@ var _ = Describe("Staging", func() {
 		})
 		Context("when subscription was not made", func() {
 			It("does not unsubscribe", func() {
-				subject.Stop()
+				staging.Stop()
 				Expect(len(nats.Unsubscriptions)).To(Equal(0))
 			})
 		})
@@ -139,40 +170,68 @@ var _ = Describe("Staging", func() {
 	})
 
 	Describe("handle", func() {
-		Describe("staging async", func() {
-			var message yagnats.Message
+		var message yagnats.Message
 
-			newMockStagingTask := func(config *cfg.Config, staging_message staging.StagingMessage,
-				buildpacksInUse []staging.StagingBuildpack, dropletRegistry droplet.DropletRegistry, logger *steno.Logger) staging.StagingTask {
+		it_registers_task := func() {
+			It("adds staging task to registry", func() {
+				staging.handle(&message)
+				Expect(stagingRegistry.Task(task_id)).NotTo(BeNil())
+			})
+		}
+
+		it_unregisters_task := func() {
+			It("unregisters staging task from registry", func() {
+				staging.handle(&message)
+				Expect(stagingRegistry.Task(task_id)).To(BeNil())
+			})
+		}
+
+		it_handles_and_responds := func(expectedRsp map[string]interface{}) {
+			staging.handle(&message)
+			actualRsp := make(map[string]interface{})
+			json.Unmarshal(nats.PublishedMessages["respond-to"][0].Payload, &actualRsp)
+			Expect(actualRsp).To(Equal(expectedRsp))
+		}
+
+		BeforeEach(func() {
+			message = yagnats.Message{
+				Subject: "subject",
+				ReplyTo: "respond-to",
+				Payload: []byte(`{"app_id":"` + app_id + `", "task_id":"` + task_id + `"}`),
+			}
+		})
+
+		It("logs to the loggregator", func() {
+			emitter := temitter.FakeEmitter{}
+			loggregator.SetEmitter(&emitter)
+
+			staging.handle(&message)
+			Expect(emitter.Messages[app_id][0]).To(Equal("Got staging request for app with id " + app_id))
+		})
+
+		Context("staging async", func() {
+			newFakeStagingTask := func(config *cfg.Config, staging_message stg.StagingMessage,
+				buildpacksInUse []stg.StagingBuildpack, dropletRegistry droplet.DropletRegistry, logger *steno.Logger) stg.StagingTask {
 				return staging_task
 			}
 
 			BeforeEach(func() {
-				stagingRegistry = staging.NewStagingTaskRegistry(newMockStagingTask)
-				message = yagnats.Message{
-					Subject: "subject",
-					ReplyTo: "respond-to",
-					Payload: []byte(`{"app_id":"app-id", "task_id":"task-id"}`),
-				}
-			})
-
-			It("adds staging task to registry", func() {
-				subject.handle(&message)
-				Expect(stagingRegistry.Task("task-id")).NotTo(BeNil())
+				stagingRegistry = stg.NewStagingTaskRegistry(newFakeStagingTask)
 			})
 
 			It("starts staging task with registered callbacks", func() {
-				subject.handle(&message)
+				staging.handle(&message)
 				Expect(staging_task.SetupCallback).ToNot(BeNil())
 				Expect(staging_task.CompleteCallback).ToNot(BeNil())
-				Expect(staging_task.UploadCallback).ToNot(BeNil())
 				Expect(staging_task.StopCallback).ToNot(BeNil())
 				Expect(staging_task.Started).To(BeTrue())
 			})
 
+			it_registers_task()
+
 			It("saves snapshot", func() {
-				subject.handle(&message)
-				Expect(appManager.savedSnapshot).To(BeTrue())
+				staging.handle(&message)
+				Expect(snapshot.SaveInvoked).To(BeTrue())
 			})
 
 			Describe("after staging container setup", func() {
@@ -181,203 +240,228 @@ var _ = Describe("Staging", func() {
 				})
 
 				Context("when staging succeeds setting up staging container", func() {
+					BeforeEach(func() {
+						staging_task.InvokeSetup = true
+					})
+
 					It("responds with successful message", func() {
 						expectedRsp := map[string]interface{}{
-							"task_id":                "task-id",
+							"task_id":                task_id,
 							"task_streaming_log_url": "stream-log-url",
 							"detected_buildpack":     nil,
 							"error":                  nil,
 							"droplet_sha1":           nil,
 						}
 
-						subject.handle(&message)
-						Expect(staging_task.SetupCallback).NotTo(BeNil())
-						staging_task.SetupCallback(nil)
-						actualRsp := make(map[string]interface{})
-						json.Unmarshal(nats.PublishedMessages["respond-to"][0].Payload, &actualRsp)
-						Expect(actualRsp).To(Equal(expectedRsp))
+						it_handles_and_responds(expectedRsp)
 					})
 				})
 
 				Context("when staging fails to set up staging container", func() {
+					BeforeEach(func() {
+						staging_task.InvokeSetup = true
+						staging_task.SetupError = errors.New("error-description")
+					})
+
 					It("responds with error message", func() {
 						expectedRsp := map[string]interface{}{
-							"task_id":                "task-id",
+							"task_id":                task_id,
 							"task_streaming_log_url": "stream-log-url",
 							"detected_buildpack":     nil,
 							"error":                  "error-description",
 							"droplet_sha1":           nil,
 						}
 
-						subject.handle(&message)
-						Expect(staging_task.SetupCallback).NotTo(BeNil())
-						staging_task.SetupCallback(errors.New("error-description"))
-						actualRsp := make(map[string]interface{})
-						json.Unmarshal(nats.PublishedMessages["respond-to"][0].Payload, &actualRsp)
-						Expect(actualRsp).To(Equal(expectedRsp))
+						it_handles_and_responds(expectedRsp)
 					})
 				})
 
 			})
 
-			Describe("after staging completion", func() {
-				Context("when successfully", func() {
-					app_id := "my_app_id"
-					start_message := map[string]interface{}{
-						"droplet": "dff77854-3767-41d9-ab16-c8a824beb77a",
-						"sha1":    "some-droplet-sha",
-					}
-
+			Describe("after staging completed", func() {
+				Context("when successful", func() {
 					BeforeEach(func() {
-						msg := map[string]interface{}{
-							"app_id":        app_id,
-							"start_message": start_message,
-						}
-						msgBytes, _ := json.Marshal(msg)
-						message = yagnats.Message{
-							Subject: "subject",
-							ReplyTo: "respond-to",
-							Payload: msgBytes,
-						}
+						staging_task.InvokeComplete = true
 					})
 
-					It("handles instance start with updated droplet sha", func() {
-						subject.handle(&message)
-						Expect(staging_task.CompleteCallback).NotTo(BeNil())
-						staging_task.CompleteCallback(nil)
-						Expect(appManager.startedApp).To(Equal(start_message))
-					})
-
-					It("logs to the loggregator", func() {
-						emitter := temitter.MockEmitter{}
-						loggregator.SetEmitter(&emitter)
-
-						subject.handle(&message)
-						Expect(emitter.Messages[app_id][0]).To(Equal("Got staging request for app with id " + app_id))
-					})
-				})
-				Context("when failed", func() {
-					It("does not start an instance", func() {
-						subject.handle(&message)
-						Expect(staging_task.CompleteCallback).NotTo(BeNil())
-						staging_task.CompleteCallback(errors.New("error-description"))
-						Expect(len(appManager.startedApp)).To(Equal(0))
-					})
-				})
-			})
-
-			Describe("after staging upload", func() {
-				Context("when successfully", func() {
-					It("responds successful message", func() {
+					It("responds with successful message", func() {
 						expectedRsp := map[string]interface{}{
-							"task_id":                "task-id",
+							"task_id":                task_id,
 							"task_streaming_log_url": nil,
 							"detected_buildpack":     nil,
 							"error":                  nil,
 							"droplet_sha1":           "some-droplet-sha",
 						}
 
-						subject.handle(&message)
-						Expect(staging_task.UploadCallback).NotTo(BeNil())
-						staging_task.UploadCallback(nil)
-						actualRsp := make(map[string]interface{})
-						json.Unmarshal(nats.PublishedMessages["respond-to"][0].Payload, &actualRsp)
-						Expect(actualRsp).To(Equal(expectedRsp))
+						it_handles_and_responds(expectedRsp)
 					})
 
-					It("unregisters task from registry", func() {
-						subject.handle(&message)
-						staging_task.UploadCallback(nil)
-						Expect(stagingRegistry.Task("task-id")).To(BeNil())
-					})
+					it_unregisters_task()
 
 					It("saves snapshot", func() {
-						subject.handle(&message)
-						staging_task.UploadCallback(nil)
-						Expect(appManager.savedSnapshot).To(BeTrue())
+						staging.handle(&message)
+						Expect(snapshot.SaveInvoked).To(BeTrue())
+					})
+
+					Context("when there is a start message in staging message", func() {
+						start_message := map[string]interface{}{
+							"droplet": "dff77854-3767-41d9-ab16-c8a824beb77a",
+							"sha1":    "some-droplet-sha",
+						}
+
+						BeforeEach(func() {
+							msg := map[string]interface{}{
+								"app_id":        app_id,
+								"start_message": start_message,
+							}
+							msgBytes, _ := json.Marshal(msg)
+							message = yagnats.Message{
+								Subject: "subject",
+								ReplyTo: "respond-to",
+								Payload: msgBytes,
+							}
+						})
+
+						It("handles instance start with updated droplet sha", func() {
+							staging.handle(&message)
+							Expect(staging_task.CompleteCallback).NotTo(BeNil())
+							Expect(fakeim.StartAppInvoked).To(BeTrue())
+							Expect(fakeim.StartAppAttributes).To(Equal(start_message))
+						})
+
 					})
 				})
 
 				Context("when failed", func() {
-					err := errors.New("error-description")
+					BeforeEach(func() {
+						staging_task.InvokeComplete = true
+						staging_task.CompleteError = errors.New("error-description")
+					})
 
 					It("responds with error message", func() {
 						expectedRsp := map[string]interface{}{
-							"task_id":                "task-id",
+							"task_id":                task_id,
 							"task_streaming_log_url": nil,
 							"detected_buildpack":     nil,
 							"error":                  "error-description",
 							"droplet_sha1":           "some-droplet-sha",
 						}
 
-						subject.handle(&message)
-						Expect(staging_task.UploadCallback).NotTo(BeNil())
-						staging_task.UploadCallback(err)
-						actualRsp := make(map[string]interface{})
-						json.Unmarshal(nats.PublishedMessages["respond-to"][0].Payload, &actualRsp)
-						Expect(actualRsp).To(Equal(expectedRsp))
+						it_handles_and_responds(expectedRsp)
 					})
 
+					it_unregisters_task()
+
 					It("unregisters task from registry", func() {
-						subject.handle(&message)
-						staging_task.UploadCallback(err)
-						Expect(stagingRegistry.Task("task-id")).To(BeNil())
+						staging.handle(&message)
+						Expect(stagingRegistry.Task(task_id)).To(BeNil())
 					})
 
 					It("saves snapshot", func() {
-						subject.handle(&message)
-						staging_task.UploadCallback(err)
-						Expect(appManager.savedSnapshot).To(BeTrue())
+						staging.handle(&message)
+						Expect(snapshot.SaveInvoked).To(BeTrue())
+					})
+
+					It("does not start an instance", func() {
+						staging.handle(&message)
+						Expect(fakeim.StartAppInvoked).To(BeFalse())
+					})
+				})
+			})
+
+			Context("when stopped", func() {
+				BeforeEach(func() {
+					staging_task.InvokeStop = true
+				})
+
+				Context("when successful", func() {
+					It("responds with successful message", func() {
+						expectedRsp := map[string]interface{}{
+							"task_id":                task_id,
+							"task_streaming_log_url": nil,
+							"detected_buildpack":     nil,
+							"error":                  nil,
+							"droplet_sha1":           nil,
+						}
+
+						it_handles_and_responds(expectedRsp)
 					})
 				})
 
-				Context("when stopped", func() {
-					err := errors.New("Error staging: task stopped")
+				Context("when failed", func() {
+					BeforeEach(func() {
+						staging_task.InvokeStop = true
+						staging_task.StopError = errors.New("Error staging: task stopped")
+					})
 
 					It("responds with error message", func() {
 						expectedRsp := map[string]interface{}{
-							"task_id":                "task-id",
+							"task_id":                task_id,
 							"task_streaming_log_url": nil,
 							"detected_buildpack":     nil,
 							"error":                  "Error staging: task stopped",
 							"droplet_sha1":           nil,
 						}
 
-						subject.handle(&message)
-						Expect(staging_task.StopCallback).NotTo(BeNil())
-						staging_task.StopCallback(err)
-						actualRsp := make(map[string]interface{})
-						json.Unmarshal(nats.PublishedMessages["respond-to"][0].Payload, &actualRsp)
-						Expect(actualRsp).To(Equal(expectedRsp))
+						it_handles_and_responds(expectedRsp)
 					})
+				})
 
-					It("unregisters task from registry", func() {
-						subject.handle(&message)
-						staging_task.StopCallback(err)
-						Expect(stagingRegistry.Task("task-id")).To(BeNil())
-					})
+				it_unregisters_task()
 
-					It("saves snapshot", func() {
-						subject.handle(&message)
-						staging_task.StopCallback(err)
-						Expect(appManager.savedSnapshot).To(BeTrue())
-					})
+				It("saves snapshot", func() {
+					staging.handle(&message)
+					Expect(snapshot.SaveInvoked).To(BeTrue())
 				})
 			})
+		})
 
-			Describe("when an error occurs", func() {
-				BeforeEach(func() {
-					stagingRegistry = staging.NewStagingTaskRegistry(panicNewStagingTask)
-				})
+		Context("when an error occurs during staging", func() {
+			BeforeEach(func() {
+				stagingRegistry = stg.NewStagingTaskRegistry(panicNewStagingTask)
+			})
 
-				It("catches the error since this is the top level", func() {
-					Expect(func() { subject.handle(&message) }).NotTo(Panic())
-				})
+			It("catches the error since this is the top level", func() {
+				Expect(func() { staging.handle(&message) }).NotTo(Panic())
+			})
+		})
+
+		Context("when not enough resources available", func() {
+			newFakeStagingTask := func(config *cfg.Config, staging_message stg.StagingMessage,
+				buildpacksInUse []stg.StagingBuildpack, dropletRegistry droplet.DropletRegistry, logger *steno.Logger) stg.StagingTask {
+				return staging_task
+			}
+
+			BeforeEach(func() {
+				resmgr.ConstrainedResource = "memory"
+				stagingRegistry = stg.NewStagingTaskRegistry(newFakeStagingTask)
+			})
+
+			It("does not register staging task", func() {
+				staging.handle(&message)
+				Expect(stagingRegistry.Tasks()).To(HaveLen(0))
+			})
+
+			It("does not start staging task", func() {
+				staging.handle(&message)
+				Expect(staging_task.Started).Should(BeFalse())
+			})
+
+			It("responds with error message", func() {
+				expectedRsp := map[string]interface{}{
+					"task_id":                task_id,
+					"task_streaming_log_url": nil,
+					"detected_buildpack":     nil,
+					"error":                  "Not enough memory resources available",
+					"droplet_sha1":           nil,
+				}
+
+				it_handles_and_responds(expectedRsp)
 			})
 		})
 	})
 
-	Describe("handle", func() {
+	Describe("handleStop", func() {
 		var message yagnats.Message
 
 		BeforeEach(func() {
@@ -391,31 +475,19 @@ var _ = Describe("Staging", func() {
 		})
 
 		It("stops all staging tasks with the given id", func() {
-			subject.handleStop(&message)
+			staging.handleStop(&message)
 			Expect(staging_task.Stopped).To(BeTrue())
 		})
 
 		Describe("when an error occurs", func() {
 			BeforeEach(func() {
-				stagingRegistry = staging.NewStagingTaskRegistry(panicNewStagingTask)
+				stagingRegistry = stg.NewStagingTaskRegistry(panicNewStagingTask)
 			})
 
 			It("catches the error since this is the top level", func() {
-				Expect(func() { subject.handleStop(&message) }).NotTo(Panic())
+				Expect(func() { staging.handleStop(&message) }).NotTo(Panic())
 			})
 		})
 	})
 
 })
-
-type mockAppManager struct {
-	startedApp    map[string]interface{}
-	savedSnapshot bool
-}
-
-func (am *mockAppManager) StartApp(msg map[string]interface{}) {
-	am.startedApp = msg
-}
-func (am *mockAppManager) SaveSnapshot() {
-	am.savedSnapshot = true
-}

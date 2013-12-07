@@ -39,10 +39,10 @@ func (r RunningEnv) VcapApplication() map[string]interface{} {
 		"instance_id":          r.instance.Id(),
 		"instance_index":       r.Message().Index(),
 		"host":                 HOST,
-		"port":                 strconv.FormatUint(uint64(r.instance.ContainerPort()), 10),
-		"started_at":           started_at.String(),
+		"port":                 r.instance.ContainerPort(),
+		"started_at":           started_at,
 		"started_at_timestamp": started_at.Unix(),
-		"start":                started_at.String(),
+		"start":                started_at,
 		"state_timestamp":      started_at.Unix(),
 	}
 }

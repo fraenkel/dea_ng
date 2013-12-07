@@ -42,6 +42,8 @@ const (
 	NPROC_LIMIT = 512
 )
 
+var STATES = []State{STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING, STATE_STOPPED, STATE_CRASHED, STATE_DELETED, STATE_RESUMING}
+
 type link_callback func(err error)
 
 type Transition struct {
@@ -170,6 +172,14 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 	})
 
 	i.SetState(STATE_BORN)
+
+	// recover from a snapshot
+	for _, s := range STATES {
+		k := "state_" + string(s) + "_timestamp"
+		if ts := getInt64(raw_attributes, k); ts != 0 {
+			i.state_times[s] = time.Unix(0, ts)
+		}
+	}
 
 	warden_handle := getString(raw_attributes, "warden_handle")
 	hostPort := getUInt(raw_attributes, "instance_host_port")
@@ -373,9 +383,9 @@ func (i *Instance) attributes_and_stats() map[string]interface{} {
 
 	// add state information
 	m["state"] = i.state
-	m["state_timestamp"] = i.state_times[i.state].Unix()
+	m["state_timestamp"] = i.state_times[i.state].UnixNano()
 	for k, v := range i.state_times {
-		m["state_"+string(k)+"_timestamp"] = v.Unix()
+		m["state_"+string(k)+"_timestamp"] = v.UnixNano()
 	}
 
 	stats := i.GetStats()
@@ -621,7 +631,7 @@ func (i *Instance) Snapshot_attributes() map[string]interface{} {
 		"application_uris":    i.ApplicationUris(),
 
 		"droplet_sha1": i.DropletSHA1(),
-		"droplet_uri":  i.DropletUri,
+		"droplet_uri":  i.DropletUri(),
 
 		"start_command": i.StartCommand(),
 

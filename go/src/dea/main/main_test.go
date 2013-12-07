@@ -7,6 +7,7 @@ import (
 	"dea/staging"
 	"dea/starting"
 	thelpers "dea/testhelpers"
+	tboot "dea/testhelpers/boot"
 	tlogger "dea/testhelpers/logger"
 	trm "dea/testhelpers/resource_manager"
 	tstaging "dea/testhelpers/staging"
@@ -27,7 +28,7 @@ import (
 )
 
 var _ = Describe("Main", func() {
-	var config *cfg.Config
+	var config cfg.Config
 	var tmpdir string
 	var boot *bootstrap
 	var fakenats *fakeyagnats.FakeYagnats
@@ -37,7 +38,7 @@ var _ = Describe("Main", func() {
 		for k, v := range m {
 			attributes[k] = v
 		}
-		instance := starting.NewInstance(attributes, config, boot.dropletRegistry, "127.0.0.1")
+		instance := starting.NewInstance(attributes, &config, boot.dropletRegistry, "127.0.0.1")
 		instance.Task.TaskPromises = &fakePromises{}
 		boot.instanceRegistry.Register(instance)
 		return instance
@@ -59,21 +60,27 @@ var _ = Describe("Main", func() {
 		boot.nats.NatsClient = fakenats
 	}
 
+	setupDirectoryServers := func() {
+		boot.localIp = "127.0.0.1"
+		boot.setupDirectoryServers()
+	}
+
 	BeforeEach(func() {
 		tmpdir, _ = ioutil.TempDir("", "main")
-		config = &cfg.Config{
-			BaseDir: tmpdir,
-			DirectoryServer: cfg.DirServerConfig{
+		config, _ = cfg.NewConfig(func(c *cfg.Config) error {
+			c.BaseDir = tmpdir
+			c.DirectoryServer = cfg.DirServerConfig{
 				V1Port: 12345,
 				V2Port: 23456,
-			},
-			Domain: "default",
-		}
-		cfg.Finalize(config)
+			}
+			c.Domain = "default"
+			return nil
+		})
+
 	})
 
 	JustBeforeEach(func() {
-		boot = newBootstrap(config)
+		boot = newBootstrap(&config)
 	})
 
 	AfterEach(func() {
@@ -108,6 +115,32 @@ var _ = Describe("Main", func() {
 
 			bytes, _ := ioutil.ReadFile(config.Logging.File)
 			Expect(string(bytes)).To(ContainSubstring(`Dea started"`))
+		})
+	})
+
+	Describe("loggregator setup", func() {
+
+		It("should configure when router is valid", func() {
+			config.Index = 0
+			config.Loggregator = cfg.LoggregatorConfig{
+				Router:       "localhost:5432",
+				SharedSecret: "secret",
+			}
+
+			//      LoggregatorEmitter::Emitter.should_receive(:new).with("localhost:5432", "DEA", 0, "secret")
+			//      LoggregatorEmitter::Emitter.should_receive(:new).with("localhost:5432", "STG", 0, "secret")
+			boot.setupLoggregator()
+		})
+
+		It("should validate host", func() {
+			config.Index = 0
+			config.Loggregator = cfg.LoggregatorConfig{
+				Router:       "null:5432",
+				SharedSecret: "secret",
+			}
+
+			err := boot.setupLoggregator()
+			Expect(err).ToNot(BeNil())
 		})
 	})
 
@@ -209,11 +242,11 @@ var _ = Describe("Main", func() {
 
 	Describe("shutdown", func() {
 		JustBeforeEach(func() {
-			boot.Bootstrap = &fakeBootstrap{nested: boot}
+			boot.Terminator = &fakeTerminator{nested: boot}
 			boot.setupLogger()
 			boot.setupRegistries()
 			setupNats()
-			boot.setupDirectoryServers()
+			setupDirectoryServers()
 			boot.component = &common.VcapComponent{UUID: "bogus"}
 			boot.setupRouterClient()
 		})
@@ -270,15 +303,15 @@ var _ = Describe("Main", func() {
 	})
 
 	Describe("evacuation", func() {
-		var fakebootstrap *fakeBootstrap
+		var faketerminator *fakeTerminator
 
 		JustBeforeEach(func() {
-			fakebootstrap = &fakeBootstrap{nested: boot}
-			boot.Bootstrap = fakebootstrap
+			faketerminator = &fakeTerminator{nested: boot}
+			boot.Terminator = faketerminator
 
 			boot.setupLogger()
 			boot.setupRegistries()
-			boot.setupDirectoryServers()
+			setupDirectoryServers()
 
 			setupNats()
 
@@ -306,7 +339,7 @@ var _ = Describe("Main", func() {
 		It("should call shutdown after some time", func() {
 			c := make(chan time.Time, 1)
 			boot.config.EvacuationDelay = 200 * time.Millisecond
-			fakebootstrap.shutdownCallback = func() {
+			faketerminator.shutdownCallback = func() {
 				c <- time.Now()
 				close(c)
 			}
@@ -343,8 +376,8 @@ var _ = Describe("Main", func() {
 
 	Describe("reap_unreferenced_droplets", func() {
 		JustBeforeEach(func() {
-			fakebootstrap := &fakeBootstrap{nested: boot}
-			boot.Bootstrap = fakebootstrap
+			faketerminator := &fakeTerminator{nested: boot}
+			boot.Terminator = faketerminator
 
 			boot.setupLogger()
 			boot.setupRegistries()
@@ -501,7 +534,7 @@ var _ = Describe("Main", func() {
 					appInstances := is[instance1.ApplicationId()]
 					i := appInstances[instance1.Id()].(map[string]interface{})
 					Expect(i["state"]).To(Equal(starting.STATE_BORN))
-					Expect(i["state_timestamp"]).To(Equal(instance1.StateTimestamp().Unix()))
+					Expect(i["state_timestamp"]).To(Equal(instance1.StateTimestamp().UnixNano()))
 				})
 
 				It("uses the values from stat_collector", func() {
@@ -596,7 +629,7 @@ var _ = Describe("Main", func() {
 	Describe("start_finish", func() {
 		JustBeforeEach(func() {
 			boot.setupRegistries()
-			boot.setupDirectoryServers()
+			setupDirectoryServers()
 			boot.component = &common.VcapComponent{UUID: "bogus"}
 			setupNats()
 		})
@@ -632,10 +665,10 @@ var _ = Describe("Main", func() {
 
 	Describe("evacuate", func() {
 		JustBeforeEach(func() {
-			boot.Bootstrap = &fakeBootstrap{nested: boot}
+			boot.Terminator = &fakeTerminator{nested: boot}
 			boot.setupRegistries()
 			boot.setupLogger()
-			boot.setupDirectoryServers()
+			setupDirectoryServers()
 			boot.component = &common.VcapComponent{UUID: "bogus"}
 			setupNats()
 			boot.setupRouterClient()
@@ -651,49 +684,6 @@ var _ = Describe("Main", func() {
 
 	})
 
-	Describe("creating an instance", func() {
-		var fakel tlogger.FakeL
-		var fakerm *trm.FakeResourceManager
-
-		JustBeforeEach(func() {
-			boot.setupLogger()
-			fakel = tlogger.FakeL{}
-			boot.logger.L = &fakel
-
-			boot.setupRegistries()
-			fakerm = &trm.FakeResourceManager{}
-			boot.resource_manager = fakerm
-		})
-
-		Context("when the resource manager can not reserve space for the app", func() {
-			It("log and error and return nil", func() {
-				fakerm.Reserve = false
-
-				i := boot.create_instance(thelpers.Valid_instance_attributes(false))
-				Expect(i).To(BeNil())
-				Expect(fakel.Logs["error"]).To(ContainSubstring("not enough resources available"))
-			})
-		})
-
-		Context("when the resource manager can reserve space for the app", func() {
-			It("creates the instance", func() {
-				fakerm.Reserve = true
-
-				i := boot.create_instance(thelpers.Valid_instance_attributes(false))
-				Expect(i).ToNot(BeNil())
-			})
-		})
-
-		Context("when limits are missing from the attributes", func() {
-			It("fails validation instead of blowing up", func() {
-				attrs := thelpers.Valid_instance_attributes(false)
-				delete(attrs, "limits")
-				i := boot.create_instance(attrs)
-				Expect(i).To(BeNil())
-			})
-		})
-	})
-
 	Describe("handle_dea_directed_start", func() {
 		JustBeforeEach(func() {
 			boot.setupLogger()
@@ -703,7 +693,8 @@ var _ = Describe("Main", func() {
 			fakerm := &trm.FakeResourceManager{Reserve: true}
 			boot.resource_manager = fakerm
 
-			boot.instanceRegistry = &fakeinstanceregistry{}
+			boot.instanceRegistry = &tstarting.FakeInstanceRegistry{}
+			boot.setupInstanceManager()
 			setupNats()
 		})
 
@@ -717,6 +708,30 @@ var _ = Describe("Main", func() {
 		})
 
 	})
+
+	Describe("start", func() {
+		var fakesnap tboot.FakeSnapshot
+		JustBeforeEach(func() {
+			fakesnap = tboot.FakeSnapshot{}
+			boot.snapshot = &fakesnap
+			boot.resource_manager = &trm.FakeResourceManager{}
+			boot.instanceRegistry = &tstarting.FakeInstanceRegistry{}
+
+			boot.setupLogger()
+			setupNats()
+			setupDirectoryServers()
+			timer := boot.setupComponent()
+			timer.Stop()
+		})
+
+		Describe("snapshot", func() {
+			It("loads the snapshot on startup", func() {
+				boot.Start()
+				Expect(fakesnap.LoadInvoked).To(BeTrue())
+			})
+		})
+	})
+
 })
 
 type fakeSignalHandler struct {
@@ -737,29 +752,23 @@ func (fr *fakeResponder) Stop() {
 	fr.stopCalled = true
 }
 
-type fakeBootstrap struct {
-	nested    Bootstrap
+type fakeTerminator struct {
+	nested    Terminator
 	terminate bool
 
 	shutdownCallback func()
 }
 
-func (fb *fakeBootstrap) Setup() error {
-	return fb.nested.Setup()
-}
-func (fb *fakeBootstrap) Start() {
-	fb.nested.Start()
-}
-func (fb *fakeBootstrap) Shutdown() {
-	if fb.shutdownCallback != nil {
-		fb.shutdownCallback()
+func (ft *fakeTerminator) Shutdown() {
+	if ft.shutdownCallback != nil {
+		ft.shutdownCallback()
 	}
 
-	fb.nested.Shutdown()
+	ft.nested.Shutdown()
 }
-func (fb *fakeBootstrap) Terminate() {
-	if fb.terminate {
-		fb.nested.Terminate()
+func (ft *fakeTerminator) Terminate() {
+	if ft.terminate {
+		ft.nested.Terminate()
 	}
 }
 
@@ -784,50 +793,4 @@ func (fr *FakeResponder) Stop() {
 }
 func (fr *FakeResponder) Advertise() {
 	fr.Advertised = true
-}
-
-type fakeinstanceregistry struct {
-	instances []*starting.Instance
-}
-
-func (fir *fakeinstanceregistry) Instances() []*starting.Instance {
-	return fir.instances
-}
-func (fir *fakeinstanceregistry) InstancesForApplication(app_id string) map[string]*starting.Instance {
-	return nil
-}
-func (fir *fakeinstanceregistry) Register(instance *starting.Instance) {
-	p := tstarting.FakePromises{}
-	instance.InstancePromises = &p
-	instance.Task.TaskPromises = &p
-
-	if fir.instances == nil {
-		fir.instances = make([]*starting.Instance, 0, 1)
-	}
-	fir.instances = append(fir.instances, instance)
-}
-
-func (fir *fakeinstanceregistry) Unregister(instance *starting.Instance) {
-}
-func (fir *fakeinstanceregistry) ChangeInstanceId(instance *starting.Instance) {
-}
-func (fir *fakeinstanceregistry) LookupInstance(instanceId string) *starting.Instance {
-	return nil
-}
-func (fir *fakeinstanceregistry) StartReapers() {
-}
-func (fir *fakeinstanceregistry) AppIdToCount() map[string]int {
-	return nil
-}
-func (fir *fakeinstanceregistry) ReservedMemory() cfg.Memory {
-	return 0
-}
-func (fir *fakeinstanceregistry) UsedMemory() cfg.Memory {
-	return 0
-}
-func (fir *fakeinstanceregistry) ReservedDisk() cfg.Disk {
-	return 0
-}
-func (fir *fakeinstanceregistry) ToHash() map[string]map[string]interface{} {
-	return nil
 }

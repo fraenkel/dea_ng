@@ -3,6 +3,7 @@ package starting
 import dstarting "dea/starting"
 
 type FakePromises struct {
+	DestroyCallback func()
 }
 
 func (f *FakePromises) Promise_start() error {
@@ -45,4 +46,7 @@ func (f *FakePromises) Promise_stop() error {
 	return nil
 }
 func (f *FakePromises) Promise_destroy() {
+	if f.DestroyCallback != nil {
+		f.DestroyCallback()
+	}
 }

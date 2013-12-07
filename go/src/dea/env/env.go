@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var serviceKeys = []string{"name", "label", "tags", "plan", "plan_option", "credentials"}
+var serviceKeys = []string{"name", "label", "tags", "plan", "plan_option", "credentials", "syslog_drain_url"}
 
 type Env struct {
 	envStrategy EnvStrategy
@@ -21,11 +21,11 @@ func NewEnv(strategy EnvStrategy) *Env {
 }
 
 func (e Env) ExportedSystemEnvironmentVariables() (string, error) {
-	vcapApp, err := json.Marshal(e.vcapApplication())
+	vcapApp, err := json.Marshal(e.VcapApplication())
 	if err != nil {
 		return "", err
 	}
-	vcapServices, err := json.Marshal(e.vcapServices())
+	vcapServices, err := json.Marshal(e.VcapServices())
 	if err != nil {
 		return "", err
 	}
@@ -66,7 +66,7 @@ func (e Env) ExportedEnvironmentVariables() (string, error) {
 	return sysEnv + e.ExportedUserEnvironmentVariables(), nil
 }
 
-func (e Env) vcapApplication() map[string]interface{} {
+func (e Env) VcapApplication() map[string]interface{} {
 	if e.vcapApp == nil {
 		msg := e.envStrategy.Message()
 		vcapApp := e.envStrategy.VcapApplication()
@@ -84,7 +84,7 @@ func (e Env) vcapApplication() map[string]interface{} {
 	return *e.vcapApp
 }
 
-func (e Env) vcapServices() map[string][]map[string]interface{} {
+func (e Env) VcapServices() map[string][]map[string]interface{} {
 	if e.vcapSrvcs == nil {
 		services := make(map[string][]map[string]interface{})
 		servicesData := e.envStrategy.Message().Services()
@@ -92,7 +92,7 @@ func (e Env) vcapServices() map[string][]map[string]interface{} {
 		for _, serviceInfo := range servicesData {
 			serviceMap := make(map[string]interface{})
 			for _, k := range serviceKeys {
-				if v, exists := serviceInfo[k]; exists {
+				if v, exists := serviceInfo[k]; exists && (v != nil && v != "") {
 					serviceMap[k] = v
 				}
 			}

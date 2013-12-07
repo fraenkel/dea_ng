@@ -24,8 +24,8 @@ import (
 )
 
 var _ = Describe("StagingTask", func() {
-	var mockEmitter temitter.MockEmitter
-	var config *cfg.Config
+	var fakeEmitter temitter.FakeEmitter
+	var config cfg.Config
 	var buildpacks_in_use []StagingBuildpack
 	var attributes map[string]interface{}
 	var staging StagingTask
@@ -35,24 +35,28 @@ var _ = Describe("StagingTask", func() {
 	memory_limit_mb := uint64(256)
 	disk_limit_mb := uint64(1025)
 
+	getLimits := func() map[string]interface{} {
+		startmsg := attributes["start_message"].(map[string]interface{})
+		return startmsg["limits"].(map[string]interface{})
+	}
+
 	BeforeEach(func() {
-		mockEmitter = temitter.MockEmitter{}
-		loggregator.SetStagingEmitter(&mockEmitter)
+		fakeEmitter = temitter.FakeEmitter{}
+		loggregator.SetStagingEmitter(&fakeEmitter)
 
 		base_dir, _ := ioutil.TempDir("", "staging_task_test")
 
-		config = &cfg.Config{
-			BaseDir:      base_dir,
-			BuildpackDir: path.Join(base_dir, "buildpacks"),
-			DirectoryServer: cfg.DirServerConfig{
-				DeaPort: 1234,
-			},
-			Staging: cfg.StagingConfig{
-				Environment:        map[string]string{"BUILDPACK_CACHE": "buildpack_cache_url"},
-				MemoryLimitMB:      memory_limit_mb,
-				DiskLimitMB:        disk_limit_mb,
-				MaxStagingDuration: time.Duration(900) * time.Second,
-			},
+		config, _ = cfg.NewConfig(nil)
+		config.BaseDir = base_dir
+		config.BuildpackDir = path.Join(base_dir, "buildpacks")
+		config.DirectoryServer = cfg.DirServerConfig{
+			DeaPort: 1234,
+		}
+		config.Staging = cfg.StagingConfig{
+			Environment:        map[string]string{"BUILDPACK_CACHE": "buildpack_cache_url"},
+			MemoryLimitMB:      memory_limit_mb,
+			DiskLimitMB:        disk_limit_mb,
+			MaxStagingDuration: time.Duration(900) * time.Second,
 		}
 
 		url1, _ := url.Parse("www.google.com")
@@ -69,7 +73,7 @@ var _ = Describe("StagingTask", func() {
 	JustBeforeEach(func() {
 		dropletRegistry := droplet.NewDropletRegistry(config.BaseDir)
 		staging_message := NewStagingMessage(attributes)
-		staging = NewStagingTask(config, staging_message, buildpacks_in_use,
+		staging = NewStagingTask(&config, staging_message, buildpacks_in_use,
 			dropletRegistry, utils.Logger("staging_tasks_test_logger", nil))
 
 		stgTask = staging.(*stagingTask)
@@ -99,10 +103,10 @@ var _ = Describe("StagingTask", func() {
 			stgTask.promise_stage()
 
 			app_id := staging.StagingMessage().App_id()
-			Expect(mockEmitter.Messages).To(HaveLen(1))
-			Expect(mockEmitter.ErrorMessages).To(HaveLen(1))
-			Expect(mockEmitter.Messages[app_id][0]).To(Equal("stdout message"))
-			Expect(mockEmitter.ErrorMessages[app_id][0]).To(Equal("stderr message"))
+			Expect(fakeEmitter.Messages).To(HaveLen(1))
+			Expect(fakeEmitter.ErrorMessages).To(HaveLen(1))
+			Expect(fakeEmitter.Messages[app_id][0]).To(Equal("stdout message"))
+			Expect(fakeEmitter.ErrorMessages[app_id][0]).To(Equal("stderr message"))
 		})
 
 		Context("when env variables need to be escaped", func() {
@@ -375,7 +379,7 @@ detected_buildpack: Ruby/Rack
 
 			It("returns an error in response", func() {
 				var response error
-				staging.SetAfter_upload_callback(func(e error) error {
+				staging.SetAfter_complete_callback(func(e error) error {
 					response = e
 					return nil
 				})
@@ -470,28 +474,23 @@ detected_buildpack: Ruby/Rack
 		})
 
 		It("triggers callbacks in correct order", func() {
-			complete := 9999
-			upload := -1
+			complete := -1
 			staging.SetAfter_complete_callback(func(e error) error {
-				complete = mockPromises.step
-				return e
-			})
-			staging.SetAfter_upload_callback(func(e error) error {
-				upload = mockPromises.step
+				complete = mockPromises.step + 1
 				return e
 			})
 
 			staging.Start()
-			Expect(complete).To(BeNumerically("<", upload))
-			Expect(complete).To(BeNumerically("<=", mockPromises.order["promise_app_upload"]))
-			Expect(upload).To(BeNumerically(">=", mockPromises.order["promise_save_buildpack_cache"]))
+
+			Expect(mockPromises.order["promise_app_upload"]).To(BeNumerically("<", mockPromises.order["promise_save_buildpack_cache"]))
+			Expect(mockPromises.order["promise_save_buildpack_cache"]).To(BeNumerically("<", complete))
 		})
 
 		Context("when the upload fails", func() {
 
 			it_raises_and_returns_an_error := func() {
 				var response error
-				staging.SetAfter_upload_callback(func(e error) error {
+				staging.SetAfter_complete_callback(func(e error) error {
 					response = e
 					return nil
 				})
@@ -579,19 +578,40 @@ detected_buildpack: Ruby/Rack
 	})
 
 	Describe("MemoryLimit", func() {
-		It("exports memory in bytes as specified in the config file", func() {
-			Expect(staging.MemoryLimit()).To(Equal(cfg.Mebi * cfg.Memory(memory_limit_mb)))
-		})
 
 		Context("when unspecified", func() {
 			BeforeEach(func() {
-				config.Staging.MemoryLimitMB = 0
+				c, _ := cfg.NewConfig(nil)
+				config.Staging.MemoryLimitMB = c.Staging.MemoryLimitMB
 			})
 
 			It("uses 1GB as a default", func() {
 				Expect(staging.MemoryLimit()).To(Equal(cfg.Mebi * 1024))
 			})
 		})
+
+		Context("when the app requests less than the config", func() {
+			BeforeEach(func() {
+				config.Staging.MemoryLimitMB = 1024
+				getLimits()["mem"] = 512
+			})
+
+			It("sets the MemoryLimit to the config value", func() {
+				Expect(staging.MemoryLimit()).To(Equal(cfg.Mebi * 1024))
+			})
+		})
+
+		Context("when the app requests more than the config", func() {
+			BeforeEach(func() {
+				config.Staging.MemoryLimitMB = 1024
+				getLimits()["mem"] = 2048
+			})
+
+			It("sets the MemoryLimit to the app value", func() {
+				Expect(staging.MemoryLimit()).To(Equal(cfg.Mebi * 2048))
+			})
+		})
+
 	})
 
 	Describe("DiskLimit", func() {
@@ -601,13 +621,37 @@ detected_buildpack: Ruby/Rack
 
 		Context("when unspecified", func() {
 			BeforeEach(func() {
-				config.Staging.DiskLimitMB = 0
+				c, _ := cfg.NewConfig(nil)
+				config.Staging.DiskLimitMB = c.Staging.DiskLimitMB
 			})
 
 			It("uses 2GB as a default", func() {
 				Expect(staging.DiskLimit()).To(Equal(cfg.MB * 2 * 1024))
 			})
 		})
+
+		Context("when the app requests less than the config", func() {
+			BeforeEach(func() {
+				config.Staging.DiskLimitMB = 1024
+				getLimits()["disk"] = 512
+			})
+
+			It("sets the DiskLimit to the config value", func() {
+				Expect(staging.DiskLimit()).To(Equal(cfg.MB * 1024))
+			})
+		})
+
+		Context("when the app requests more than the config", func() {
+			BeforeEach(func() {
+				config.Staging.DiskLimitMB = 1024
+				getLimits()["disk"] = 2048
+			})
+
+			It("sets the DiskLimit to the app value", func() {
+				Expect(staging.DiskLimit()).To(Equal(cfg.MB * 2048))
+			})
+		})
+
 	})
 
 	Describe("promise_prepare_staging_log", func() {
@@ -709,10 +753,10 @@ detected_buildpack: Ruby/Rack
 			stgTask.promise_unpack_app()
 
 			app_id := staging.StagingMessage().App_id()
-			Expect(mockEmitter.Messages).To(HaveLen(1))
-			Expect(mockEmitter.ErrorMessages).To(HaveLen(1))
-			Expect(mockEmitter.Messages[app_id][0]).To(Equal("stdout message"))
-			Expect(mockEmitter.ErrorMessages[app_id][0]).To(Equal("stderr message"))
+			Expect(fakeEmitter.Messages).To(HaveLen(1))
+			Expect(fakeEmitter.ErrorMessages).To(HaveLen(1))
+			Expect(fakeEmitter.Messages[app_id][0]).To(Equal("stdout message"))
+			Expect(fakeEmitter.ErrorMessages[app_id][0]).To(Equal("stderr message"))
 		})
 	})
 
@@ -743,10 +787,10 @@ detected_buildpack: Ruby/Rack
 				stgTask.promise_unpack_app()
 
 				app_id := staging.StagingMessage().App_id()
-				Expect(mockEmitter.Messages).To(HaveLen(1))
-				Expect(mockEmitter.ErrorMessages).To(HaveLen(1))
-				Expect(mockEmitter.Messages[app_id][0]).To(Equal("stdout message"))
-				Expect(mockEmitter.ErrorMessages[app_id][0]).To(Equal("stderr message"))
+				Expect(fakeEmitter.Messages).To(HaveLen(1))
+				Expect(fakeEmitter.ErrorMessages).To(HaveLen(1))
+				Expect(fakeEmitter.Messages[app_id][0]).To(Equal("stdout message"))
+				Expect(fakeEmitter.ErrorMessages[app_id][0]).To(Equal("stderr message"))
 			})
 		})
 	})

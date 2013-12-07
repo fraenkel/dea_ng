@@ -1,16 +1,15 @@
 package dea
 
 import (
-	cfg "dea/config"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/nu7hatch/gouuid"
-	"strconv"
+	"net/url"
 )
 
 type Nats struct {
-	NatsClient yagnats.NATSClient
-	config     cfg.NatsConfig
-	sids       []int
+	NatsClient  yagnats.NATSClient
+	connectInfo yagnats.ConnectionCluster
+	sids        []int
 }
 
 type NatsHandler interface {
@@ -24,23 +23,41 @@ type NatsHandler interface {
 	UUID() string
 }
 
-func NewNats(config cfg.NatsConfig) *Nats {
-	return &Nats{
-		NatsClient: yagnats.NewClient(),
-		config:     config,
-		sids:       make([]int, 0, 7),
+func NewNats(servers []string) (*Nats, error) {
+	members := make([]yagnats.ConnectionProvider, 0, len(servers))
+	for _, server := range servers {
+		natsURL, err := url.Parse(server)
+		if err != nil {
+			return nil, err
+		}
+
+		username := ""
+		password := ""
+		if natsURL.User != nil {
+			username = natsURL.User.Username()
+			password, _ = natsURL.User.Password()
+		}
+
+		members = append(members, &yagnats.ConnectionInfo{
+			Addr:     natsURL.Host,
+			Username: username,
+			Password: password,
+		})
 	}
+
+	connectionCluster := yagnats.ConnectionCluster{
+		Members: members,
+	}
+
+	return &Nats{
+		NatsClient:  yagnats.NewClient(),
+		connectInfo: connectionCluster,
+		sids:        make([]int, 0, 7),
+	}, nil
 }
 
 func (n *Nats) Start(handler NatsHandler) error {
-	addr := n.config.Host + ":" + strconv.FormatUint(uint64(n.config.Port), 10)
-	connection := &yagnats.ConnectionInfo{
-		Addr:     addr,
-		Username: n.config.User,
-		Password: n.config.Pass,
-	}
-
-	if err := n.NatsClient.Connect(connection); err != nil {
+	if err := n.NatsClient.Connect(&n.connectInfo); err != nil {
 		return err
 	}
 

@@ -1,9 +1,11 @@
 package responders
 
 import (
+	"dea/boot"
 	"dea/config"
 	"dea/droplet"
 	"dea/loggregator"
+	rm "dea/resource_manager"
 	"dea/staging"
 	"dea/utils"
 	"encoding/json"
@@ -13,36 +15,34 @@ import (
 
 var stagingLogger = utils.Logger("Staging", nil)
 
-type AppManager interface {
-	StartApp(map[string]interface{})
-	SaveSnapshot()
-}
-
 type Staging struct {
 	enabled          bool
-	appManager       AppManager
+	instanceManager  boot.InstanceManager
+	snapshot         boot.Snapshot
 	nats             yagnats.NATSClient
 	id               string
 	stagingRegistry  *staging.StagingTaskRegistry
 	config           *config.Config
 	dropletRegistry  droplet.DropletRegistry
+	resourceMgr      rm.ResourceManager
 	urlMaker         staging.StagingTaskUrlMaker
 	staging_sid      *int
 	staging_id_sid   *int
 	staging_stop_sid *int
 }
 
-func NewStaging(appManager AppManager, nats yagnats.NATSClient, id string,
-	stagingTaskRegistry *staging.StagingTaskRegistry,
-	config *config.Config, dropletRegistry droplet.DropletRegistry, maker staging.StagingTaskUrlMaker) *Staging {
+func NewStaging(boot boot.Bootstrap, id string, maker staging.StagingTaskUrlMaker) *Staging {
+	config := boot.Config()
 	return &Staging{
 		enabled:         config.Staging.Enabled,
-		appManager:      appManager,
-		nats:            nats,
+		instanceManager: boot.InstanceManager(),
+		snapshot:        boot.Snapshot(),
+		nats:            boot.Nats(),
 		id:              id,
-		stagingRegistry: stagingTaskRegistry,
+		stagingRegistry: boot.StagingTaskRegistry(),
 		config:          config,
-		dropletRegistry: dropletRegistry,
+		dropletRegistry: boot.DropletRegistry(),
+		resourceMgr:     boot.ResourceManager(),
 		urlMaker:        maker,
 	}
 }
@@ -103,18 +103,31 @@ func (s *Staging) handle(msg *yagnats.Message) {
 	appId := stagingMsg.App_id()
 
 	logger := logger_for_app(appId)
-
 	loggregator.Emit(appId, "Got staging request for app with id "+appId)
 	logger.Infof("staging.handle.start %v", stagingMsg)
+
 	task := s.stagingRegistry.NewStagingTask(s.config, stagingMsg, s.dropletRegistry, logger)
+
+	if constrained := s.resourceMgr.GetConstrainedResource(task.MemoryLimit(), task.DiskLimit()); constrained != "" {
+		s.respondTo(msg.ReplyTo, map[string]string{
+			"task_id": task.Id(),
+			"error":   "Not enough " + constrained + " resources available",
+		})
+
+		logger.Errord(map[string]interface{}{
+			"app_id":                appId,
+			"contstrained_resource": constrained,
+		}, "staging.start.insufficient-resource")
+
+		return
+	}
 
 	s.stagingRegistry.Register(task)
 
-	s.appManager.SaveSnapshot()
+	s.snapshot.Save()
 
 	s.notify_setup_completion(msg.ReplyTo, task)
-	s.notify_completion(data, task)
-	s.notify_upload(msg.ReplyTo, task)
+	s.notify_completion(msg.ReplyTo, data, task)
 	s.notify_stop(msg.ReplyTo, task)
 
 	task.Start()
@@ -164,33 +177,35 @@ func (s *Staging) notify_setup_completion(replyTo string, task staging.StagingTa
 	})
 }
 
-func (s *Staging) notify_completion(data map[string]interface{}, task staging.StagingTask) {
+func (s *Staging) notify_completion(replyTo string, data map[string]interface{}, task staging.StagingTask) {
 	task.SetAfter_complete_callback(func(e error) error {
-		if msg, exists := data["start_message"]; exists && e == nil {
-			startMsg := msg.(map[string]interface{})
-			startMsg["sha1"] = task.DropletSHA1()
-			s.appManager.StartApp(startMsg)
-		}
-		return nil
-	})
-}
-
-func (s *Staging) notify_upload(replyTo string, task staging.StagingTask) {
-	task.SetAfter_upload_callback(func(e error) error {
-		data := map[string]string{
+		response := map[string]string{
 			"task_id":            task.Id(),
 			"detected_buildpack": task.DetectedBuildpack(),
 			"droplet_sha1":       task.DropletSHA1(),
 		}
+
 		if e != nil {
-			data["error"] = e.Error()
+			response["error"] = e.Error()
 		}
 
-		s.respondTo(replyTo, data)
+		s.respondTo(replyTo, response)
 
+		// Unregistering the staging task will release the reservation of excess memory reserved for the app,
+		// if the app requires more memory than the staging process.
 		s.stagingRegistry.Unregister(task)
 
-		s.appManager.SaveSnapshot()
+		s.snapshot.Save()
+
+		if msg, exists := data["start_message"]; exists && e == nil {
+			startMsg := msg.(map[string]interface{})
+			startMsg["sha1"] = task.DropletSHA1()
+
+			// Now re-reserve the app's memory.  There may be a window between staging task unregistration and here
+			// where the DEA could no longer have enough memory to start the app.  In that case, the health manager
+			// should cause the app to be relocated on another DEA.
+			s.instanceManager.StartApp(startMsg)
+		}
 
 		return nil
 	})
@@ -209,7 +224,7 @@ func (s *Staging) notify_stop(replyTo string, task staging.StagingTask) {
 
 		s.stagingRegistry.Unregister(task)
 
-		s.appManager.SaveSnapshot()
+		s.snapshot.Save()
 
 		return nil
 	})

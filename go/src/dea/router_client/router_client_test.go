@@ -31,7 +31,7 @@ var _ = Describe("RouterClient", func() {
 	application_uri := "my-super-app.cf-app.com"
 
 	BeforeEach(func() {
-		nats := dea.NewNats(config.NatsConfig{})
+		nats, _ := dea.NewNats([]string{"nats://user:password@myexample.com:4222"})
 		fakeNats = fakeyagnats.New()
 		nats.NatsClient = fakeNats
 

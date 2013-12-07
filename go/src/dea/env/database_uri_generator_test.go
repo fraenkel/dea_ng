@@ -72,8 +72,8 @@ var _ = Describe("DatabaseUriGenerator.Go", func() {
 		Context("and there are more than one production relational database", func() {
 			BeforeEach(func() {
 				services_env = []map[string]interface{}{
-					map[string]interface{}{"name": "production", "credentials": map[string]string{"uri": "postgres://username:password@host/db1"}},
-					map[string]interface{}{"name": "prod", "credentials": map[string]string{"uri": "postgres://username:password@host/db2"}}}
+					map[string]interface{}{"name": "first_db", "credentials": map[string]string{"uri": "postgres://username:password@host/db1"}},
+					map[string]interface{}{"name": "second_db", "credentials": map[string]string{"uri": "postgres://username:password@host/db2"}}}
 
 				expectedUri = "postgres://username:password@host/db1"
 			})

@@ -26,7 +26,8 @@ var _ = Describe("InstancePaths", func() {
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
 		cfgPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/dea.yml"))
-		config, _ = cfg.ConfigFromFile(cfgPath)
+		c, _ := cfg.LoadConfig(cfgPath)
+		config = &c
 
 		instanceRegistry = starting.NewInstanceRegistry(config)
 

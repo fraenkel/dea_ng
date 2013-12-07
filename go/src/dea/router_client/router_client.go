@@ -12,7 +12,15 @@ import (
 
 var rcLogger = utils.Logger("RouterClient", nil)
 
-type RouterClient struct {
+type RouterClient interface {
+	RegisterInstance(i *starting.Instance, opts map[string]interface{}) error
+	UnregisterInstance(i *starting.Instance, opts map[string]interface{}) error
+	Greet(callback yagnats.Callback) error
+	Register_directory_server(host string, port uint16, uri string) error
+	Unregister_directory_server(host string, port uint16, uri string) error
+}
+
+type routerClient struct {
 	config   *config.Config
 	nats     *dea.Nats
 	uuid     string
@@ -20,16 +28,16 @@ type RouterClient struct {
 }
 
 func NewRouterClient(config *config.Config, nats *dea.Nats, uuid, local_ip string) RouterClient {
-	return RouterClient{config, nats, uuid, local_ip}
+	return &routerClient{config, nats, uuid, local_ip}
 }
 
-func (r *RouterClient) RegisterInstance(i *starting.Instance, opts map[string]interface{}) error {
+func (r *routerClient) RegisterInstance(i *starting.Instance, opts map[string]interface{}) error {
 	req := r.generate_instance_request(i, opts)
 	return r.publish("router.register", req)
 }
 
 // Same format is used for both registration and unregistration
-func (r *RouterClient) generate_instance_request(i *starting.Instance, opts map[string]interface{}) map[string]interface{} {
+func (r *routerClient) generate_instance_request(i *starting.Instance, opts map[string]interface{}) map[string]interface{} {
 	uris := i.ApplicationUris()
 
 	if opts != nil {
@@ -51,12 +59,12 @@ func (r *RouterClient) generate_instance_request(i *starting.Instance, opts map[
 	return rsp
 }
 
-func (r *RouterClient) UnregisterInstance(i *starting.Instance, opts map[string]interface{}) error {
+func (r *routerClient) UnregisterInstance(i *starting.Instance, opts map[string]interface{}) error {
 	req := r.generate_instance_request(i, opts)
 	return r.publish("router.unregister", req)
 }
 
-func (r *RouterClient) Greet(callback yagnats.Callback) error {
+func (r *routerClient) Greet(callback yagnats.Callback) error {
 	_, err := r.nats.Request("router.greet", []byte("{}"), callback)
 	if err != nil {
 		rcLogger.Errorf("greet error: %s", err.Error())
@@ -64,18 +72,18 @@ func (r *RouterClient) Greet(callback yagnats.Callback) error {
 	return err
 }
 
-func (r *RouterClient) Register_directory_server(host string, port uint16, uri string) error {
+func (r *routerClient) Register_directory_server(host string, port uint16, uri string) error {
 	req := r.generate_directory_server_request(host, port, uri)
 	return r.publish("router.register", req)
 }
 
-func (r *RouterClient) Unregister_directory_server(host string, port uint16, uri string) error {
+func (r *routerClient) Unregister_directory_server(host string, port uint16, uri string) error {
 	req := r.generate_directory_server_request(host, port, uri)
 	return r.publish("router.unregister", req)
 }
 
 // Same format is used for both registration and unregistration
-func (r *RouterClient) generate_directory_server_request(host string, port uint16, uri string) map[string]interface{} {
+func (r *routerClient) generate_directory_server_request(host string, port uint16, uri string) map[string]interface{} {
 	return map[string]interface{}{
 		"host": host,
 		"port": port,
@@ -84,7 +92,7 @@ func (r *RouterClient) generate_directory_server_request(host string, port uint1
 	}
 }
 
-func (r *RouterClient) publish(subject string, message interface{}) error {
+func (r *routerClient) publish(subject string, message interface{}) error {
 	bytes, err := json.Marshal(message)
 	if err != nil {
 		rcLogger.Errorf("%s error: %s", subject, err.Error())

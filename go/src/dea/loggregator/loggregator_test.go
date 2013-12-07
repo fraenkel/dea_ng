@@ -8,13 +8,13 @@ import (
 )
 
 var _ = Describe("Loggregator", func() {
-	var emitter temitter.MockEmitter
-	var staging_emitter temitter.MockEmitter
+	var emitter temitter.FakeEmitter
+	var staging_emitter temitter.FakeEmitter
 
 	BeforeEach(func() {
-		emitter = temitter.MockEmitter{}
+		emitter = temitter.FakeEmitter{}
 		SetEmitter(&emitter)
-		staging_emitter = temitter.MockEmitter{}
+		staging_emitter = temitter.FakeEmitter{}
 		SetStagingEmitter(&staging_emitter)
 	})
 

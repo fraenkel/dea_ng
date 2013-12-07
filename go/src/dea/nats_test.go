@@ -2,7 +2,6 @@ package dea_test
 
 import (
 	. "dea"
-	"dea/config"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	. "github.com/onsi/ginkgo"
@@ -18,7 +17,7 @@ var _ = Describe("Nats", func() {
 		"dea.stop", "dea.update", "dea.find.droplet"}
 
 	BeforeEach(func() {
-		nats = NewNats(config.NatsConfig{})
+		nats, _ = NewNats([]string{"nats://user:password@myexample.com:4222"})
 		fakeNats = fakeyagnats.New()
 		nats.NatsClient = fakeNats
 

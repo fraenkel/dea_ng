@@ -13,13 +13,14 @@ import (
 var dealocatorLogger = utils.Logger("DeaLocator", nil)
 
 type DeaLocator struct {
-	nats               yagnats.NATSClient
-	subscriptionId     int
-	id                 string
-	resourceMgr        resmgr.ResourceManager
-	advertiseIntervals time.Duration
-	stacks             []string
-	advertiseTicker    *time.Ticker
+	nats                yagnats.NATSClient
+	subscriptionId      int
+	id                  string
+	resourceMgr         resmgr.ResourceManager
+	advertiseIntervals  time.Duration
+	stacks              []string
+	placementProperties map[string]interface{}
+	advertiseTicker     *time.Ticker
 }
 
 func NewDeaLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.ResourceManager, config *config.Config) *DeaLocator {
@@ -29,11 +30,12 @@ func NewDeaLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.Resour
 	}
 
 	return &DeaLocator{
-		nats:               nats,
-		id:                 id,
-		resourceMgr:        resourceMgr,
-		advertiseIntervals: advertiseIntervals,
-		stacks:             config.Stacks,
+		nats:                nats,
+		id:                  id,
+		resourceMgr:         resourceMgr,
+		advertiseIntervals:  advertiseIntervals,
+		stacks:              config.Stacks,
+		placementProperties: config.PlacementProperties,
 	}
 }
 
@@ -61,7 +63,9 @@ func (d *DeaLocator) handleIt(msg *yagnats.Message) {
 func (d *DeaLocator) Advertise() {
 	am := protocol.NewAdvertiseMessage(d.id, d.stacks,
 		d.resourceMgr.RemainingMemory(), d.resourceMgr.RemainingDisk(),
-		d.resourceMgr.AppIdToCount())
+		d.resourceMgr.AppIdToCount(),
+		d.placementProperties)
+
 	bytes, err := json.Marshal(am)
 	if err != nil {
 		dealocatorLogger.Error(err.Error())

@@ -17,7 +17,7 @@ func NewStagingEnv(stagingTask StagingTask) *StagingEnv {
 }
 
 func (s StagingEnv) Message() env.Message {
-	return s.stagingTask.StagingMessage().start_data()
+	return s.stagingTask.StagingMessage().StartData()
 }
 
 func (s StagingEnv) ExportedSystemEnvironmentVariables() [][]string {

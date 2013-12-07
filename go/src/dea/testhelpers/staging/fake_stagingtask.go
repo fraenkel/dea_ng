@@ -15,52 +15,60 @@ type FakeStagingTask struct {
 	ContainerPath     string
 	Started           bool
 	Stopped           bool
-	SetupCallback     dstaging.Callback
-	CompleteCallback  dstaging.Callback
-	UploadCallback    dstaging.Callback
-	StopCallback      dstaging.Callback
+
+	InvokeSetup   bool
+	SetupCallback dstaging.Callback
+	SetupError    error
+
+	InvokeComplete   bool
+	CompleteCallback dstaging.Callback
+	CompleteError    error
+
+	InvokeStop   bool
+	StopCallback dstaging.Callback
+	StopError    error
 }
 
-func (m *FakeStagingTask) Id() string {
-	return m.StagingMessage().Task_id()
+func (fst *FakeStagingTask) Id() string {
+	return fst.StagingMessage().Task_id()
 }
 
-func (m *FakeStagingTask) StagingMessage() dstaging.StagingMessage {
-	return m.StagingMsg
+func (fst *FakeStagingTask) StagingMessage() dstaging.StagingMessage {
+	return fst.StagingMsg
 }
 
-func (m *FakeStagingTask) StagingConfig() cfg.StagingConfig {
-	return m.StagingCfg
+func (fst *FakeStagingTask) StagingConfig() cfg.StagingConfig {
+	return fst.StagingCfg
 }
 
-func (m *FakeStagingTask) MemoryLimit() cfg.Memory {
-	return cfg.Memory(m.StagingCfg.MemoryLimitMB) * cfg.Mebi
+func (fst *FakeStagingTask) MemoryLimit() cfg.Memory {
+	return cfg.Memory(fst.StagingCfg.MemoryLimitMB) * cfg.Mebi
 }
 
-func (m *FakeStagingTask) DiskLimit() cfg.Disk {
-	return cfg.Disk(m.StagingCfg.DiskLimitMB) * cfg.MB
+func (fst *FakeStagingTask) DiskLimit() cfg.Disk {
+	return cfg.Disk(fst.StagingCfg.DiskLimitMB) * cfg.MB
 }
 
-func (m *FakeStagingTask) Start() error {
-	m.Started = true
+func (fst *FakeStagingTask) Start() error {
+	fst.Started = true
 	return nil
 }
 
-func (m *FakeStagingTask) Stop() {
-	m.Stopped = true
+func (fst *FakeStagingTask) Stop() {
+	fst.Stopped = true
 }
 
-func (m *FakeStagingTask) StreamingLogUrl(maker dstaging.StagingTaskUrlMaker) string {
-	return m.Streaming_log_url
+func (fst *FakeStagingTask) StreamingLogUrl(maker dstaging.StagingTaskUrlMaker) string {
+	return fst.Streaming_log_url
 }
-func (m *FakeStagingTask) DetectedBuildpack() string {
+func (fst *FakeStagingTask) DetectedBuildpack() string {
 	return ""
 }
-func (m *FakeStagingTask) DropletSHA1() string {
-	return m.Droplet_Sha1
+func (fst *FakeStagingTask) DropletSHA1() string {
+	return fst.Droplet_Sha1
 }
-func (m *FakeStagingTask) Path_in_container(pathSuffix string) string {
-	cPath := m.ContainerPath
+func (fst *FakeStagingTask) Path_in_container(pathSuffix string) string {
+	cPath := fst.ContainerPath
 	if cPath == "" {
 		return ""
 	}
@@ -69,18 +77,25 @@ func (m *FakeStagingTask) Path_in_container(pathSuffix string) string {
 	return strings.Join([]string{cPath, "tmp", "rootfs", pathSuffix}, "/")
 }
 
-func (m *FakeStagingTask) SetAfter_setup_callback(callback dstaging.Callback) {
-	m.SetupCallback = callback
+func (fst *FakeStagingTask) SetAfter_setup_callback(callback dstaging.Callback) {
+	fst.SetupCallback = callback
+
+	if fst.InvokeSetup {
+		callback(fst.SetupError)
+	}
 }
-func (m *FakeStagingTask) SetAfter_complete_callback(callback dstaging.Callback) {
-	m.CompleteCallback = callback
+func (fst *FakeStagingTask) SetAfter_complete_callback(callback dstaging.Callback) {
+	fst.CompleteCallback = callback
+	if fst.InvokeComplete {
+		callback(fst.CompleteError)
+	}
 }
-func (m *FakeStagingTask) SetAfter_upload_callback(callback dstaging.Callback) {
-	m.UploadCallback = callback
+func (fst *FakeStagingTask) SetAfter_stop_callback(callback dstaging.Callback) {
+	fst.StopCallback = callback
+	if fst.InvokeStop {
+		callback(fst.StopError)
+	}
 }
-func (m *FakeStagingTask) SetAfter_stop_callback(callback dstaging.Callback) {
-	m.StopCallback = callback
-}
-func (m *FakeStagingTask) StagingTimeout() time.Duration {
-	return m.StagingCfg.MaxStagingDuration
+func (fst *FakeStagingTask) StagingTimeout() time.Duration {
+	return fst.StagingCfg.MaxStagingDuration
 }

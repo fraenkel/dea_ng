@@ -13,13 +13,14 @@ import (
 var stagingLocatorLogger = utils.Logger("StagingLocator", nil)
 
 type StagingLocator struct {
-	nats               yagnats.NATSClient
-	id                 string
-	resourceMgr        resmgr.ResourceManager
-	advertiseIntervals time.Duration
-	stacks             []string
-	advertiseTicker    *time.Ticker
-	staging_locate_sid int
+	nats                yagnats.NATSClient
+	id                  string
+	resourceMgr         resmgr.ResourceManager
+	advertiseIntervals  time.Duration
+	stacks              []string
+	placementProperties map[string]interface{}
+	advertiseTicker     *time.Ticker
+	staging_locate_sid  int
 }
 
 func NewStagingLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.ResourceManager, config *config.Config) *StagingLocator {
@@ -29,11 +30,12 @@ func NewStagingLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.Re
 	}
 
 	return &StagingLocator{
-		nats:               nats,
-		id:                 id,
-		resourceMgr:        resourceMgr,
-		advertiseIntervals: advertiseIntervals,
-		stacks:             config.Stacks,
+		nats:                nats,
+		id:                  id,
+		resourceMgr:         resourceMgr,
+		advertiseIntervals:  advertiseIntervals,
+		stacks:              config.Stacks,
+		placementProperties: config.PlacementProperties,
 	}
 }
 
@@ -61,7 +63,10 @@ func (s *StagingLocator) handleIt(msg *yagnats.Message) {
 
 func (s *StagingLocator) Advertise() {
 	am := protocol.NewAdvertiseMessage(s.id, s.stacks,
-		s.resourceMgr.RemainingMemory(), s.resourceMgr.RemainingDisk(), nil)
+		s.resourceMgr.RemainingMemory(), s.resourceMgr.RemainingDisk(),
+		s.resourceMgr.AppIdToCount(),
+		s.placementProperties)
+
 	bytes, err := json.Marshal(am)
 	if err != nil {
 		stagingLocatorLogger.Error(err.Error())

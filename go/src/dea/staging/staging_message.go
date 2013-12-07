@@ -55,7 +55,7 @@ func (msg StagingMessage) Download_uri() *url.URL {
 	return msg.staging_uri("download_uri")
 }
 
-func (msg StagingMessage) start_data() *starting.StartData {
+func (msg StagingMessage) StartData() *starting.StartData {
 	if msg.startData == nil {
 		sdata, err := starting.NewStartData(msg.message["start_message"].(map[string]interface{}))
 		if err == nil {
