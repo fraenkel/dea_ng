@@ -3,7 +3,6 @@ package router_client
 import (
 	"dea"
 	"dea/config"
-	"dea/starting"
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/yagnats"
@@ -12,14 +11,6 @@ import (
 
 var rcLogger = utils.Logger("RouterClient", nil)
 
-type RouterClient interface {
-	RegisterInstance(i *starting.Instance, opts map[string]interface{}) error
-	UnregisterInstance(i *starting.Instance, opts map[string]interface{}) error
-	Greet(callback yagnats.Callback) error
-	Register_directory_server(host string, port uint16, uri string) error
-	Unregister_directory_server(host string, port uint16, uri string) error
-}
-
 type routerClient struct {
 	config   *config.Config
 	nats     *dea.Nats
@@ -27,17 +18,17 @@ type routerClient struct {
 	local_ip string
 }
 
-func NewRouterClient(config *config.Config, nats *dea.Nats, uuid, local_ip string) RouterClient {
+func NewRouterClient(config *config.Config, nats *dea.Nats, uuid, local_ip string) dea.RouterClient {
 	return &routerClient{config, nats, uuid, local_ip}
 }
 
-func (r *routerClient) RegisterInstance(i *starting.Instance, opts map[string]interface{}) error {
+func (r *routerClient) RegisterInstance(i dea.Instance, opts map[string]interface{}) error {
 	req := r.generate_instance_request(i, opts)
 	return r.publish("router.register", req)
 }
 
 // Same format is used for both registration and unregistration
-func (r *routerClient) generate_instance_request(i *starting.Instance, opts map[string]interface{}) map[string]interface{} {
+func (r *routerClient) generate_instance_request(i dea.Instance, opts map[string]interface{}) map[string]interface{} {
 	uris := i.ApplicationUris()
 
 	if opts != nil {
@@ -59,7 +50,7 @@ func (r *routerClient) generate_instance_request(i *starting.Instance, opts map[
 	return rsp
 }
 
-func (r *routerClient) UnregisterInstance(i *starting.Instance, opts map[string]interface{}) error {
+func (r *routerClient) UnregisterInstance(i dea.Instance, opts map[string]interface{}) error {
 	req := r.generate_instance_request(i, opts)
 	return r.publish("router.unregister", req)
 }
@@ -72,18 +63,18 @@ func (r *routerClient) Greet(callback yagnats.Callback) error {
 	return err
 }
 
-func (r *routerClient) Register_directory_server(host string, port uint16, uri string) error {
+func (r *routerClient) Register_directory_server(host string, port uint32, uri string) error {
 	req := r.generate_directory_server_request(host, port, uri)
 	return r.publish("router.register", req)
 }
 
-func (r *routerClient) Unregister_directory_server(host string, port uint16, uri string) error {
+func (r *routerClient) Unregister_directory_server(host string, port uint32, uri string) error {
 	req := r.generate_directory_server_request(host, port, uri)
 	return r.publish("router.unregister", req)
 }
 
 // Same format is used for both registration and unregistration
-func (r *routerClient) generate_directory_server_request(host string, port uint16, uri string) map[string]interface{} {
+func (r *routerClient) generate_directory_server_request(host string, port uint32, uri string) map[string]interface{} {
 	return map[string]interface{}{
 		"host": host,
 		"port": port,

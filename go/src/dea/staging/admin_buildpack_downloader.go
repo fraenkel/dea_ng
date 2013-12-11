@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	"dea/utils"
 	"io/ioutil"
 	"os"
@@ -11,11 +12,11 @@ import (
 var bpdlLogger = utils.Logger("AdminBuildpackDownloader", nil)
 
 type AdminBuildpackDownloader struct {
-	buildpacks  []StagingBuildpack
+	buildpacks  []dea.StagingBuildpack
 	destination string
 }
 
-func NewAdminBuildpackDownloader(buildpacks []StagingBuildpack, destination string) AdminBuildpackDownloader {
+func NewAdminBuildpackDownloader(buildpacks []dea.StagingBuildpack, destination string) AdminBuildpackDownloader {
 	return AdminBuildpackDownloader{buildpacks, destination}
 }
 
@@ -27,7 +28,7 @@ func (bpdl AdminBuildpackDownloader) Download() {
 		return
 	}
 
-	download_promises := make([]func() error, 0, len(bpdl.buildpacks))
+	download_promises := make([]utils.Promise, 0, len(bpdl.buildpacks))
 	for _, bp := range bpdl.buildpacks {
 		buildpack := bp
 		dest := path.Join(bpdl.destination, bp.Key)
@@ -39,7 +40,7 @@ func (bpdl AdminBuildpackDownloader) Download() {
 	utils.Parallel_promises(download_promises...)
 }
 
-func (bpdl AdminBuildpackDownloader) download_buildpack(buildpack StagingBuildpack, dest_dir string) error {
+func (bpdl AdminBuildpackDownloader) download_buildpack(buildpack dea.StagingBuildpack, dest_dir string) error {
 	file, err := ioutil.TempFile("", "temp_admin_buildpack")
 	if err != nil {
 		bpdlLogger.Errorf("Failed to create tempfile, error: %s", err.Error())

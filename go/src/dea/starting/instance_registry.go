@@ -1,6 +1,7 @@
 package starting
 
 import (
+	"dea"
 	"dea/config"
 	emitter "dea/loggregator"
 	"dea/utils"
@@ -19,25 +20,9 @@ const (
 	CRASHES_REAPER_INTERVAL_SECS = 10
 )
 
-type InstanceRegistry interface {
-	Instances() []*Instance
-	InstancesForApplication(app_id string) map[string]*Instance
-	Instances_filtered_by_message(data map[string]interface{}, f func(*Instance))
-	Register(instance *Instance)
-	Unregister(instance *Instance)
-	ChangeInstanceId(instance *Instance)
-	LookupInstance(instanceId string) *Instance
-	StartReapers()
-	AppIdToCount() map[string]int
-	ReservedMemory() config.Memory
-	UsedMemory() config.Memory
-	ReservedDisk() config.Disk
-	ToHash() map[string]map[string]interface{}
-}
-
 type instanceRegistry struct {
-	instances                     map[string]*Instance
-	instancesByAppId              map[string]map[string]*Instance
+	instances                     map[string]dea.Instance
+	instancesByAppId              map[string]map[string]dea.Instance
 	crashLifetime                 time.Duration
 	crashesPath                   string
 	crashBlockUsageRatioThreshold float64
@@ -48,7 +33,7 @@ type instanceRegistry struct {
 	statfs func(path string, buf *syscall.Statfs_t) error
 }
 
-type instances []*Instance
+type instances []dea.Instance
 
 type byTimestamp struct {
 	reverse bool
@@ -69,10 +54,10 @@ func (s byTimestamp) Swap(i, j int) {
 	s.instances[i], s.instances[j] = s.instances[j], s.instances[i]
 }
 
-func NewInstanceRegistry(config *config.Config) InstanceRegistry {
+func NewInstanceRegistry(config *config.Config) dea.InstanceRegistry {
 	registry := &instanceRegistry{
-		instances:                     make(map[string]*Instance),
-		instancesByAppId:              make(map[string]map[string]*Instance),
+		instances:                     make(map[string]dea.Instance),
+		instancesByAppId:              make(map[string]map[string]dea.Instance),
 		crashesPath:                   config.CrashesPath,
 		crashBlockUsageRatioThreshold: config.CrashBlockUsageRatioThreshold,
 		crashInodeUsageRatioThreshold: config.CrashInodeUsageRatioThreshold,
@@ -88,25 +73,25 @@ func NewInstanceRegistry(config *config.Config) InstanceRegistry {
 	return registry
 }
 
-func (r *instanceRegistry) Instances() []*Instance {
+func (r *instanceRegistry) Instances() []dea.Instance {
 	r.Lock()
 	defer r.Unlock()
 
-	instances := make([]*Instance, 0, len(r.instances))
+	instances := make([]dea.Instance, 0, len(r.instances))
 	for _, instance := range r.instances {
 		instances = append(instances, instance)
 	}
 	return instances
 }
 
-func (r *instanceRegistry) InstancesForApplication(app_id string) map[string]*Instance {
+func (r *instanceRegistry) InstancesForApplication(app_id string) map[string]dea.Instance {
 	r.Lock()
 	defer r.Unlock()
 
 	return r.instancesByAppId[app_id]
 }
 
-func (r *instanceRegistry) Register(instance *Instance) {
+func (r *instanceRegistry) Register(instance dea.Instance) {
 	applicationId := instance.ApplicationId()
 	emitter.Emit(applicationId, "Registering instance")
 	r.logger.Debug2f("Registering instance %s", instance.Id())
@@ -114,7 +99,7 @@ func (r *instanceRegistry) Register(instance *Instance) {
 	r.add_instance(instance)
 }
 
-func (r *instanceRegistry) Unregister(instance *Instance) {
+func (r *instanceRegistry) Unregister(instance dea.Instance) {
 	applicationId := instance.ApplicationId()
 
 	emitter.Emit(applicationId, "Removing instance")
@@ -123,13 +108,13 @@ func (r *instanceRegistry) Unregister(instance *Instance) {
 	r.remove_instance(instance)
 }
 
-func (r *instanceRegistry) ChangeInstanceId(instance *Instance) {
+func (r *instanceRegistry) ChangeInstanceId(instance dea.Instance) {
 	r.remove_instance(instance)
 	instance.SetId()
 	r.add_instance(instance)
 }
 
-func (r *instanceRegistry) add_instance(instance *Instance) {
+func (r *instanceRegistry) add_instance(instance dea.Instance) {
 	applicationId := instance.ApplicationId()
 
 	r.Lock()
@@ -139,13 +124,13 @@ func (r *instanceRegistry) add_instance(instance *Instance) {
 
 	instances := r.instancesByAppId[applicationId]
 	if instances == nil {
-		instances = make(map[string]*Instance, 1)
+		instances = make(map[string]dea.Instance, 1)
 		r.instancesByAppId[applicationId] = instances
 	}
 	instances[instance.Id()] = instance
 }
 
-func (r *instanceRegistry) remove_instance(instance *Instance) {
+func (r *instanceRegistry) remove_instance(instance dea.Instance) {
 	applicationId := instance.ApplicationId()
 	r.Lock()
 	defer r.Unlock()
@@ -160,7 +145,7 @@ func (r *instanceRegistry) remove_instance(instance *Instance) {
 	}
 }
 
-func (r *instanceRegistry) LookupInstance(instanceId string) *Instance {
+func (r *instanceRegistry) LookupInstance(instanceId string) dea.Instance {
 	r.Lock()
 	defer r.Unlock()
 	return r.instances[instanceId]
@@ -200,12 +185,12 @@ func (r *instanceRegistry) reapOrphanedCrashes() {
 func (r *instanceRegistry) reapCrashes() {
 	r.logger.Debug2("Reaping crashes")
 
-	crashesByApp := make(map[string][]*Instance)
+	crashesByApp := make(map[string][]dea.Instance)
 	for _, instance := range r.Instances() {
-		if instance.State() == STATE_CRASHED {
+		if instance.State() == dea.STATE_CRASHED {
 			crashedApps := crashesByApp[instance.ApplicationId()]
 			if crashedApps == nil {
-				crashedApps = make([]*Instance, 0, 1)
+				crashedApps = make([]dea.Instance, 0, 1)
 			}
 			crashesByApp[instance.ApplicationId()] = append(crashedApps, instance)
 		}
@@ -227,9 +212,9 @@ func (r *instanceRegistry) reapCrashesUnderDiskPressure() {
 	r.logger.Debug2("Reaping crashes under disk pressure")
 
 	if r.hasDiskPressure() {
-		crashed := make([]*Instance, 0)
+		crashed := make([]dea.Instance, 0)
 		for _, instance := range r.Instances() {
-			if instance.State() == STATE_CRASHED {
+			if instance.State() == dea.STATE_CRASHED {
 				crashed = append(crashed, instance)
 			}
 		}
@@ -357,12 +342,12 @@ func (r *instanceRegistry) ToHash() map[string]map[string]interface{} {
 			apps = make(map[string]interface{})
 			result[i.ApplicationId()] = apps
 		}
-		apps[i.Id()] = i.attributes_and_stats()
+		apps[i.Id()] = i.Attributes_and_stats()
 	}
 	return result
 }
 
-func (r *instanceRegistry) Instances_filtered_by_message(data map[string]interface{}, f func(*Instance)) {
+func (r *instanceRegistry) Instances_filtered_by_message(data map[string]interface{}, f func(dea.Instance)) {
 	app_id, exist := data["droplet"].(string)
 
 	if !exist {
@@ -386,11 +371,11 @@ func (r *instanceRegistry) Instances_filtered_by_message(data map[string]interfa
 
 	indices, _ := data["indices"].([]int)
 	stateStrings, _ := data["states"].([]string)
-	var states []State
+	var states []dea.State
 	if stateStrings != nil {
-		states = make([]State, 0, len(stateStrings))
+		states = make([]dea.State, 0, len(stateStrings))
 		for _, ss := range stateStrings {
-			states = append(states, State(strings.ToLower(ss)))
+			states = append(states, dea.State(strings.ToLower(ss)))
 		}
 	}
 

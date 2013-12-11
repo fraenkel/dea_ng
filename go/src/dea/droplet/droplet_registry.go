@@ -1,25 +1,19 @@
 package droplet
 
 import (
+	"dea"
 	"os"
 	"sync"
 )
 
-type DropletRegistry interface {
-	Get(sha1 string) Droplet
-	Remove(sha1 string) Droplet
-	Size() int
-	SHA1s() []string
-}
-
 type dropletRegistry struct {
 	baseDir string
 	sync.Mutex
-	m map[string]Droplet
+	m map[string]dea.Droplet
 }
 
-func NewDropletRegistry(baseDir string) DropletRegistry {
-	registry := &dropletRegistry{baseDir, sync.Mutex{}, make(map[string]Droplet)}
+func NewDropletRegistry(baseDir string) dea.DropletRegistry {
+	registry := &dropletRegistry{baseDir, sync.Mutex{}, make(map[string]dea.Droplet)}
 
 	// Seed registry with available droplets
 	if file, err := os.Open(baseDir); err == nil {
@@ -33,7 +27,7 @@ func NewDropletRegistry(baseDir string) DropletRegistry {
 	return registry
 }
 
-func (d *dropletRegistry) Get(sha1 string) Droplet {
+func (d *dropletRegistry) Get(sha1 string) dea.Droplet {
 	d.Lock()
 	defer d.Unlock()
 
@@ -44,7 +38,7 @@ func (d *dropletRegistry) Get(sha1 string) Droplet {
 	return drop
 }
 
-func (d *dropletRegistry) Remove(sha1 string) Droplet {
+func (d *dropletRegistry) Remove(sha1 string) dea.Droplet {
 	d.Lock()
 	defer d.Unlock()
 	if droplet, exists := d.m[sha1]; exists {
@@ -54,7 +48,7 @@ func (d *dropletRegistry) Remove(sha1 string) Droplet {
 	return nil
 }
 
-func (d *dropletRegistry) put(sha1 string) (Droplet, error) {
+func (d *dropletRegistry) put(sha1 string) (dea.Droplet, error) {
 	droplet, err := NewDroplet(d.baseDir, sha1)
 	if err != nil {
 		return nil, err

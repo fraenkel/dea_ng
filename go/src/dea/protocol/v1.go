@@ -1,9 +1,8 @@
 package protocol
 
 import (
+	"dea"
 	"dea/config"
-	ds "dea/directory_server"
-	"dea/starting"
 	"time"
 )
 
@@ -12,15 +11,13 @@ const VERSION = "0.0.1"
 type HelloMessage struct {
 	Id      string `json:"id"`
 	Ip      string `json:"ip"`
-	Port    uint16 `json:"port"`
 	Version string `json:"version"`
 }
 
-func NewHelloMessage(uuid string, ip string, port uint16) *HelloMessage {
+func NewHelloMessage(uuid string, ip string) *HelloMessage {
 	return &HelloMessage{
 		Id:      uuid,
 		Ip:      ip,
-		Port:    port,
 		Version: VERSION,
 	}
 }
@@ -56,7 +53,7 @@ type HeartbeatResponseV1 struct {
 	Uuid       string                `json:"dea"`
 }
 
-func NewHeartbeatResponseV1(uuid string, instances []*starting.Instance) *HeartbeatResponseV1 {
+func NewHeartbeatResponseV1(uuid string, instances []dea.Instance) *HeartbeatResponseV1 {
 	heartbeats := make([]HeartbeatInstanceV1, len(instances))
 	for i, instance := range instances {
 		heartbeats[i] = HeartbeatInstanceV1{
@@ -89,7 +86,7 @@ type ExitMessage struct {
 	CrashTimestamp  *time.Time `json:"crash_timestamp"`
 }
 
-func NewExitMessage(i starting.Instance, reason string) *ExitMessage {
+func NewExitMessage(i dea.Instance, reason string) *ExitMessage {
 	exitm := ExitMessage{
 		CCPartition:     i.CCPartition(),
 		Droplet:         i.ApplicationId(),
@@ -101,7 +98,7 @@ func NewExitMessage(i starting.Instance, reason string) *ExitMessage {
 		ExitDescription: i.ExitDescription(),
 	}
 
-	if i.State() == starting.STATE_CRASHED {
+	if i.State() == dea.STATE_CRASHED {
 		sTime := i.StateTimestamp()
 		exitm.CrashTimestamp = &sTime
 	}
@@ -132,7 +129,6 @@ func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableD
 type DeaStatusResponse struct {
 	Id             string  `json:"id"`
 	Ip             string  `json:"ip"`
-	Port           uint16  `json:"port"`
 	Version        string  `json:"version"`
 	MaxMemory      float64 `json:"max_memory"`
 	ReservedMemory uint    `json:"reserved_memory"`
@@ -140,11 +136,10 @@ type DeaStatusResponse struct {
 	NumClients     *uint32 `json:"num_clients"`
 }
 
-func NewDeaStatusResponse(uuid string, ip string, port uint16, memoryCapacity float64, reservedMemory, usedMemory uint) *DeaStatusResponse {
+func NewDeaStatusResponse(uuid string, ip string, memoryCapacity float64, reservedMemory, usedMemory uint) *DeaStatusResponse {
 	response := DeaStatusResponse{
 		Id:             uuid,
 		Ip:             ip,
-		Port:           port,
 		Version:        VERSION,
 		MaxMemory:      memoryCapacity,
 		ReservedMemory: reservedMemory,
@@ -162,9 +157,7 @@ type FindDropletResponse struct {
 	Index          int               `json:"index"`
 	State          string            `json:"state"`
 	StateTimestamp time.Time         `json:"state_timestamp"`
-	FileUri        string            `json:"file_uri"`
 	FileUriV2      *string           `json:"file_uri_v2, omitempty"`
-	Credentials    []string          `json:"credentials"`
 	Staged         string            `json:"staged"`
 	Stats          *FindDropletStats `json:"stats,omitempty"`
 }
@@ -188,9 +181,12 @@ type FindDropletUsage struct {
 	Disk     config.Disk `json:"disk"`
 }
 
-func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
-	dirServerV1 *ds.DirectoryServerV1, dirServerV2 *ds.DirectoryServerV2,
-	request map[string]interface{}) *FindDropletResponse {
+type Server interface {
+	UrlForInstance(instanceId, path string) *string
+}
+
+func NewFindDropletResponse(uuid string, localIp string, i dea.Instance,
+	maker dea.InstanceUrlMaker, request map[string]interface{}) *FindDropletResponse {
 	rsp := FindDropletResponse{
 		Dea:            uuid,
 		Droplet:        i.ApplicationId(),
@@ -199,24 +195,22 @@ func NewFindDropletResponse(uuid string, localIp string, i *starting.Instance,
 		Index:          i.Index(),
 		State:          string(i.State()),
 		StateTimestamp: i.StateTime(i.State()),
-		FileUri:        dirServerV1.Uri,
-		Credentials:    dirServerV1.Credentials,
 		Staged:         "/" + i.Id(),
 	}
 
 	if path, exists := request["path"]; exists {
-		fileUriV2 := dirServerV2.Instance_file_url_for(i.Id(), path.(string))
+		fileUriV2 := maker.UrlForInstance(i.Id(), path.(string))
 		rsp.FileUriV2 = &fileUriV2
 	}
 
-	if _, exists := request["include_stats"]; exists && i.State() == starting.STATE_RUNNING {
+	if _, exists := request["include_stats"]; exists && i.State() == dea.STATE_RUNNING {
 		stats := i.GetStats()
 		rspStats := FindDropletStats{
 			Name:        i.ApplicationName(),
 			Uris:        i.ApplicationUris(),
 			Host:        localIp,
 			Port:        i.HostPort(),
-			Uptime:      time.Now().Sub(i.StateTime(starting.STATE_STARTING)).Seconds(),
+			Uptime:      time.Now().Sub(i.StateTime(dea.STATE_STARTING)).Seconds(),
 			MemoryQuota: i.MemoryLimit(),
 			DiskQuota:   i.DiskLimit(),
 			FdsQuota:    i.FileDescriptorLimit(),

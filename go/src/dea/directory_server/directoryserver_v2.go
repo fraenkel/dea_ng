@@ -1,9 +1,8 @@
 package directory_server
 
 import (
+	"dea"
 	"dea/config"
-	"dea/staging"
-	"dea/starting"
 	"dea/utils"
 	"directoryserver"
 	"encoding/hex"
@@ -38,10 +37,11 @@ type DirectoryServerV2 struct {
 	instancepaths *instancePaths
 	stagingtasks  *stagingTasks
 	hmacHelper    HMACHelper
+	routerClient  dea.RouterClient
 	logger        *steno.Logger
 }
 
-func NewDirectoryServerV2(localIp string, domain string, config config.DirServerConfig) (*DirectoryServerV2, error) {
+func NewDirectoryServerV2(localIp string, domain string, routerClient dea.RouterClient, config config.DirServerConfig) (*DirectoryServerV2, error) {
 	dirUuid, err := uuid.NewV4()
 	if err != nil {
 		return nil, err
@@ -53,12 +53,13 @@ func NewDirectoryServerV2(localIp string, domain string, config config.DirServer
 	}
 
 	return &DirectoryServerV2{
-		protocol:   config.Protocol,
-		uuid:       dirUuid,
-		domain:     domain,
-		address:    localIp + ":" + strconv.Itoa(int(config.V2Port)),
-		hmacHelper: NewHMACHelper(hmacKey[:]),
-		logger:     utils.Logger("directoryserver_v2", nil),
+		protocol:     config.Protocol,
+		uuid:         dirUuid,
+		domain:       domain,
+		address:      localIp + ":" + strconv.Itoa(int(config.V2Port)),
+		hmacHelper:   NewHMACHelper(hmacKey[:]),
+		routerClient: routerClient,
+		logger:       utils.Logger("directoryserver_v2", nil),
 	}, nil
 }
 
@@ -68,7 +69,7 @@ func (ds *DirectoryServerV2) Port() uint16 {
 	return uint16(n)
 }
 
-func (ds *DirectoryServerV2) Configure_endpoints(instanceRegistry starting.InstanceRegistry, stagingTaskRegistry *staging.StagingTaskRegistry) {
+func (ds *DirectoryServerV2) Configure_endpoints(instanceRegistry dea.InstanceRegistry, stagingTaskRegistry dea.StagingTaskRegistry) {
 	ds.instancepaths = newInstancePaths(instanceRegistry, ds, 60*60)
 	ds.stagingtasks = newStagingTasks(stagingTaskRegistry, ds, 60*60)
 }
@@ -92,14 +93,31 @@ func (ds *DirectoryServerV2) Start() error {
 
 	go server.Serve(ds.listener)
 
+	ds.register()
+
 	return nil
 }
 
+func (ds *DirectoryServerV2) register() {
+	host, port, _ := net.SplitHostPort(ds.address)
+	p, _ := strconv.ParseUint(port, 10, 32)
+	ds.routerClient.Register_directory_server(host, uint32(p), ds.External_hostname())
+}
+
 func (ds *DirectoryServerV2) Stop() error {
+	ds.unregister()
+
 	if ds.listener != nil {
 		return ds.listener.Close()
 	}
 	return nil
+}
+
+func (ds *DirectoryServerV2) unregister() {
+	host, port, _ := net.SplitHostPort(ds.address)
+	p, _ := strconv.ParseUint(port, 10, 32)
+	ds.routerClient.Unregister_directory_server(host, uint32(p), ds.External_hostname())
+
 }
 
 // If validation with the DEA is successful, the HTTP request is served.
@@ -243,7 +261,7 @@ func (ds *DirectoryServerV2) dumpFile(request *http.Request, writer http.Respons
 	return handle.Close()
 }
 
-func (ds *DirectoryServerV2) Instance_file_url_for(instance_id, file_path string) string {
+func (ds *DirectoryServerV2) UrlForInstance(instance_id, file_path string) string {
 	path := fmt.Sprintf("/instance_paths/%s", instance_id)
 	return ds.hmaced_url_for(path,
 		map[string]string{
@@ -252,7 +270,7 @@ func (ds *DirectoryServerV2) Instance_file_url_for(instance_id, file_path string
 		}, verifiable_file_params)
 }
 
-func (ds *DirectoryServerV2) Staging_task_url(task_id, file_path string) string {
+func (ds *DirectoryServerV2) UrlForStagingTask(task_id, file_path string) string {
 	path := fmt.Sprintf("/staging_tasks/%s/file_path", task_id)
 	return ds.hmaced_url_for(path,
 		map[string]string{

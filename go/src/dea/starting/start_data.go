@@ -71,11 +71,11 @@ func (s StartData) Limits() map[string]uint64 {
 	return limit
 }
 
-func (s StartData) MemoryLimit() uint64 {
+func (s StartData) MemoryLimitMB() uint64 {
 	return uint64(s.LimitsData.MemMb)
 }
 
-func (s StartData) DiskLimit() uint64 {
+func (s StartData) DiskLimitMB() uint64 {
 	return uint64(s.LimitsData.DiskMb)
 }
 

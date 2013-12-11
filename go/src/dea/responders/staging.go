@@ -1,11 +1,9 @@
 package responders
 
 import (
-	"dea/boot"
+	"dea"
 	"dea/config"
-	"dea/droplet"
 	"dea/loggregator"
-	rm "dea/resource_manager"
 	"dea/staging"
 	"dea/utils"
 	"encoding/json"
@@ -17,21 +15,21 @@ var stagingLogger = utils.Logger("Staging", nil)
 
 type Staging struct {
 	enabled          bool
-	instanceManager  boot.InstanceManager
-	snapshot         boot.Snapshot
+	instanceManager  dea.InstanceManager
+	snapshot         dea.Snapshot
 	nats             yagnats.NATSClient
 	id               string
-	stagingRegistry  *staging.StagingTaskRegistry
+	stagingRegistry  dea.StagingTaskRegistry
 	config           *config.Config
-	dropletRegistry  droplet.DropletRegistry
-	resourceMgr      rm.ResourceManager
-	urlMaker         staging.StagingTaskUrlMaker
+	dropletRegistry  dea.DropletRegistry
+	resourceMgr      dea.ResourceManager
+	urlMaker         dea.StagingTaskUrlMaker
 	staging_sid      *int
 	staging_id_sid   *int
 	staging_stop_sid *int
 }
 
-func NewStaging(boot boot.Bootstrap, id string, maker staging.StagingTaskUrlMaker) *Staging {
+func NewStaging(boot dea.Bootstrap, id string, maker dea.StagingTaskUrlMaker) *Staging {
 	config := boot.Config()
 	return &Staging{
 		enabled:         config.Staging.Enabled,
@@ -106,7 +104,7 @@ func (s *Staging) handle(msg *yagnats.Message) {
 	loggregator.Emit(appId, "Got staging request for app with id "+appId)
 	logger.Infof("staging.handle.start %v", stagingMsg)
 
-	task := s.stagingRegistry.NewStagingTask(s.config, stagingMsg, s.dropletRegistry, logger)
+	task := s.stagingRegistry.NewStagingTask(stagingMsg, logger)
 
 	if constrained := s.resourceMgr.GetConstrainedResource(task.MemoryLimit(), task.DiskLimit()); constrained != "" {
 		s.respondTo(msg.ReplyTo, map[string]string{
@@ -156,12 +154,12 @@ func (s *Staging) handleStop(msg *yagnats.Message) {
 	for _, st := range s.stagingRegistry.Tasks() {
 
 		if appId == st.StagingMessage().App_id() {
-			st.Stop()
+			st.Stop(nil)
 		}
 	}
 }
 
-func (s *Staging) notify_setup_completion(replyTo string, task staging.StagingTask) {
+func (s *Staging) notify_setup_completion(replyTo string, task dea.StagingTask) {
 	task.SetAfter_setup_callback(func(e error) error {
 		data := map[string]string{
 			"task_id":           task.Id(),
@@ -177,7 +175,7 @@ func (s *Staging) notify_setup_completion(replyTo string, task staging.StagingTa
 	})
 }
 
-func (s *Staging) notify_completion(replyTo string, data map[string]interface{}, task staging.StagingTask) {
+func (s *Staging) notify_completion(replyTo string, data map[string]interface{}, task dea.StagingTask) {
 	task.SetAfter_complete_callback(func(e error) error {
 		response := map[string]string{
 			"task_id":            task.Id(),
@@ -211,7 +209,7 @@ func (s *Staging) notify_completion(replyTo string, data map[string]interface{},
 	})
 }
 
-func (s *Staging) notify_stop(replyTo string, task staging.StagingTask) {
+func (s *Staging) notify_stop(replyTo string, task dea.StagingTask) {
 	task.SetAfter_stop_callback(func(e error) error {
 		data := map[string]string{
 			"task_id": task.Id(),

@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	"dea/utils"
 	"io/ioutil"
 	"os"
@@ -12,11 +13,11 @@ var bpMgrLogger = utils.Logger("BuildpackManager", nil)
 type BuildpackManager struct {
 	adminBuildpacks_dir  string
 	systemBuildpacks_dir string
-	admin_buildpacks     []StagingBuildpack
-	buildpacks_in_use    []StagingBuildpack
+	admin_buildpacks     []dea.StagingBuildpack
+	buildpacks_in_use    []dea.StagingBuildpack
 }
 
-func NewBuildpackManager(admin_buildpacks_dir, system_buildpacks_dir string, admin_buildpacks, buildpacks_in_use []StagingBuildpack) BuildpackManager {
+func NewBuildpackManager(admin_buildpacks_dir, system_buildpacks_dir string, admin_buildpacks, buildpacks_in_use []dea.StagingBuildpack) BuildpackManager {
 	bpMgr := BuildpackManager{
 		adminBuildpacks_dir:  admin_buildpacks_dir,
 		systemBuildpacks_dir: system_buildpacks_dir,

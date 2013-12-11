@@ -1,8 +1,7 @@
-package boot
+package snapshot
 
 import (
-	"dea/staging"
-	"dea/starting"
+	"dea"
 	"dea/utils"
 	steno "github.com/cloudfoundry/gosteno"
 	"io/ioutil"
@@ -12,12 +11,6 @@ import (
 	"time"
 )
 
-type Snapshot interface {
-	Path() string
-	Load() error
-	Save()
-}
-
 type Snap struct {
 	Time          int64
 	Instances     []map[string]interface{}
@@ -25,15 +18,15 @@ type Snap struct {
 }
 
 type snapshot struct {
-	instanceManager     InstanceManager
-	instanceRegistry    starting.InstanceRegistry
-	stagingTaskRegistry *staging.StagingTaskRegistry
+	instanceManager     dea.InstanceManager
+	instanceRegistry    dea.InstanceRegistry
+	stagingTaskRegistry dea.StagingTaskRegistry
 	snapPath            string
 	tmpPath             string
 	logger              *steno.Logger
 }
 
-func NewSnapshot(ir starting.InstanceRegistry, str *staging.StagingTaskRegistry, im InstanceManager, baseDir string) Snapshot {
+func NewSnapshot(ir dea.InstanceRegistry, str dea.StagingTaskRegistry, im dea.InstanceManager, baseDir string) dea.Snapshot {
 	return &snapshot{
 		instanceRegistry:    ir,
 		stagingTaskRegistry: str,
@@ -62,7 +55,7 @@ func (s *snapshot) Load() error {
 	}
 
 	for _, attrs := range snap.Instances {
-		instance_state := starting.State(attrs["state"].(string))
+		instance_state := dea.State(attrs["state"].(string))
 		println("state", instance_state)
 		delete(attrs, "state")
 		instance := s.instanceManager.CreateInstance(attrs)
@@ -71,7 +64,7 @@ func (s *snapshot) Load() error {
 		}
 
 		// Enter instance state via "RESUMING" to trigger the right transitions
-		instance.SetState(starting.STATE_RESUMING)
+		instance.SetState(dea.STATE_RESUMING)
 		instance.SetState(instance_state)
 	}
 
@@ -86,7 +79,7 @@ func (s *snapshot) Save() {
 	iSnaps := make([]map[string]interface{}, 0, len(instances))
 	for _, i := range instances {
 		switch i.State() {
-		case starting.STATE_RUNNING, starting.STATE_CRASHED:
+		case dea.STATE_RUNNING, dea.STATE_CRASHED:
 			iSnaps = append(iSnaps, i.Snapshot_attributes())
 		}
 	}

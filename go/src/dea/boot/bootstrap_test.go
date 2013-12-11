@@ -1,4 +1,4 @@
-package main
+package boot
 
 import (
 	cfg "dea/config"
@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var _ = Describe("Main", func() {
+var _ = Describe("Boot", func() {
 	var config cfg.Config
 	var tmpdir string
 	var boot *bootstrap

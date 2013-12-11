@@ -119,7 +119,7 @@ func (n *Nats) Request(subject string, message []byte, callback yagnats.Callback
 	return sid, err
 }
 
-func (n *Nats) Stop() {
+func (n *Nats) Unsubscribe() {
 	for _, sid := range n.sids {
 		n.NatsClient.Unsubscribe(sid)
 	}

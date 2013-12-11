@@ -1,7 +1,7 @@
 package directory_server
 
 import (
-	"dea/staging"
+	"dea"
 	"dea/utils"
 	"net/http"
 	"net/url"
@@ -14,13 +14,13 @@ import (
 var staging_tasks = "/staging_tasks/"
 
 type stagingTasks struct {
-	stagingRegistry *staging.StagingTaskRegistry
+	stagingRegistry dea.StagingTaskRegistry
 	hmacServer      hmacDirectoryServer
 	max_age_secs    int64
 }
 
 //GET /staging_tasks/<task_id>/file_path
-func newStagingTasks(registry *staging.StagingTaskRegistry, hmacServer hmacDirectoryServer, max_url_age_secs int64) *stagingTasks {
+func newStagingTasks(registry dea.StagingTaskRegistry, hmacServer hmacDirectoryServer, max_url_age_secs int64) *stagingTasks {
 	return &stagingTasks{
 		stagingRegistry: registry,
 		hmacServer:      hmacServer,

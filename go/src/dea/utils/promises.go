@@ -6,8 +6,38 @@ import (
 	"sync"
 )
 
-func Parallel_promises(callbacks ...func() error) (result error) {
-	if len(callbacks) == 0 {
+type Promise func() error
+
+var promiseLogger = Logger("Promise", nil)
+
+func Async_promise(p Promise, callback func(error) error) {
+	go func() {
+		var err error
+
+		defer func() {
+			if r := recover(); r != nil {
+				switch r.(type) {
+				case error:
+					err = r.(error)
+				default:
+					err = toError(r)
+				}
+			}
+
+			if callback != nil {
+				err = callback(err)
+				if err != nil {
+					promiseLogger.Errorf("Error occurred during async promise: %s", err.Error())
+				}
+			}
+		}()
+
+		err = p()
+	}()
+}
+
+func Parallel_promises(promises ...Promise) (result error) {
+	if len(promises) == 0 {
 		return nil
 	}
 
@@ -23,10 +53,10 @@ func Parallel_promises(callbacks ...func() error) (result error) {
 	}()
 
 	wg := sync.WaitGroup{}
-	wg.Add(len(callbacks) - 1)
-	goCallbacks := callbacks[1:]
-	for _, cb := range goCallbacks {
-		curCB := cb
+	wg.Add(len(promises) - 1)
+	goCallbacks := promises[1:]
+	for _, p := range goCallbacks {
+		curP := p
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -39,7 +69,7 @@ func Parallel_promises(callbacks ...func() error) (result error) {
 			}()
 
 			defer wg.Done()
-			if err := curCB(); err != nil {
+			if err := curP(); err != nil {
 				lock.Lock()
 				defer lock.Unlock()
 				if result == nil {
@@ -48,7 +78,7 @@ func Parallel_promises(callbacks ...func() error) (result error) {
 			}
 		}()
 	}
-	err := callbacks[0]()
+	err := promises[0]()
 
 	wg.Wait()
 
@@ -59,15 +89,15 @@ func Parallel_promises(callbacks ...func() error) (result error) {
 	return
 }
 
-func Sequence_promises(callbacks ...func() error) (err error) {
+func Sequence_promises(promises ...Promise) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = toError(r)
 		}
 	}()
 
-	for _, cb := range callbacks {
-		err = cb()
+	for _, p := range promises {
+		err = p()
 		if err != nil {
 			return
 		}

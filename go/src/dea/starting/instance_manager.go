@@ -1,8 +1,10 @@
-package boot
+package starting
 
 import (
-	"dea/starting"
+	"dea"
+	"dea/protocol"
 	"dea/utils"
+	"encoding/json"
 	steno "github.com/cloudfoundry/gosteno"
 )
 
@@ -10,17 +12,12 @@ const (
 	EXIT_REASON_CRASHED = "CRASHED"
 )
 
-type InstanceManager interface {
-	CreateInstance(attributes map[string]interface{}) *starting.Instance
-	StartApp(attributes map[string]interface{})
-}
-
 type instanceManager struct {
-	Bootstrap
+	dea.Bootstrap
 	logger *steno.Logger
 }
 
-func NewInstanceManager(b Bootstrap) InstanceManager {
+func NewInstanceManager(b dea.Bootstrap) dea.InstanceManager {
 	return &instanceManager{
 		Bootstrap: b,
 		logger:    utils.Logger("InstanceManager", nil),
@@ -34,8 +31,8 @@ func (im *instanceManager) StartApp(data map[string]interface{}) {
 	}
 }
 
-func (im *instanceManager) CreateInstance(attributes map[string]interface{}) *starting.Instance {
-	instance := starting.NewInstance(attributes, im.Config(), im.DropletRegistry(), im.LocalIp())
+func (im *instanceManager) CreateInstance(attributes map[string]interface{}) dea.Instance {
+	instance := NewInstance(attributes, im.Config(), im.DropletRegistry(), im.LocalIp())
 	if instance == nil {
 		return nil
 	}
@@ -46,8 +43,8 @@ func (im *instanceManager) CreateInstance(attributes map[string]interface{}) *st
 		return nil
 	}
 
-	instance.On(starting.Transition{starting.STATE_BORN, starting.STATE_CRASHED}, func() {
-		im.SendExitMessage(instance, EXIT_REASON_CRASHED)
+	instance.On(Transition{dea.STATE_BORN, dea.STATE_CRASHED}, func() {
+		im.sendCrashedMessage(instance)
 	})
 
 	if constrained := im.ResourceManager().GetConstrainedResource(instance.MemoryLimit(), instance.DiskLimit()); constrained != "" {
@@ -57,17 +54,17 @@ func (im *instanceManager) CreateInstance(attributes map[string]interface{}) *st
 			"constrained_resource": constrained,
 		}, "instance.start.insufficient-resource")
 		instance.SetExitStatus(-1, "Not enough "+constrained+" resource available.")
-		instance.SetState(starting.STATE_CRASHED)
+		instance.SetState(dea.STATE_CRASHED)
 		return nil
 	}
 
 	instance.Setup()
 
-	instance.On(starting.Transition{starting.STATE_STARTING, starting.STATE_CRASHED}, func() {
-		im.SendExitMessage(instance, EXIT_REASON_CRASHED)
+	instance.On(Transition{dea.STATE_STARTING, dea.STATE_CRASHED}, func() {
+		im.sendCrashedMessage(instance)
 	})
 
-	instance.On(starting.Transition{starting.STATE_STARTING, starting.STATE_RUNNING}, func() {
+	instance.On(Transition{dea.STATE_STARTING, dea.STATE_RUNNING}, func() {
 		// Notify others immediately
 		im.SendHeartbeat()
 
@@ -77,27 +74,37 @@ func (im *instanceManager) CreateInstance(attributes map[string]interface{}) *st
 		im.Snapshot().Save()
 	})
 
-	instance.On(starting.Transition{starting.STATE_STARTING, starting.STATE_STOPPING}, func() {
-		im.SendInstanceStopMessage(instance)
-	})
-
-	instance.On(starting.Transition{starting.STATE_RUNNING, starting.STATE_CRASHED}, func() {
+	instance.On(Transition{dea.STATE_RUNNING, dea.STATE_CRASHED}, func() {
 		im.RouterClient().UnregisterInstance(instance, nil)
-		im.SendExitMessage(instance, EXIT_REASON_CRASHED)
+		im.sendCrashedMessage(instance)
 		im.Snapshot().Save()
 	})
 
-	instance.On(starting.Transition{starting.STATE_RUNNING, starting.STATE_STOPPING}, func() {
+	instance.On(Transition{dea.STATE_RUNNING, dea.STATE_STOPPING}, func() {
 		im.RouterClient().UnregisterInstance(instance, nil)
-		im.SendInstanceStopMessage(instance)
 		im.Snapshot().Save()
 	})
 
-	instance.On(starting.Transition{starting.STATE_STOPPING, starting.STATE_STOPPED}, func() {
+	instance.On(Transition{dea.STATE_EVACUATING, dea.STATE_STOPPING}, func() {
+		im.RouterClient().UnregisterInstance(instance, nil)
+		im.Snapshot().Save()
+	})
+
+	instance.On(Transition{dea.STATE_STOPPING, dea.STATE_STOPPED}, func() {
 		im.InstanceRegistry().Unregister(instance)
-		go instance.Destroy()
+		instance.Destroy(nil)
 	})
 
 	im.InstanceRegistry().Register(instance)
 	return instance
+}
+
+func (im *instanceManager) sendCrashedMessage(i dea.Instance) {
+	exitm := protocol.NewExitMessage(i, EXIT_REASON_CRASHED)
+	bytes, err := json.Marshal(exitm)
+	if err != nil {
+		im.logger.Error(err.Error())
+		return
+	}
+	im.Nats().Publish("droplet.exited", bytes)
 }

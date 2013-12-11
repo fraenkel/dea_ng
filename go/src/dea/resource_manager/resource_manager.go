@@ -1,32 +1,16 @@
 package resource_manager
 
 import (
+	"dea"
 	"dea/config"
-	"dea/staging"
-	"dea/starting"
 	"math"
 )
-
-type ResourceManager interface {
-	MemoryCapacity() float64
-	DiskCapacity() float64
-	AppIdToCount() map[string]int
-	RemainingMemory() float64
-	ReservedMemory() float64
-	UsedMemory() float64
-	CanReserve(memory, disk float64) bool
-	GetConstrainedResource(memory config.Memory, disk config.Disk) string
-	RemainingDisk() float64
-	NumberReservable(memory, disk uint64) uint
-	AvailableMemoryRatio() float64
-	AvailableDiskRatio() float64
-}
 
 type resourceManager struct {
 	memoryCapacityMB    float64
 	diskCapacityMB      float64
-	instanceRegistry    starting.InstanceRegistry
-	stagingTaskRegistry *staging.StagingTaskRegistry
+	instanceRegistry    dea.InstanceRegistry
+	stagingTaskRegistry dea.StagingTaskRegistry
 }
 
 var defaultConfig = &config.ResourcesConfig{
@@ -50,9 +34,9 @@ func getFloat64(configVal, defaultVal float64) float64 {
 	return defaultVal
 }
 
-func NewResourceManager(iRegistry starting.InstanceRegistry,
-	stRegistry *staging.StagingTaskRegistry,
-	config *config.ResourcesConfig) ResourceManager {
+func NewResourceManager(iRegistry dea.InstanceRegistry,
+	stRegistry dea.StagingTaskRegistry,
+	config *config.ResourcesConfig) dea.ResourceManager {
 
 	memoryMb := getUint64(config.MemoryMB, defaultConfig.MemoryMB)
 	memoryOvercommit := getFloat64(config.MemoryOvercommitFactor, defaultConfig.MemoryOvercommitFactor)

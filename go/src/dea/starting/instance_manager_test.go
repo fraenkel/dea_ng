@@ -1,4 +1,4 @@
-package boot_test
+package starting_test
 
 import (
 	. "dea/boot"

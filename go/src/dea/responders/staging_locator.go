@@ -1,9 +1,9 @@
 package responders
 
 import (
+	"dea"
 	"dea/config"
 	"dea/protocol"
-	resmgr "dea/resource_manager"
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/yagnats"
@@ -15,7 +15,7 @@ var stagingLocatorLogger = utils.Logger("StagingLocator", nil)
 type StagingLocator struct {
 	nats                yagnats.NATSClient
 	id                  string
-	resourceMgr         resmgr.ResourceManager
+	resourceMgr         dea.ResourceManager
 	advertiseIntervals  time.Duration
 	stacks              []string
 	placementProperties map[string]interface{}
@@ -23,7 +23,7 @@ type StagingLocator struct {
 	staging_locate_sid  int
 }
 
-func NewStagingLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.ResourceManager, config *config.Config) *StagingLocator {
+func NewStagingLocator(nats yagnats.NATSClient, id string, resourceMgr dea.ResourceManager, config *config.Config) *StagingLocator {
 	advertiseIntervals := default_advertise_interval
 	if config.Intervals.Advertise != 0 {
 		advertiseIntervals = config.Intervals.Advertise

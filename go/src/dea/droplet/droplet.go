@@ -1,6 +1,7 @@
 package droplet
 
 import (
+	"dea"
 	"dea/utils"
 	steno "github.com/cloudfoundry/gosteno"
 	"io/ioutil"
@@ -13,16 +14,6 @@ import (
 
 const DROPLET_BASENAME = "droplet.tgz"
 
-type Droplet interface {
-	SHA1() string
-	Dir() string
-	Path() string
-	Exists() bool
-	Download(uri string) error
-	Local_copy(source string) error
-	Destroy()
-}
-
 type dribble struct {
 	baseDir string
 	sha1    string
@@ -30,7 +21,7 @@ type dribble struct {
 	mutex   sync.Mutex
 }
 
-func NewDroplet(baseDir string, sha1 string) (Droplet, error) {
+func NewDroplet(baseDir string, sha1 string) (dea.Droplet, error) {
 	d := &dribble{
 		baseDir: baseDir,
 		sha1:    sha1,

@@ -1,7 +1,7 @@
 package starting
 
 import (
-	"dea/env"
+	"dea"
 	"strconv"
 )
 
@@ -10,17 +10,17 @@ const (
 )
 
 type RunningEnv struct {
-	instance *Instance
+	instance dea.Instance
 }
 
-func NewRunningEnv(instance *Instance) *RunningEnv {
+func NewRunningEnv(instance dea.Instance) *RunningEnv {
 	return &RunningEnv{
 		instance: instance,
 	}
 }
 
-func (r RunningEnv) Message() env.Message {
-	return &r.instance.startData
+func (r RunningEnv) StartMessage() dea.StartMessage {
+	return r.instance.StartMessage()
 }
 
 func (r RunningEnv) ExportedSystemEnvironmentVariables() [][]string {
@@ -34,10 +34,10 @@ func (r RunningEnv) ExportedSystemEnvironmentVariables() [][]string {
 }
 
 func (r RunningEnv) VcapApplication() map[string]interface{} {
-	started_at := r.instance.StateTime(STATE_STARTING)
+	started_at := r.instance.StateTime(dea.STATE_STARTING)
 	return map[string]interface{}{
 		"instance_id":          r.instance.Id(),
-		"instance_index":       r.Message().Index(),
+		"instance_index":       r.instance.Index(),
 		"host":                 HOST,
 		"port":                 r.instance.ContainerPort(),
 		"started_at":           started_at,

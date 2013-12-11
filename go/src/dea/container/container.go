@@ -21,7 +21,7 @@ type Container interface {
 	Create(bind_mounts []*warden.CreateRequest_BindMount, disk_limit uint64, memory_limit uint64, network bool) error
 	Stop() error
 	CloseAllConnections()
-	Destroy()
+	Destroy() error
 	RunScript(script string) (*warden.RunResponse, error)
 	Spawn(script string, file_descriptor_limit, nproc_limit uint64, discard_output bool) (*warden.SpawnResponse, error)
 	Link(jobId uint32) (*warden.LinkResponse, error)
@@ -137,12 +137,12 @@ func (c *sContainer) Create(bind_mounts []*warden.CreateRequest_BindMount, disk_
 	return nil
 }
 
-func (c *sContainer) Destroy() {
+func (c *sContainer) Destroy() error {
 	if c.handle == "" {
 		bytes := make([]byte, 512)
 		runtime.Stack(bytes, false)
-		logger.Warnf("sContainer.destroy.failed: %v %s", c, bytes)
-		return
+		logger.Warnf("container.destroy.failed: %v %s", c, bytes)
+		return nil
 	}
 
 	c.connect()
@@ -151,6 +151,8 @@ func (c *sContainer) Destroy() {
 		logger.Warnf("Error destroying container: %s", err.Error())
 	}
 	c.handle = ""
+
+	return err
 }
 
 func (c *sContainer) CloseAllConnections() {

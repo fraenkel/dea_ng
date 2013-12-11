@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	"dea/starting"
 	"net/url"
 )
@@ -8,11 +9,6 @@ import (
 type StagingMessage struct {
 	message   map[string]interface{}
 	startData *starting.StartData
-}
-
-type StagingBuildpack struct {
-	Url *url.URL
-	Key string
 }
 
 func NewStagingMessage(data map[string]interface{}) StagingMessage {
@@ -55,7 +51,8 @@ func (msg StagingMessage) Download_uri() *url.URL {
 	return msg.staging_uri("download_uri")
 }
 
-func (msg StagingMessage) StartData() *starting.StartData {
+//func (msg StagingMessage) StartData() *starting.StartData {
+func (msg StagingMessage) StartMessage() dea.StartMessage {
 	if msg.startData == nil {
 		sdata, err := starting.NewStartData(msg.message["start_message"].(map[string]interface{}))
 		if err == nil {
@@ -66,16 +63,16 @@ func (msg StagingMessage) StartData() *starting.StartData {
 	return msg.startData
 }
 
-func (msg StagingMessage) AdminBuildpacks() []StagingBuildpack {
+func (msg StagingMessage) AdminBuildpacks() []dea.StagingBuildpack {
 	adminBuildpacks, ok := msg.message["admin_buildpacks"].([]map[string]interface{})
 	if !ok {
-		return []StagingBuildpack{}
+		return []dea.StagingBuildpack{}
 	}
 
-	buildpacks := make([]StagingBuildpack, 0, len(adminBuildpacks))
+	buildpacks := make([]dea.StagingBuildpack, 0, len(adminBuildpacks))
 	for _, b := range adminBuildpacks {
 		bpUrl, _ := url.Parse(b["url"].(string))
-		buildpacks = append(buildpacks, StagingBuildpack{bpUrl, b["key"].(string)})
+		buildpacks = append(buildpacks, dea.StagingBuildpack{bpUrl, b["key"].(string)})
 	}
 	return buildpacks
 }

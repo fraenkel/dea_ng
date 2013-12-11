@@ -1,9 +1,9 @@
 package starting
 
 import (
+	"dea"
 	"dea/config"
 	"dea/container"
-	"dea/droplet"
 	"dea/health_check"
 	"dea/task"
 	"dea/utils"
@@ -27,28 +27,17 @@ func (u *userFacingError) Error() string {
 var HealthCheckFailed = &userFacingError{"failed to start accepting connections"}
 var MissingStartCommand = &userFacingError{"missing start command"}
 
-type State string
-
 const (
-	STATE_BORN     State = "born"
-	STATE_STARTING State = "starting"
-	STATE_RUNNING  State = "running"
-	STATE_STOPPING State = "stopping"
-	STATE_STOPPED  State = "stopped"
-	STATE_CRASHED  State = "crashed"
-	STATE_DELETED  State = "deleted"
-	STATE_RESUMING State = "resuming"
-
 	NPROC_LIMIT = 512
 )
 
-var STATES = []State{STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING, STATE_STOPPED, STATE_CRASHED, STATE_DELETED, STATE_RESUMING}
+var STATES = []dea.State{dea.STATE_BORN, dea.STATE_STARTING, dea.STATE_RUNNING, dea.STATE_STOPPING, dea.STATE_STOPPED, dea.STATE_CRASHED, dea.STATE_DELETED, dea.STATE_RESUMING, dea.STATE_EVACUATING}
 
 type link_callback func(err error)
 
 type Transition struct {
-	From State
-	To   State
+	From dea.State
+	To   dea.State
 }
 
 func (t Transition) Name() string {
@@ -68,16 +57,16 @@ type Instance struct {
 
 	instance_path string
 	warden_job_id uint32
-	state         State
-	state_times   map[State]time.Time
+	state         dea.State
+	state_times   map[dea.State]time.Time
 
 	exitStatus      int64
 	exitDescription string
 	hooks           map[string]string
-	StatCollector
+	dea.StatCollector
 	*task.Task
 	utils.EventEmitter
-	dropletRegistry    droplet.DropletRegistry
+	dropletRegistry    dea.DropletRegistry
 	stagedInfo         map[string]interface{}
 	localIp            string
 	healthCheckTimeout time.Duration
@@ -122,7 +111,7 @@ func (hcc *healthcheckCallback) Wait() {
 	hcc.condition.Wait()
 }
 
-func NewInstance(raw_attributes map[string]interface{}, config *config.Config, dr droplet.DropletRegistry, localIp string) *Instance {
+func NewInstance(raw_attributes map[string]interface{}, config *config.Config, dr dea.DropletRegistry, localIp string) *Instance {
 	sdata, err := NewStartData(raw_attributes)
 	if err != nil {
 		return nil
@@ -143,7 +132,7 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 	i := &Instance{
 		raw_attributes:      raw_attributes,
 		startData:           sdata,
-		state_times:         make(map[State]time.Time),
+		state_times:         make(map[dea.State]time.Time),
 		instance_id:         instance_id,
 		private_instance_id: private_id,
 		exitStatus:          -1,
@@ -171,7 +160,7 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		"application_name":    i.ApplicationName(),
 	})
 
-	i.SetState(STATE_BORN)
+	i.SetState(dea.STATE_BORN)
 
 	// recover from a snapshot
 	for _, s := range STATES {
@@ -199,6 +188,10 @@ func (i *Instance) Setup() {
 	i.setup_stat_collector()
 	i.setup_link()
 	i.setup_crash_handler()
+}
+
+func (i *Instance) StartMessage() dea.StartMessage {
+	return i.startData
 }
 
 func (i *Instance) CCPartition() string {
@@ -246,7 +239,7 @@ func (i *Instance) DropletSHA1() string {
 func (i *Instance) DropletUri() string {
 	return i.startData.Droplet_uri
 }
-func (i *Instance) droplet() droplet.Droplet {
+func (i *Instance) droplet() dea.Droplet {
 	return i.dropletRegistry.Get(i.DropletSHA1())
 }
 
@@ -279,7 +272,7 @@ func (i *Instance) FileDescriptorLimit() uint64 {
 	return i.Limits().Fds
 }
 
-func (i *Instance) SetState(newState State) {
+func (i *Instance) SetState(newState dea.State) {
 	transition := Transition{i.state, newState}
 	curTime := time.Now()
 
@@ -293,14 +286,14 @@ func (i *Instance) SetState(newState State) {
 	i.Emit(transition)
 }
 
-func (i *Instance) State() State {
+func (i *Instance) State() dea.State {
 	i.Lock()
 	defer i.Unlock()
 
 	return i.state
 }
 
-func (i *Instance) StateTime(state State) time.Time {
+func (i *Instance) StateTime(state dea.State) time.Time {
 	i.Lock()
 	defer i.Unlock()
 
@@ -339,7 +332,7 @@ func (i *Instance) ExitDescription() string {
 
 func (i *Instance) IsConsumingMemory() bool {
 	switch i.State() {
-	case STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING:
+	case dea.STATE_BORN, dea.STATE_STARTING, dea.STATE_RUNNING, dea.STATE_STOPPING:
 		return true
 	}
 	return false
@@ -347,7 +340,7 @@ func (i *Instance) IsConsumingMemory() bool {
 
 func (i *Instance) IsConsumingDisk() bool {
 	switch i.State() {
-	case STATE_BORN, STATE_STARTING, STATE_RUNNING, STATE_STOPPING, STATE_CRASHED:
+	case dea.STATE_BORN, dea.STATE_STARTING, dea.STATE_RUNNING, dea.STATE_STOPPING, dea.STATE_CRASHED:
 		return true
 	}
 	return false
@@ -355,7 +348,7 @@ func (i *Instance) IsConsumingDisk() bool {
 
 func (i *Instance) IsPathAvailable() bool {
 	switch i.State() {
-	case STATE_RUNNING, STATE_CRASHED:
+	case dea.STATE_RUNNING, dea.STATE_CRASHED:
 		return true
 	}
 	return false
@@ -377,7 +370,7 @@ func (i *Instance) Path() (string, error) {
 	return *i.path, nil
 }
 
-func (i *Instance) attributes_and_stats() map[string]interface{} {
+func (i *Instance) Attributes_and_stats() map[string]interface{} {
 	m := make(map[string]interface{})
 	i.startData.MarshalMap(m)
 
@@ -396,171 +389,158 @@ func (i *Instance) attributes_and_stats() map[string]interface{} {
 	return m
 }
 
-func (i *Instance) GetStats() Stats {
+func (i *Instance) GetStats() dea.Stats {
 	return i.StatCollector.GetStats()
 }
 
 func (i *Instance) setup_crash_handler() {
 	// Resuming to crashed state
-	i.EventEmitter.On(Transition{STATE_RESUMING, STATE_CRASHED}, func() {
-		i.crash_handler()
+	i.EventEmitter.On(Transition{dea.STATE_RESUMING, dea.STATE_CRASHED}, func() {
+		i.crash_handler(nil)
 	})
 
-	i.EventEmitter.On(Transition{STATE_STARTING, STATE_CRASHED}, func() {
-		i.crash_handler()
+	i.EventEmitter.On(Transition{dea.STATE_STARTING, dea.STATE_CRASHED}, func() {
+		i.crash_handler(nil)
 	})
 
-	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_CRASHED}, func() {
-		i.crash_handler()
+	i.EventEmitter.On(Transition{dea.STATE_RUNNING, dea.STATE_CRASHED}, func() {
+		i.crash_handler(nil)
 	})
 }
 
-func (i *Instance) crash_handler() {
-	err := i.Promise_crash_handler()
-	if err != nil {
-		i.Logger.Warnd(map[string]interface{}{"error": err},
-			"droplet.crash-handler.error")
-	}
-}
-
-func (i *Instance) Start(callback func(error)) {
-	var err error
-	defer func() {
-		if r := recover(); r != nil {
-			switch r.(type) {
-			case error:
-				err = r.(error)
-			default:
-				err = errors.New("failed to start")
-			}
-		}
-
+func (i *Instance) crash_handler(callback func(error) error) {
+	utils.Async_promise(i.Promise_crash_handler, func(err error) error {
 		if err != nil {
-			// An error occured while starting, mark as crashed
-			i.exitDescription = err.Error()
-			i.SetState(STATE_CRASHED)
+			i.Logger.Warnd(map[string]interface{}{"error": err},
+				"droplet.crash-handler.error")
 		}
 
 		if callback != nil {
-			callback(err)
+			return callback(err)
 		}
-	}()
-
-	i.Logger.Info("droplet.starting")
-
-	err = i.Promise_state([]State{STATE_BORN}, STATE_STARTING)
-	if err != nil {
-		return
-	}
-	// Concurrently download droplet and setup container
-	err = utils.Parallel_promises(
-		i.Promise_droplet,
-		i.Promise_container)
-	if err != nil {
-		return
-	}
-
-	err = utils.Sequence_promises(
-		i.Promise_extract_droplet,
-		func() error { return i.Promise_exec_hook_script("before_start") },
-		i.Promise_start)
-	if err != nil {
-		return
-	}
-
-	i.On(Transition{STATE_STARTING, STATE_CRASHED}, func() {
-		i.cancel_health_check()
+		return nil
 	})
-
-	// Fire off link so that the health check can be cancelled when the
-	// instance crashes before the health check completes.
-
-	i.Link()
-
-	healthy, err := i.Promise_health_check()
-	if err != nil {
-		return
-	}
-
-	if healthy {
-		err = i.Promise_state([]State{STATE_STARTING}, STATE_RUNNING)
-		if err == nil {
-			i.Logger.Info("droplet.healthy")
-			err = i.Promise_exec_hook_script("after_start")
-		}
-	} else {
-		i.Logger.Warn("droplet.unhealthy")
-		err = HealthCheckFailed
-	}
 }
 
-func (i *Instance) Stop() error {
-	startTime := time.Now()
+func (i *Instance) Start(callback func(error) error) {
+	start_promise := func() error {
+		i.Logger.Info("droplet.starting")
 
-	i.Logger.Info("droplet.stopping")
-	i.Promise_exec_hook_script("before_stop")
+		if err := i.Promise_state([]dea.State{dea.STATE_BORN}, dea.STATE_STARTING); err != nil {
+			return err
+		}
 
-	err := i.Promise_state([]State{STATE_RUNNING, STATE_STARTING}, STATE_STOPPING)
-	if err != nil {
-		goto done
+		// Concurrently download droplet and setup container
+		if err := utils.Parallel_promises(
+			i.Promise_droplet,
+			i.Promise_container); err != nil {
+			return err
+		}
+
+		if err := utils.Sequence_promises(
+			i.Promise_extract_droplet,
+			func() error { return i.Promise_exec_hook_script("before_start") },
+			i.Promise_start); err != nil {
+			return err
+		}
+
+		i.On(Transition{dea.STATE_STARTING, dea.STATE_CRASHED}, func() {
+			i.cancel_health_check()
+		})
+
+		// Fire off link so that the health check can be cancelled when the
+		// instance crashes before the health check completes.
+
+		i.Link(nil)
+
+		healthy, err := i.Promise_health_check()
+		if err != nil {
+			return err
+		}
+
+		if healthy {
+			err = i.Promise_state([]dea.State{dea.STATE_STARTING}, dea.STATE_RUNNING)
+			if err == nil {
+				i.Logger.Info("droplet.healthy")
+				err = i.Promise_exec_hook_script("after_start")
+			}
+		} else {
+			i.Logger.Warn("droplet.unhealthy")
+			err = HealthCheckFailed
+		}
+
+		return err
 	}
 
-	err = i.Promise_exec_hook_script("after_stop")
-	err = i.Promise_stop()
-	if err != nil {
-		goto done
+	i.ResolveAndLog(start_promise, "instance.start", func(err error) error {
+		if err != nil {
+			// An error occured while starting, mark as crashed
+			i.exitDescription = err.Error()
+			i.SetState(dea.STATE_CRASHED)
+		}
+
+		if callback != nil {
+			return callback(err)
+		}
+		return nil
+	})
+}
+
+func (i *Instance) Stop(callback dea.Callback) {
+	stopping_promise := func() error {
+
+		i.Logger.Info("droplet.stopping")
+
+		if err := i.Promise_exec_hook_script("before_stop"); err != nil {
+			return err
+		}
+
+		if err := i.Promise_state([]dea.State{dea.STATE_RUNNING, dea.STATE_STARTING}, dea.STATE_STOPPING); err != nil {
+			return err
+		}
+
+		if err := i.Promise_exec_hook_script("after_stop"); err != nil {
+			return err
+		}
+
+		if err := i.Promise_stop(); err != nil {
+			return err
+		}
+
+		return i.Promise_state([]dea.State{dea.STATE_STOPPING}, dea.STATE_STOPPED)
 	}
 
-	err = i.Promise_state([]State{STATE_STOPPING}, STATE_STOPPED)
+	i.ResolveAndLog(stopping_promise, "instance.stop", func(err error) error {
+		if callback != nil {
+			return callback(err)
+		}
+		return nil
+	})
 
-done:
-	duration := time.Since(startTime)
-
-	if err != nil {
-		// An error occured while starting, mark as crashed
-		i.exitDescription = err.Error()
-		i.SetState(STATE_CRASHED)
-	}
-
-	operation := "stop instance"
-	if err != nil {
-		i.Logger.Warnf("Failed: %s (took %s)", operation, duration)
-		i.Logger.Warnf("Exception: %s %s", operation, err.Error())
-	} else {
-		i.Logger.Infof("Delivered: %s (took %s)", operation, duration)
-	}
-
-	if err != nil {
-		// An error occured while starting, mark as crashed
-		i.exitDescription = err.Error()
-		i.SetState(STATE_CRASHED)
-	}
-
-	return err
 }
 
 func (i *Instance) setup_stat_collector() {
-	i.EventEmitter.On(Transition{STATE_RESUMING, STATE_RUNNING}, func() {
+	i.EventEmitter.On(Transition{dea.STATE_RESUMING, dea.STATE_RUNNING}, func() {
 		i.StatCollector.Start()
 	})
 
-	i.EventEmitter.On(Transition{STATE_STARTING, STATE_RUNNING}, func() {
+	i.EventEmitter.On(Transition{dea.STATE_STARTING, dea.STATE_RUNNING}, func() {
 		i.StatCollector.Start()
 	})
 
-	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_STOPPING}, func() {
+	i.EventEmitter.On(Transition{dea.STATE_RUNNING, dea.STATE_STOPPING}, func() {
 		i.StatCollector.Stop()
 	})
 
-	i.EventEmitter.On(Transition{STATE_RUNNING, STATE_CRASHED}, func() {
+	i.EventEmitter.On(Transition{dea.STATE_RUNNING, dea.STATE_CRASHED}, func() {
 		i.StatCollector.Stop()
 	})
 }
 
 func (i *Instance) setup_link() {
 	// Resuming to running state
-	i.EventEmitter.On(Transition{STATE_RESUMING, STATE_RUNNING}, func() {
-		i.Link()
+	i.EventEmitter.On(Transition{dea.STATE_RESUMING, dea.STATE_RUNNING}, func() {
+		i.Link(nil)
 	})
 }
 
@@ -645,7 +625,7 @@ func (i *Instance) Snapshot_attributes() map[string]interface{} {
 
 		"syslog_drain_urls": sysdrainUrls,
 
-		"state_starting_timestamp": i.StateTime(STATE_STARTING),
+		"state_starting_timestamp": i.StateTime(dea.STATE_STARTING),
 	}
 }
 

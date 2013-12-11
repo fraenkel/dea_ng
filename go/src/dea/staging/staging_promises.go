@@ -188,26 +188,17 @@ func (p *stagingPromises) promise_copy_out() error {
 
 func (p *stagingPromises) promise_save_buildpack_cache() error {
 	s := p.staging
-	start := time.Now()
-	err := s.promise_pack_buildpack_cache()
-	if err == nil {
-		err = utils.Sequence_promises(
-			s.promise_copy_out_buildpack_cache,
-			s.promise_buildpack_cache_upload)
-	}
+	s.ResolveAndLog(s.promise_pack_buildpack_cache, "staging.buildpack-cache.save", func(err error) error {
+		if err == nil {
+			err = utils.Sequence_promises(
+				s.promise_copy_out_buildpack_cache,
+				s.promise_buildpack_cache_upload)
+		}
 
-	if err != nil {
-		s.Logger.Warnd(map[string]interface{}{
-			"duration": time.Now().Sub(start),
-			"error":    err},
-			"staging.buildpack-cache.save.failed")
-	} else {
-		s.Logger.Infod(map[string]interface{}{
-			"duration": time.Now().Sub(start)},
-			"staging.buildpack-cache.save.completed")
-	}
+		return err
+	})
 
-	return err
+	return nil
 }
 
 func (p *stagingPromises) promise_save_droplet() error {

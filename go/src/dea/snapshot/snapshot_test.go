@@ -1,9 +1,9 @@
-package boot_test
+package snapshot_test
 
 import (
-	. "dea/boot"
 	cfg "dea/config"
 	"dea/droplet"
+	. "dea/snapshot"
 	"dea/staging"
 	"dea/starting"
 	thelpers "dea/testhelpers"

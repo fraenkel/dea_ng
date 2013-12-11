@@ -1,9 +1,9 @@
 package responders
 
 import (
+	"dea"
 	"dea/config"
 	"dea/protocol"
-	resmgr "dea/resource_manager"
 	"dea/utils"
 	"encoding/json"
 	"github.com/cloudfoundry/yagnats"
@@ -16,14 +16,14 @@ type DeaLocator struct {
 	nats                yagnats.NATSClient
 	subscriptionId      int
 	id                  string
-	resourceMgr         resmgr.ResourceManager
+	resourceMgr         dea.ResourceManager
 	advertiseIntervals  time.Duration
 	stacks              []string
 	placementProperties map[string]interface{}
 	advertiseTicker     *time.Ticker
 }
 
-func NewDeaLocator(nats yagnats.NATSClient, id string, resourceMgr resmgr.ResourceManager, config *config.Config) *DeaLocator {
+func NewDeaLocator(nats yagnats.NATSClient, id string, resourceMgr dea.ResourceManager, config *config.Config) *DeaLocator {
 	advertiseIntervals := default_advertise_interval
 	if config.Intervals.Advertise != 0 {
 		advertiseIntervals = config.Intervals.Advertise

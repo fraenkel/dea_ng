@@ -1,9 +1,9 @@
 package staging
 
 import (
+	"dea"
 	"dea/config"
 	cnr "dea/container"
-	"dea/droplet"
 	"dea/loggregator"
 	"dea/task"
 	"dea/utils"
@@ -18,49 +18,25 @@ import (
 	"time"
 )
 
-type Callback func(e error) error
-
-type StagingTaskUrlMaker interface {
-	Staging_task_url(task_id, file_path string) string
-}
-
-type StagingTask interface {
-	Id() string
-	StagingMessage() StagingMessage
-	StagingConfig() config.StagingConfig
-	MemoryLimit() config.Memory
-	DiskLimit() config.Disk
-	Start() error
-	Stop()
-	StreamingLogUrl(maker StagingTaskUrlMaker) string
-	DetectedBuildpack() string
-	DropletSHA1() string
-	Path_in_container(pathSuffix string) string
-	SetAfter_setup_callback(callback Callback)
-	SetAfter_complete_callback(callback Callback)
-	SetAfter_stop_callback(callback Callback)
-	StagingTimeout() time.Duration
-}
-
 type stagingTask struct {
 	id              string
 	stagingConfig   *config.StagingConfig
 	bindMounts      []map[string]string
-	staging_message StagingMessage
+	staging_message dea.StagingMessage
 	workspace       StagingTaskWorkspace
-	dropletRegistry droplet.DropletRegistry
+	dropletRegistry dea.DropletRegistry
 	deaRuby         string
 	*task.Task
 	dropletSha1             string
-	after_setup_callback    Callback
-	after_complete_callback Callback
-	after_stop_callback     Callback
+	after_setup_callback    dea.Callback
+	after_complete_callback dea.Callback
+	after_stop_callback     dea.Callback
 	StagingPromises
 	staging_timeout_buffer time.Duration
 }
 
-func NewStagingTask(config *config.Config, staging_message StagingMessage, buildpacksInUse []StagingBuildpack,
-	dropletRegistry droplet.DropletRegistry, logger *steno.Logger) StagingTask {
+func NewStagingTask(config *config.Config, staging_message dea.StagingMessage, buildpacksInUse []dea.StagingBuildpack,
+	dropletRegistry dea.DropletRegistry, logger *steno.Logger) dea.StagingTask {
 	p := &stagingPromises{}
 	s := &stagingTask{
 		id:                     staging_message.Task_id(),
@@ -93,13 +69,13 @@ func (s *stagingTask) StagingConfig() config.StagingConfig {
 	return *s.stagingConfig
 }
 
-func (s *stagingTask) StagingMessage() StagingMessage {
+func (s *stagingTask) StagingMessage() dea.StagingMessage {
 	return s.staging_message
 }
 
 func (s *stagingTask) MemoryLimit() config.Memory {
 	stagemem := s.stagingConfig.MemoryLimitMB
-	if startmem := s.StagingMessage().StartData().MemoryLimit(); startmem > stagemem {
+	if startmem := s.StagingMessage().StartMessage().MemoryLimitMB(); startmem > stagemem {
 		stagemem = startmem
 	}
 
@@ -109,54 +85,70 @@ func (s *stagingTask) MemoryLimit() config.Memory {
 func (s *stagingTask) DiskLimit() config.Disk {
 	stagedisk := s.stagingConfig.DiskLimitMB
 
-	if startdisk := s.StagingMessage().StartData().DiskLimit(); startdisk > stagedisk {
+	if startdisk := s.StagingMessage().StartMessage().DiskLimitMB(); startdisk > stagedisk {
 		stagedisk = startdisk
 	}
 
 	return config.Disk(stagedisk) * config.MB
 }
 
-func (s *stagingTask) Start() error {
-	defer func() {
-		s.Promise_destroy()
-		os.RemoveAll(s.workspace.Workspace_dir())
-	}()
-
-	err := s.resolve_staging_setup()
-	if err == nil {
-		err = s.resolve_staging()
-	}
-
-	if err != nil {
-		s.Logger.Infof("staging.task.failed: %s", err.Error())
-	} else {
-		s.Logger.Info("staging.task.completed")
-	}
-
-	if err == nil {
-		err = s.resolve_staging_upload()
-		if err != nil {
-			s.Logger.Infof("staging.task.upload-failed: %s", err.Error())
+func (s *stagingTask) Start() {
+	staging_promise := func() error {
+		err := s.resolve_staging_setup()
+		if err == nil {
+			err = s.resolve_staging()
 		}
+
+		return err
 	}
 
-	newErr := s.trigger_after_complete(err)
-	if newErr != nil {
-		return newErr
-	}
+	utils.Async_promise(staging_promise, func(err error) error {
+		defer func() {
+			s.Promise_destroy()
+			os.RemoveAll(s.workspace.Workspace_dir())
+		}()
 
-	return err
+		if err != nil {
+			s.Logger.Infof("staging.task.failed: %s", err.Error())
+		} else {
+			s.Logger.Info("staging.task.completed")
+		}
+
+		if err == nil {
+			err = s.resolve_staging_upload()
+			if err != nil {
+				s.Logger.Infof("staging.task.upload-failed: %s", err.Error())
+			}
+		}
+
+		newErr := s.trigger_after_complete(err)
+		if newErr != nil {
+			return newErr
+		}
+
+		return err
+	})
 }
 
-func (s *stagingTask) Stop() {
-	s.Logger.Info("staging.task.stopped")
+func (s *stagingTask) Stop(callback dea.Callback) {
+	stopping_promise := func() error {
+		s.Logger.Info("staging.task.stopped")
 
-	s.SetAfter_complete_callback(nil)
-	if s.Container.Handle() != "" {
-		s.Promise_stop()
+		s.SetAfter_complete_callback(nil)
+		if s.Container.Handle() != "" {
+			return s.Promise_stop()
+		}
+
+		return nil
 	}
 
-	s.trigger_after_stop(errors.New("StagingTaskStoppedError"))
+	utils.Async_promise(stopping_promise, func(e error) error {
+		s.trigger_after_stop(errors.New("StagingTaskStoppedError"))
+		if callback != nil {
+			return callback(e)
+		}
+		return nil
+	})
 }
 
 func (s *stagingTask) bind_mounts() []*warden.CreateRequest_BindMount {
@@ -168,7 +160,7 @@ func (s *stagingTask) resolve_staging_setup() error {
 	s.workspace.Prepare()
 	s.Container.Create(s.bind_mounts(), uint64(s.DiskLimit()), uint64(s.MemoryLimit()), false)
 
-	promises := make([]func() error, 1, 2)
+	promises := make([]utils.Promise, 1, 2)
 	promises[0] = s.promise_app_download
 	if s.staging_message.Buildpack_cache_download_uri() != nil {
 		promises = append(promises, s.promise_buildpack_cache_download)
@@ -215,8 +207,8 @@ func (s *stagingTask) resolve_staging_upload() error {
 	)
 }
 
-func (s *stagingTask) StreamingLogUrl(maker StagingTaskUrlMaker) string {
-	return maker.Staging_task_url(s.Id(), s.workspace.warden_staging_log())
+func (s *stagingTask) StreamingLogUrl(maker dea.StagingTaskUrlMaker) string {
+	return maker.UrlForStagingTask(s.Id(), s.workspace.warden_staging_log())
 }
 
 func (s *stagingTask) task_info() map[string]interface{} {
@@ -250,7 +242,7 @@ func (s *stagingTask) Path_in_container(pathSuffix string) string {
 	return strings.Join([]string{cPath, "tmp", "rootfs", pathSuffix}, "/")
 }
 
-func (s *stagingTask) SetAfter_setup_callback(callback Callback) {
+func (s *stagingTask) SetAfter_setup_callback(callback dea.Callback) {
 	s.after_setup_callback = callback
 }
 func (s *stagingTask) trigger_after_setup(err error) error {
@@ -260,7 +252,7 @@ func (s *stagingTask) trigger_after_setup(err error) error {
 	return nil
 }
 
-func (s *stagingTask) SetAfter_complete_callback(callback Callback) {
+func (s *stagingTask) SetAfter_complete_callback(callback dea.Callback) {
 	s.after_complete_callback = callback
 }
 
@@ -271,7 +263,7 @@ func (s *stagingTask) trigger_after_complete(err error) error {
 	return nil
 }
 
-func (s *stagingTask) SetAfter_stop_callback(callback Callback) {
+func (s *stagingTask) SetAfter_stop_callback(callback dea.Callback) {
 	s.after_stop_callback = callback
 }
 func (s *stagingTask) trigger_after_stop(err error) error {

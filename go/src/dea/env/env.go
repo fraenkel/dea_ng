@@ -1,6 +1,7 @@
 package env
 
 import (
+	"dea"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -10,12 +11,12 @@ import (
 var serviceKeys = []string{"name", "label", "tags", "plan", "plan_option", "credentials", "syslog_drain_url"}
 
 type Env struct {
-	envStrategy EnvStrategy
+	envStrategy dea.EnvStrategy
 	vcapApp     *map[string]interface{}
 	vcapSrvcs   *map[string][]map[string]interface{}
 }
 
-func NewEnv(strategy EnvStrategy) *Env {
+func NewEnv(strategy dea.EnvStrategy) *Env {
 	env := &Env{envStrategy: strategy}
 	return env
 }
@@ -34,10 +35,10 @@ func (e Env) ExportedSystemEnvironmentVariables() (string, error) {
 	envList = append(envList, []string{"VCAP_APPLICATION", string(vcapApp)})
 	envList = append(envList, []string{"VCAP_SERVICES", string(vcapServices)})
 
-	memlimit := e.envStrategy.Message().MemoryLimit()
+	memlimit := e.envStrategy.StartMessage().MemoryLimitMB()
 	envList = append(envList, []string{"MEMORY_LIMIT", strconv.FormatUint(memlimit, 10) + "m"})
 
-	services := e.envStrategy.Message().Services()
+	services := e.envStrategy.StartMessage().Services()
 
 	if len(services) > 0 {
 		dbGen := NewDatabaseUriGenerator(services)
@@ -55,7 +56,7 @@ func (e Env) ExportedSystemEnvironmentVariables() (string, error) {
 }
 
 func (e Env) ExportedUserEnvironmentVariables() string {
-	return to_export(translate_env(e.envStrategy.Message().Environment()))
+	return to_export(translate_env(e.envStrategy.StartMessage().Environment()))
 }
 
 func (e Env) ExportedEnvironmentVariables() (string, error) {
@@ -68,7 +69,7 @@ func (e Env) ExportedEnvironmentVariables() (string, error) {
 
 func (e Env) VcapApplication() map[string]interface{} {
 	if e.vcapApp == nil {
-		msg := e.envStrategy.Message()
+		msg := e.envStrategy.StartMessage()
 		vcapApp := e.envStrategy.VcapApplication()
 		vcapApp["limits"] = msg.Limits()
 		vcapApp["application_version"] = msg.Version()
@@ -87,7 +88,7 @@ func (e Env) VcapApplication() map[string]interface{} {
 func (e Env) VcapServices() map[string][]map[string]interface{} {
 	if e.vcapSrvcs == nil {
 		services := make(map[string][]map[string]interface{})
-		servicesData := e.envStrategy.Message().Services()
+		servicesData := e.envStrategy.StartMessage().Services()
 
 		for _, serviceInfo := range servicesData {
 			serviceMap := make(map[string]interface{})

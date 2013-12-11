@@ -70,7 +70,6 @@ var defaultStagingConfig = StagingConfig{
 type DirServerConfig struct {
 	Protocol         string `yaml:"protocol"`
 	DeaPort          uint16 `yaml:"file_api_port"`
-	V1Port           uint16 `yaml:"v1_port"`
 	V2Port           uint16 `"yaml:"v2_port"`
 	StreamingTimeout uint32 `yaml:"streaming_timeout"`
 }
@@ -109,7 +108,7 @@ type Config struct {
 	NatsServers                   []string               `yaml:"nats_servers"`
 	PidFile                       string                 `yaml:"pid_filename"`
 	WardenSocket                  string                 `yaml:"warden_socket"`
-	EvacuationDelay               time.Duration          `yaml:"evacuation_delay_secs"`
+	EvacuationBailOut             time.Duration          `yaml:"evacuation_bail_out_time_in_seconds"`
 	MaximumHealthCheckTimeout     time.Duration          `yaml:"maximum_health_check_timeout"`
 	Index                         uint                   `yaml:"index"`
 	Staging                       StagingConfig          `yaml:"staging"`
@@ -135,7 +134,7 @@ func NewConfig(loader ConfigLoader) (Config, error) {
 		Status:                        StatusConfig{},
 		Resources:                     ResourcesConfig{},
 		CrashLifetime:                 60 * 60,
-		EvacuationDelay:               30,
+		EvacuationBailOut:             900,
 		BindMounts:                    []map[string]string{},
 		CrashBlockUsageRatioThreshold: 0.8,
 		CrashInodeUsageRatioThreshold: 0.8,
@@ -180,7 +179,7 @@ func finalize(config *Config) error {
 
 	// fix up durations
 	config.Staging.MaxStagingDuration *= time.Second
-	config.EvacuationDelay *= time.Second
+	config.EvacuationBailOut *= time.Second
 	config.MaximumHealthCheckTimeout *= time.Second
 	config.CrashLifetime *= time.Second
 	config.Intervals.Advertise *= time.Second

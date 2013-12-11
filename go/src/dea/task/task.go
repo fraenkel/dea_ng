@@ -2,13 +2,15 @@ package task
 
 import (
 	"dea/container"
+	"dea/utils"
 	steno "github.com/cloudfoundry/gosteno"
 	"os"
+	"time"
 )
 
 type TaskPromises interface {
 	Promise_stop() error
-	Promise_destroy()
+	Promise_destroy() error
 }
 
 type taskPromises struct {
@@ -34,10 +36,18 @@ func NewTask(wardenSocket string, logger *steno.Logger) *Task {
 	return t
 }
 
-func (t *Task) Destroy() {
-	t.Logger.Info("task.destroying")
-	t.Promise_destroy()
-	t.Logger.Info("task.destroy.completed")
+func (t *Task) Destroy(callback func(error) error) {
+	destroy_promise := func() error {
+		t.Logger.Info("task.destroying")
+		return t.Promise_destroy()
+	}
+
+	t.ResolveAndLog(destroy_promise, "task.destroy", func(e error) error {
+		if callback != nil {
+			return callback(e)
+		}
+		return nil
+	})
 }
 
 func (t *Task) Copy_out_request(source_path, destination_path string) error {
@@ -49,10 +59,34 @@ func (t *Task) Copy_out_request(source_path, destination_path string) error {
 	return err
 }
 
+func (t *Task) ResolveAndLog(p utils.Promise, name string, callback func(error) error) {
+	start := time.Now()
+	utils.Async_promise(p, func(err error) error {
+		if callback != nil {
+			err = callback(err)
+		}
+
+		duration := time.Now().Sub(start)
+		if err != nil {
+			t.Logger.Warnd(map[string]interface{}{
+				"error":    err,
+				"duration": duration,
+			}, name+".failed")
+		} else {
+			t.Logger.Infod(map[string]interface{}{
+				"duration": duration,
+			}, name+".completed")
+		}
+
+		return nil
+	})
+}
+
 func (p *taskPromises) Promise_stop() error {
 	return p.task.Container.Stop()
 }
 
-func (p *taskPromises) Promise_destroy() {
+func (p *taskPromises) Promise_destroy() error {
 	p.task.Container.Destroy()
+	return nil
 }

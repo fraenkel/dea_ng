@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	"dea/utils"
 	"io/ioutil"
 	"launchpad.net/goyaml"
@@ -23,7 +24,7 @@ type StagingTaskWorkspace struct {
 	buildpackManager      BuildpackManager
 }
 
-func NewStagingTaskWorkspace(baseDir, system_buildpack_dir string, stagingMsg StagingMessage, buildpacksInUse []StagingBuildpack) StagingTaskWorkspace {
+func NewStagingTaskWorkspace(baseDir, system_buildpack_dir string, stagingMsg dea.StagingMessage, buildpacksInUse []dea.StagingBuildpack) StagingTaskWorkspace {
 	adminbuildpacks := stagingMsg.AdminBuildpacks()
 
 	buildpackMgr := NewBuildpackManager(path.Join(baseDir, "admin_buildpacks"),

@@ -1,6 +1,7 @@
 package starting
 
 import (
+	"dea"
 	cnr "dea/container"
 	"dea/env"
 	"dea/health_check"
@@ -21,10 +22,10 @@ type InstancePromises interface {
 	Promise_container() error
 	Promise_droplet() error
 	Promise_exec_hook_script(key string) error
-	Promise_state(from []State, to State) error
+	Promise_state(from []dea.State, to dea.State) error
 	Promise_extract_droplet() error
 	Promise_setup_environment() error
-	Link()
+	Link(callback func(error) error)
 	Promise_read_instance_manifest(container_path string) (map[string]interface{}, error)
 	Promise_health_check() (bool, error)
 }
@@ -164,7 +165,7 @@ func (ip *instancePromises) Promise_exec_hook_script(key string) error {
 	return nil
 }
 
-func (ip *instancePromises) Promise_state(from []State, to State) error {
+func (ip *instancePromises) Promise_state(from []dea.State, to dea.State) error {
 	i := ip.instance
 	for _, s := range from {
 		if i.State() == s {
@@ -189,27 +190,49 @@ func (ip *instancePromises) Promise_setup_environment() error {
 	return err
 }
 
-func (ip *instancePromises) Link() {
-	i := ip.instance
-	response, err := ip.promise_link()
-	if err != nil {
-		i.SetExitStatus(-1, "unknown")
-	} else {
-		i.SetExitStatus(int64(response.GetExitStatus()), determine_exit_description(response))
-	}
+func (ip *instancePromises) Link(callback func(error) error) {
+	//utils.Async_Promise -- can't pass back the response
+	go func() {
+		response, err := ip.promise_link()
 
-	switch i.State() {
-	case STATE_STARTING:
-		i.SetState(STATE_CRASHED)
-	case STATE_RUNNING:
-		uptime := time.Now().Sub(i.StateTime(STATE_RUNNING))
-		i.Logger.Infod(map[string]interface{}{"uptime": uptime},
-			"droplet.instance.uptime")
+		i := ip.instance
+		if err != nil {
+			i.Logger.Warnd(map[string]interface{}{"error": err},
+				"droplet.warden.link.failed")
+			i.SetExitStatus(-1, "unknown")
+		} else {
+			i.SetExitStatus(int64(response.GetExitStatus()), determine_exit_description(response))
+			i.Logger.Warnd(map[string]interface{}{"exit_status": i.ExitStatus(),
+				"exit_description": i.ExitDescription(),
+			}, "droplet.warden.link.completed")
+		}
 
-		i.SetState(STATE_CRASHED)
-	default:
-		// Linking likely completed because of stop
-	}
+		if err != nil {
+			i.Logger.Warnd(map[string]interface{}{"error": err},
+				"droplet.link.failed")
+		}
+
+		switch i.State() {
+		case dea.STATE_STARTING:
+			i.SetState(dea.STATE_CRASHED)
+		case dea.STATE_RUNNING:
+			uptime := time.Now().Sub(i.StateTime(dea.STATE_RUNNING))
+			i.Logger.Infod(map[string]interface{}{"uptime": uptime},
+				"droplet.instance.uptime")
+
+			i.SetState(dea.STATE_CRASHED)
+		default:
+			// Linking likely completed because of stop
+		}
+
+		if callback != nil {
+			err = callback(err)
+		}
+
+		if err != nil {
+			i.Logger.Errorf("Error occurred during async promise: %s", err.Error())
+		}
+	}()
 }
 
 func (ip *instancePromises) promise_link() (*warden.LinkResponse, error) {
