@@ -106,23 +106,27 @@ func NewExitMessage(i dea.Instance, reason string) *ExitMessage {
 	return &exitm
 }
 
-type AdvertiseMessage struct {
-	ID                  string                 `json:"id"`
-	Stacks              []string               `json:"stacks"`
-	AvailableMemory     float64                `json:"available_memory"`
-	AvailableDisk       float64                `json:"available_disk"`
-	AppCounts           map[string]int         `json:"app_id_to_count"`
-	PlacementProperties map[string]interface{} `json:"placement_properties"`
+type PlacementProperties struct {
+	Zone string `json:"zone"`
 }
 
-func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableDisk float64, appCounts map[string]int, placementProperties map[string]interface{}) *AdvertiseMessage {
+type AdvertiseMessage struct {
+	ID                  string              `json:"id"`
+	Stacks              []string            `json:"stacks"`
+	AvailableMemory     float64             `json:"available_memory"`
+	AvailableDisk       float64             `json:"available_disk"`
+	AppCounts           map[string]int      `json:"app_id_to_count"`
+	PlacementProperties PlacementProperties `json:"placement_properties"`
+}
+
+func NewAdvertiseMessage(id string, stacks []string, availableMemory, availableDisk float64, appCounts map[string]int, placementConfig config.PlacementConfig) *AdvertiseMessage {
 	return &AdvertiseMessage{
 		ID:                  id,
 		Stacks:              stacks,
 		AvailableMemory:     availableMemory,
 		AvailableDisk:       availableDisk,
 		AppCounts:           appCounts,
-		PlacementProperties: placementProperties,
+		PlacementProperties: PlacementProperties{Zone: placementConfig.Zone},
 	}
 }
 

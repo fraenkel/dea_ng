@@ -21,7 +21,7 @@ import (
 type stagingTask struct {
 	id              string
 	stagingConfig   *config.StagingConfig
-	bindMounts      []map[string]string
+	bindMounts      []config.BindMount
 	staging_message dea.StagingMessage
 	workspace       StagingTaskWorkspace
 	dropletRegistry dea.DropletRegistry

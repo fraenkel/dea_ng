@@ -21,7 +21,7 @@ type InstancePromises interface {
 	Promise_crash_handler() error
 	Promise_container() error
 	Promise_droplet() error
-	Promise_exec_hook_script(key string) error
+	Promise_exec_hook_script(key string, script_path string) error
 	Promise_state(from []dea.State, to dea.State) error
 	Promise_extract_droplet() error
 	Promise_setup_environment() error
@@ -139,15 +139,15 @@ func (ip *instancePromises) Promise_start() error {
 	return nil
 }
 
-func (ip *instancePromises) Promise_exec_hook_script(key string) error {
+func (ip *instancePromises) Promise_exec_hook_script(key string, script_path string) error {
 	i := ip.instance
-	if script_path, exists := i.hooks[key]; exists {
+	if script_path != "" {
 		if utils.File_Exists(script_path) {
 			script := make([]string, 0, 10)
 			script = append(script, "umask 077")
 			envVars, err := env.NewEnv(NewRunningEnv(i)).ExportedEnvironmentVariables()
 			if err != nil {
-				i.Logger.Warnf("Exception: exec_hook_script hook:%s %s", key, err.Error())
+				i.Logger.Warnf("Exception: exec_hook_script hook:%s %s %s", key, script_path, err.Error())
 			}
 			script = append(script, envVars)
 			bytes, err := ioutil.ReadFile(script_path)
@@ -159,7 +159,7 @@ func (ip *instancePromises) Promise_exec_hook_script(key string) error {
 			_, err = i.Container.RunScript(strings.Join(script, "\n"))
 			return err
 		} else {
-			i.Logger.Warnd(map[string]interface{}{"hook": key, "script_path": "script_path"},
+			i.Logger.Warnd(map[string]interface{}{"hook": key, "script_path": script_path},
 				"droplet.hook-script.missing")
 		}
 	}

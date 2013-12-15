@@ -22,6 +22,7 @@ var _ = Describe("StatCollector", func() {
 		rss := uint64(2)
 		bytes_used := uint64(42)
 		usage := uint64(5000000)
+
 		infoResponse = warden.InfoResponse{
 			State: &state,
 			MemoryStat: &warden.InfoResponse_MemoryStat{
@@ -156,6 +157,30 @@ var _ = Describe("StatCollector", func() {
 
 				Expect(collector.GetStats().ComputedPCPU).To(Equal(float32((usage - 5000000) / uint64(statCollector_INTERVAL))))
 			})
+		})
+
+		Context("when disk stats are unavailable (quotas are disabled)", func() {
+			BeforeEach(func() {
+				infoResponse.DiskStat = nil
+			})
+
+			It("should report 0 bytes used", func() {
+				now := time.Now()
+				collector.Retrieve_stats(now)
+
+				Expect(collector.GetStats().UsedDisk).To(BeNumerically("==", 0))
+			})
+
+			It("should still report valid cpu statistics", func() {
+				now := time.Now()
+				collector.Retrieve_stats(now)
+				usage := uint64(10000000000)
+				container.FInfoResponse.CpuStat.Usage = &usage
+				collector.Retrieve_stats(now.Add(statCollector_INTERVAL))
+
+				Expect(collector.GetStats().ComputedPCPU).To(Equal(float32((usage - 5000000) / uint64(statCollector_INTERVAL))))
+			})
+
 		})
 	})
 })

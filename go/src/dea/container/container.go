@@ -2,12 +2,14 @@ package container
 
 import (
 	"dea"
+	"dea/config"
 	"dea/utils"
 	"errors"
 	"fmt"
 	"github.com/cloudfoundry/gordon"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 var logger = utils.Logger("sContainer", nil)
@@ -269,21 +271,29 @@ func (c *sContainer) NetworkPort(portName string) uint32 {
 	return c.networkPorts[portName]
 }
 
-func CreateBindMounts(dirs []string, bindMaps []map[string]string) []*warden.CreateRequest_BindMount {
-	mounts := make([]*warden.CreateRequest_BindMount, 0, len(dirs)+len(bindMaps))
+func CreateBindMounts(dirs []string, bindMounts []config.BindMount) []*warden.CreateRequest_BindMount {
+	mounts := make([]*warden.CreateRequest_BindMount, 0, len(dirs)+len(bindMounts))
 	for _, d := range dirs {
 		path := d
 		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &path, DstPath: &path})
 	}
 
-	for _, bindMap := range bindMaps {
-		srcPath := bindMap["src_path"]
-		dstPath, exist := bindMap["dst_path"]
-		if !exist {
-			dstPath = srcPath
+	for _, bindMount := range bindMounts {
+		srcPath := bindMount.SrcPath
+		dstPath := srcPath
+
+		if bindMount.DstPath != "" {
+			dstPath = bindMount.DstPath
 		}
 
-		mounts = append(mounts, &warden.CreateRequest_BindMount{SrcPath: &srcPath, DstPath: &dstPath})
+		mount := &warden.CreateRequest_BindMount{SrcPath: &srcPath, DstPath: &dstPath}
+		if bindMount.Mode != nil {
+			if mode, ok := warden.CreateRequest_BindMount_Mode_value[strings.ToUpper(*bindMount.Mode)]; ok {
+				mount.Mode = warden.CreateRequest_BindMount_Mode(mode).Enum()
+			}
+		}
+
+		mounts = append(mounts, mount)
 	}
 
 	return mounts

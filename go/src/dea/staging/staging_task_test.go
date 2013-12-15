@@ -419,9 +419,9 @@ detected_buildpack: Ruby/Rack
 			It("includes the configured bind mounts", func() {
 				a := "a"
 				b := "b"
-				stgTask.bindMounts = []map[string]string{{
-					"src_path": a,
-					"dst_path": b,
+				stgTask.bindMounts = []cfg.BindMount{{
+					SrcPath: a,
+					DstPath: b,
 				}}
 
 				Expect(stgTask.bind_mounts()).To(ContainElement(&warden.CreateRequest_BindMount{

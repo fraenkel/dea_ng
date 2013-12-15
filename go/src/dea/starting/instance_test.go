@@ -631,7 +631,7 @@ var _ = Describe("Instance", func() {
 			dstpath := "/var/dst"
 
 			BeforeEach(func() {
-				config.BindMounts = []map[string]string{{"src_path": srcpath, "dst_path": dstpath}}
+				config.BindMounts = []cfg.BindMount{{SrcPath: srcpath, DstPath: dstpath}}
 			})
 			It("succeeds when the call succeeds", func() {
 
@@ -730,7 +730,7 @@ var _ = Describe("Instance", func() {
 
 			It("executes the before start hook", func() {
 				before_script := path.Join(tmpdir, "hooks", "before_start")
-				instance.hooks = map[string]string{"before_start": before_script}
+				instance.hooks = cfg.HookConfig{BeforeStart: before_script}
 				ioutil.WriteFile(before_script, []byte("before start"), 0755)
 				err := startInstance()
 				Expect(err).To(BeNil())
@@ -738,7 +738,7 @@ var _ = Describe("Instance", func() {
 			})
 			It("executes the after start hook", func() {
 				after_script := path.Join(tmpdir, "hooks", "after_start")
-				instance.hooks = map[string]string{"after_start": after_script}
+				instance.hooks = cfg.HookConfig{AfterStart: after_script}
 				ioutil.WriteFile(after_script, []byte("after start"), 0755)
 				err := startInstance()
 				Expect(err).To(BeNil())
@@ -917,7 +917,7 @@ var _ = Describe("Instance", func() {
 
 			It("executes the before stop hook", func() {
 				before_script := path.Join(tmpdir, "hooks", "before_stop")
-				instance.hooks = map[string]string{"before_stop": before_script}
+				instance.hooks = cfg.HookConfig{BeforeStop: before_script}
 				ioutil.WriteFile(before_script, []byte("before stop"), 0755)
 				err := stopInstance()
 				Expect(err).To(BeNil())
@@ -925,7 +925,7 @@ var _ = Describe("Instance", func() {
 			})
 			It("executes the after stop hook", func() {
 				after_script := path.Join(tmpdir, "hooks", "after_stop")
-				instance.hooks = map[string]string{"after_stop": after_script}
+				instance.hooks = cfg.HookConfig{AfterStop: after_script}
 				ioutil.WriteFile(after_script, []byte("after stop"), 0755)
 				err := stopInstance()
 				Expect(err).To(BeNil())
@@ -934,7 +934,7 @@ var _ = Describe("Instance", func() {
 
 			It("exports the variables in the hook files", func() {
 				after_script := path.Join(tmpdir, "hooks", "after_stop")
-				instance.hooks = map[string]string{"after_stop": after_script}
+				instance.hooks = cfg.HookConfig{AfterStop: after_script}
 				ioutil.WriteFile(after_script, []byte("after stop"), 0755)
 				err := stopInstance()
 				Expect(err).To(BeNil())
@@ -1442,9 +1442,9 @@ func (f *fakePromises) Promise_droplet() error {
 
 	return nil
 }
-func (f *fakePromises) Promise_exec_hook_script(key string) error {
+func (f *fakePromises) Promise_exec_hook_script(key string, script_path string) error {
 	if f.execHookScriptInvoke {
-		return f.realPromises.Promise_exec_hook_script(key)
+		return f.realPromises.Promise_exec_hook_script(key, script_path)
 	}
 
 	return nil

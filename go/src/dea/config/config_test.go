@@ -22,17 +22,23 @@ var _ = Describe("Config", func() {
 			Expect(config).NotTo(BeNil())
 		})
 
-		Context("placement_properties in config/dea.yml", func() {
-			It("can parse placement properties", func() {
-				Expect(config.PlacementProperties["zone"]).To(Equal("zone1"))
-			})
-		})
-
 	})
 
 	It("Fails when the file does not exist", func() {
 		_, err := LoadConfig("/a/b/c")
 		Expect(err).NotTo(BeNil())
+	})
+
+	Context("placement_properties in config/dea.yml", func() {
+		var config Config
+
+		JustBeforeEach(func() {
+			config, _ = NewConfig(nil)
+		})
+
+		It("can parse placement properties", func() {
+			Expect(config.PlacementProperties.Zone).To(Equal("default"))
+		})
 	})
 
 })

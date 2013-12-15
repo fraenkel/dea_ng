@@ -61,7 +61,7 @@ type Instance struct {
 
 	exitStatus      int64
 	exitDescription string
-	hooks           map[string]string
+	hooks           config.HookConfig
 	dea.StatCollector
 	*task.Task
 	utils.EventEmitter
@@ -73,7 +73,7 @@ type Instance struct {
 	crashesPath        string
 	InstancePromises
 	*sync.Mutex
-	bindMounts []map[string]string
+	bindMounts []config.BindMount
 }
 
 type healthcheckCallback struct {
@@ -143,12 +143,9 @@ func NewInstance(raw_attributes map[string]interface{}, config *config.Config, d
 		dropletRegistry:     dr,
 		Mutex:               &sync.Mutex{},
 		bindMounts:          config.BindMounts,
+		hooks:               config.Hooks,
 	}
 	i.InstancePromises = &instancePromises{i}
-
-	if config != nil {
-		i.hooks = config.Hooks
-	}
 
 	i.Logger = utils.Logger("Instance", map[string]interface{}{
 		"instance_id":         i.Id(),
@@ -438,7 +435,7 @@ func (i *Instance) Start(callback func(error) error) {
 
 		if err := utils.Sequence_promises(
 			i.Promise_extract_droplet,
-			func() error { return i.Promise_exec_hook_script("before_start") },
+			func() error { return i.Promise_exec_hook_script("before_start", i.hooks.BeforeStart) },
 			i.Promise_start); err != nil {
 			return err
 		}
@@ -461,7 +458,7 @@ func (i *Instance) Start(callback func(error) error) {
 			err = i.Promise_state([]dea.State{dea.STATE_STARTING}, dea.STATE_RUNNING)
 			if err == nil {
 				i.Logger.Info("droplet.healthy")
-				err = i.Promise_exec_hook_script("after_start")
+				err = i.Promise_exec_hook_script("after_start", i.hooks.AfterStart)
 			}
 		} else {
 			i.Logger.Warn("droplet.unhealthy")
@@ -490,7 +487,7 @@ func (i *Instance) Stop(callback dea.Callback) {
 
 		i.Logger.Info("droplet.stopping")
 
-		if err := i.Promise_exec_hook_script("before_stop"); err != nil {
+		if err := i.Promise_exec_hook_script("before_stop", i.hooks.BeforeStop); err != nil {
 			return err
 		}
 
@@ -498,7 +495,7 @@ func (i *Instance) Stop(callback dea.Callback) {
 			return err
 		}
 
-		if err := i.Promise_exec_hook_script("after_stop"); err != nil {
+		if err := i.Promise_exec_hook_script("after_stop", i.hooks.AfterStop); err != nil {
 			return err
 		}
 

@@ -59,9 +59,13 @@ func (s *statCollector) Retrieve_stats(now time.Time) {
 
 	stats := dea.Stats{
 		UsedMemory: config.Memory(*info.MemoryStat.Rss) * config.Kibi,
-		UsedDisk:   config.Disk(*info.DiskStat.BytesUsed),
 		CpuSamples: make([]dea.CPUStat, 0, 2),
 	}
+
+	if info.DiskStat != nil {
+		stats.UsedDisk = config.Disk(*info.DiskStat.BytesUsed)
+	}
+
 	s.compute_cpu_usage(&stats, *info.CpuStat.Usage, now)
 	s.stats = stats
 }

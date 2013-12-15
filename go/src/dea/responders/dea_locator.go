@@ -19,7 +19,7 @@ type DeaLocator struct {
 	resourceMgr         dea.ResourceManager
 	advertiseIntervals  time.Duration
 	stacks              []string
-	placementProperties map[string]interface{}
+	placementProperties config.PlacementConfig
 	advertiseTicker     *time.Ticker
 }
 

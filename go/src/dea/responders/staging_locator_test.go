@@ -130,8 +130,6 @@ var _ = Describe("StagingLocator", func() {
 	})
 
 	Describe("advertise", func() {
-		var placement map[string]interface{}
-
 		availableMemory := 12345.0
 		availableDisk := 45678.0
 		appCounts := map[string]int{
@@ -141,9 +139,9 @@ var _ = Describe("StagingLocator", func() {
 		stacks := []string{"lucid64"}
 
 		BeforeEach(func() {
-			placement = map[string]interface{}{}
-			config.PlacementProperties = placement
+			config.PlacementProperties = cfg.PlacementConfig{}
 			config.Stacks = stacks
+			config.PlacementProperties.Zone = "zone1"
 
 			resourceManager = testrm.FakeResourceManager{
 				Memory:    availableMemory,
@@ -162,37 +160,17 @@ var _ = Describe("StagingLocator", func() {
 			return advertiseMsg
 		}
 
-		It("publishes 'dea.advertise' message with stacks", func() {
+		It("publishes 'dea.advertise' message", func() {
 			msg := advertise()
-			Expect(msg.Stacks).To(Equal(stacks))
-		})
+			Expect(msg).To(Equal(protocol.AdvertiseMessage{
+				ID:                  dea_id,
+				Stacks:              stacks,
+				AvailableMemory:     availableMemory,
+				AvailableDisk:       availableDisk,
+				AppCounts:           appCounts,
+				PlacementProperties: protocol.PlacementProperties{Zone: "zone1"},
+			}))
 
-		It("publishes 'dea.advertise' message with available memory", func() {
-			msg := advertise()
-			Expect(msg.AvailableMemory).To(Equal(availableMemory))
-		})
-
-		It("publishes 'dea.advertise' message with available disk", func() {
-			msg := advertise()
-			Expect(msg.AvailableDisk).To(Equal(availableDisk))
-		})
-
-		Context("when config has placement properties", func() {
-			BeforeEach(func() {
-				placement["zone"] = "zone1"
-			})
-
-			It("publishes 'dea.advertise' message with placement properties including zone", func() {
-				msg := advertise()
-				Expect(msg.PlacementProperties).To(Equal(placement))
-			})
-		})
-
-		Context("when config has empty placement properties", func() {
-			It("publishes 'dea.advertise' message with placement properties without zone", func() {
-				msg := advertise()
-				Expect(msg.PlacementProperties).To(Equal(placement))
-			})
 		})
 
 		Context("when a failure happens", func() {

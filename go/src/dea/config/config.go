@@ -99,32 +99,49 @@ type IntervalConfig struct {
 	Advertise time.Duration `yaml:"advertise"`
 }
 
+type PlacementConfig struct {
+	Zone string `yaml:"zone"`
+}
+
+type BindMount struct {
+	SrcPath string  `yaml:"src_path"`
+	DstPath string  `yaml:"dst_path"`
+	Mode    *string `yaml:"mode"`
+}
+
+type HookConfig struct {
+	BeforeStart string `yaml:"before_start"`
+	AfterStart  string `yaml:"after_start"`
+	BeforeStop  string `yaml:"before_stop"`
+	AfterStop   string `yaml:"after_stop"`
+}
+
 type Config struct {
-	BaseDir                       string                 `yaml:"base_dir"`
-	BuildpackDir                  string                 `yaml:"buildpack_dir"`
-	Logging                       LoggingConfig          `yaml:"logging"`
-	Loggregator                   LoggregatorConfig      `yaml:"loggregator"`
-	Resources                     ResourcesConfig        `yaml:"resources"`
-	NatsServers                   []string               `yaml:"nats_servers"`
-	PidFile                       string                 `yaml:"pid_filename"`
-	WardenSocket                  string                 `yaml:"warden_socket"`
-	EvacuationBailOut             time.Duration          `yaml:"evacuation_bail_out_time_in_seconds"`
-	MaximumHealthCheckTimeout     time.Duration          `yaml:"maximum_health_check_timeout"`
-	Index                         uint                   `yaml:"index"`
-	Staging                       StagingConfig          `yaml:"staging"`
-	Stacks                        []string               `yaml:"stacks"`
-	Intervals                     IntervalConfig         `yaml:"intervals"`
-	Status                        StatusConfig           `yaml:"status"`
-	CrashesPath                   string                 `yaml:"crashes_path"`
-	CrashLifetime                 time.Duration          `yaml:"crash_lifetime_secs"`
-	BindMounts                    []map[string]string    `yaml:"bind_mounts"`
-	CrashBlockUsageRatioThreshold float64                `yaml:"crash_block_usage_ratio_threshold"`
-	CrashInodeUsageRatioThreshold float64                `yaml:"crash_inode_usage_ratio_threshold"`
-	Domain                        string                 `yaml:"domain"`
-	DirectoryServer               DirServerConfig        `yaml:"directory_server"`
-	DeaRuby                       string                 `yaml:"dea_ruby"`
-	Hooks                         map[string]string      `yaml:"hooks"`
-	PlacementProperties           map[string]interface{} `yaml:"placement_properties"`
+	BaseDir                       string            `yaml:"base_dir"`
+	BuildpackDir                  string            `yaml:"buildpack_dir"`
+	Logging                       LoggingConfig     `yaml:"logging"`
+	Loggregator                   LoggregatorConfig `yaml:"loggregator"`
+	Resources                     ResourcesConfig   `yaml:"resources"`
+	NatsServers                   []string          `yaml:"nats_servers"`
+	PidFile                       string            `yaml:"pid_filename"`
+	WardenSocket                  string            `yaml:"warden_socket"`
+	EvacuationBailOut             time.Duration     `yaml:"evacuation_bail_out_time_in_seconds"`
+	MaximumHealthCheckTimeout     time.Duration     `yaml:"maximum_health_check_timeout"`
+	Index                         uint              `yaml:"index"`
+	Staging                       StagingConfig     `yaml:"staging"`
+	Stacks                        []string          `yaml:"stacks"`
+	Intervals                     IntervalConfig    `yaml:"intervals"`
+	Status                        StatusConfig      `yaml:"status"`
+	CrashesPath                   string            `yaml:"crashes_path"`
+	CrashLifetime                 time.Duration     `yaml:"crash_lifetime_secs"`
+	BindMounts                    []BindMount       `yaml:"bind_mounts"`
+	CrashBlockUsageRatioThreshold float64           `yaml:"crash_block_usage_ratio_threshold"`
+	CrashInodeUsageRatioThreshold float64           `yaml:"crash_inode_usage_ratio_threshold"`
+	Domain                        string            `yaml:"domain"`
+	DirectoryServer               DirServerConfig   `yaml:"directory_server"`
+	DeaRuby                       string            `yaml:"dea_ruby"`
+	Hooks                         HookConfig        `yaml:"hooks"`
+	PlacementProperties           PlacementConfig   `yaml:"placement_properties"`
 }
 
 type ConfigLoader func(c *Config) error
@@ -135,11 +152,13 @@ func NewConfig(loader ConfigLoader) (Config, error) {
 		Resources:                     ResourcesConfig{},
 		CrashLifetime:                 60 * 60,
 		EvacuationBailOut:             10 * 60,
-		BindMounts:                    []map[string]string{},
+		BindMounts:                    []BindMount{},
 		CrashBlockUsageRatioThreshold: 0.8,
 		CrashInodeUsageRatioThreshold: 0.8,
 		MaximumHealthCheckTimeout:     60,
-		PlacementProperties:           map[string]interface{}{},
+		PlacementProperties: PlacementConfig{
+			Zone: "default",
+		},
 		Staging: StagingConfig{
 			MemoryLimitMB: 1024,
 			DiskLimitMB:   2 * 1024,
