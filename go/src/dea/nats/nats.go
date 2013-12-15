@@ -1,6 +1,7 @@
-package dea
+package nats
 
 import (
+	"dea"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/nu7hatch/gouuid"
 	"net/url"
@@ -10,17 +11,6 @@ type Nats struct {
 	NatsClient  yagnats.NATSClient
 	connectInfo yagnats.ConnectionCluster
 	sids        []int
-}
-
-type NatsHandler interface {
-	HandleHealthManagerStart(msg *yagnats.Message)
-	HandleRouterStart(msg *yagnats.Message)
-	HandleDeaStatus(msg *yagnats.Message)
-	HandleDeaDirectedStart(msg *yagnats.Message)
-	HandleDeaStop(msg *yagnats.Message)
-	HandleDeaUpdate(msg *yagnats.Message)
-	HandleDeaFindDroplet(msg *yagnats.Message)
-	UUID() string
 }
 
 func NewNats(servers []string) (*Nats, error) {
@@ -56,7 +46,11 @@ func NewNats(servers []string) (*Nats, error) {
 	}, nil
 }
 
-func (n *Nats) Start(handler NatsHandler) error {
+func (n *Nats) Client() yagnats.NATSClient {
+	return n.NatsClient
+}
+
+func (n *Nats) Start(handler dea.NatsHandler) error {
 	if err := n.NatsClient.Connect(&n.connectInfo); err != nil {
 		return err
 	}

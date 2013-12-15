@@ -3,6 +3,7 @@ package container
 import (
 	"bytes"
 	proto "code.google.com/p/goprotobuf/proto"
+	"dea"
 	"errors"
 	"fmt"
 	"github.com/cloudfoundry/gordon"
@@ -22,8 +23,8 @@ var _ = Describe("Container", func() {
 
 			container.Setup("handle", 1, 2)
 			Expect(container.Handle()).To(Equal("handle"))
-			Expect(container.NetworkPort(HOST_PORT)).To(Equal(uint32(1)))
-			Expect(container.NetworkPort(CONTAINER_PORT)).To(Equal(uint32(2)))
+			Expect(container.NetworkPort(dea.HOST_PORT)).To(Equal(uint32(1)))
+			Expect(container.NetworkPort(dea.CONTAINER_PORT)).To(Equal(uint32(2)))
 		})
 	})
 	Context("Create", func() {

@@ -1,10 +1,11 @@
 package directory_server
 
 import (
+	"dea"
 	cfg "dea/config"
-	"dea/container"
 	"dea/starting"
 	"dea/testhelpers"
+	tcnr "dea/testhelpers/container"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -20,7 +21,7 @@ import (
 var _ = Describe("InstancePaths", func() {
 	var config *cfg.Config
 	var server *DirectoryServerV2
-	var instanceRegistry starting.InstanceRegistry
+	var instanceRegistry dea.InstanceRegistry
 	var instance *starting.Instance
 
 	BeforeEach(func() {
@@ -38,7 +39,7 @@ var _ = Describe("InstancePaths", func() {
 	})
 
 	JustBeforeEach(func() {
-		server, _ = NewDirectoryServerV2("127.0.0.1", "example.org", config.DirectoryServer)
+		server, _ = NewDirectoryServerV2("127.0.0.1", "example.org", nil, config.DirectoryServer)
 		server.Configure_endpoints(instanceRegistry, nil)
 		server.instancepaths.max_age_secs = 1
 	})
@@ -69,7 +70,7 @@ var _ = Describe("InstancePaths", func() {
 
 		Context("when instance path is not available", func() {
 			BeforeEach(func() {
-				instance.Container = &container.MockContainer{MPath: ""}
+				instance.Container = &tcnr.FakeContainer{FPath: ""}
 			})
 
 			It("returns a 503 if the instance path is unavailable", func() {
@@ -89,8 +90,8 @@ var _ = Describe("InstancePaths", func() {
 				file, _ := os.Create(filepath.Join(home_dir, "test"))
 				file.Close()
 
-				instance.Container = &container.MockContainer{MPath: tmpdir}
-				instance.SetState(starting.STATE_CRASHED)
+				instance.Container = &tcnr.FakeContainer{FPath: tmpdir}
+				instance.SetState(dea.STATE_CRASHED)
 			})
 
 			AfterEach(func() {
@@ -132,7 +133,7 @@ func instancePathRequest(server *DirectoryServerV2, id string, path string,
 }
 
 func instance_path(server *DirectoryServerV2, instance_id string, file_path string, options map[string]interface{}) string {
-	urlPath := server.Instance_file_url_for(instance_id, file_path)
+	urlPath := server.UrlForInstance(instance_id, file_path)
 	if options["hmac"] != nil {
 		u, _ := url.Parse(urlPath)
 		params := u.Query()

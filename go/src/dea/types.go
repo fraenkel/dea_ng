@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	HOST_PORT      = "host_port"
+	CONTAINER_PORT = "container_port"
+)
+
 type Bootstrap interface {
 	Config() *config.Config
 	InstanceManager() InstanceManager
@@ -97,6 +102,8 @@ type DropletRegistry interface {
 	SHA1s() []string
 }
 
+const DROPLET_BASENAME = "droplet.tgz"
+
 type Droplet interface {
 	SHA1() string
 	Dir() string
@@ -164,4 +171,22 @@ type DirectoryServerV2 interface {
 
 type Task interface {
 	Stop(callback Callback)
+}
+
+type NatsHandler interface {
+	HandleHealthManagerStart(msg *yagnats.Message)
+	HandleRouterStart(msg *yagnats.Message)
+	HandleDeaStatus(msg *yagnats.Message)
+	HandleDeaDirectedStart(msg *yagnats.Message)
+	HandleDeaStop(msg *yagnats.Message)
+	HandleDeaUpdate(msg *yagnats.Message)
+	HandleDeaFindDroplet(msg *yagnats.Message)
+	UUID() string
+}
+
+type Nats interface {
+	Client() yagnats.NATSClient
+	Start(handler NatsHandler) error
+	Request(subject string, message []byte, callback yagnats.Callback) (int, error)
+	Unsubscribe()
 }

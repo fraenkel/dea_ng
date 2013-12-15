@@ -1,6 +1,7 @@
 package responders
 
 import (
+	"dea"
 	cfg "dea/config"
 	"dea/droplet"
 	"dea/loggregator"
@@ -34,7 +35,7 @@ var _ = Describe("Staging", func() {
 	var staging *Staging
 	var resmgr trm.FakeResourceManager
 
-	panicNewStagingTask := func(*cfg.Config, stg.StagingMessage, []stg.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) stg.StagingTask {
+	panicNewStagingTask := func(*cfg.Config, dea.StagingMessage, []dea.StagingBuildpack, dea.DropletRegistry, *steno.Logger) dea.StagingTask {
 		panic("nasty error")
 	}
 
@@ -60,7 +61,7 @@ var _ = Describe("Staging", func() {
 		config.WardenSocket = "/tmp/bogus"
 
 		nats = fakeyagnats.New()
-		stagingRegistry = stg.NewStagingTaskRegistry(stg.NewStagingTask)
+		stagingRegistry = stg.NewStagingTaskRegistry(&config, nil, stg.NewStagingTask)
 		snapshot = tboot.FakeSnapshot{}
 		fakeim = tboot.FakeInstanceManager{}
 		resmgr = trm.FakeResourceManager{}
@@ -210,13 +211,13 @@ var _ = Describe("Staging", func() {
 		})
 
 		Context("staging async", func() {
-			newFakeStagingTask := func(config *cfg.Config, staging_message stg.StagingMessage,
-				buildpacksInUse []stg.StagingBuildpack, dropletRegistry droplet.DropletRegistry, logger *steno.Logger) stg.StagingTask {
+			newFakeStagingTask := func(config *cfg.Config, staging_message dea.StagingMessage,
+				buildpacksInUse []dea.StagingBuildpack, dropletRegistry dea.DropletRegistry, logger *steno.Logger) dea.StagingTask {
 				return staging_task
 			}
 
 			BeforeEach(func() {
-				stagingRegistry = stg.NewStagingTaskRegistry(newFakeStagingTask)
+				stagingRegistry = stg.NewStagingTaskRegistry(&config, nil, newFakeStagingTask)
 			})
 
 			It("starts staging task with registered callbacks", func() {
@@ -418,7 +419,7 @@ var _ = Describe("Staging", func() {
 
 		Context("when an error occurs during staging", func() {
 			BeforeEach(func() {
-				stagingRegistry = stg.NewStagingTaskRegistry(panicNewStagingTask)
+				stagingRegistry = stg.NewStagingTaskRegistry(&config, nil, panicNewStagingTask)
 			})
 
 			It("catches the error since this is the top level", func() {
@@ -427,14 +428,14 @@ var _ = Describe("Staging", func() {
 		})
 
 		Context("when not enough resources available", func() {
-			newFakeStagingTask := func(config *cfg.Config, staging_message stg.StagingMessage,
-				buildpacksInUse []stg.StagingBuildpack, dropletRegistry droplet.DropletRegistry, logger *steno.Logger) stg.StagingTask {
+			newFakeStagingTask := func(config *cfg.Config, staging_message dea.StagingMessage,
+				buildpacksInUse []dea.StagingBuildpack, dropletRegistry dea.DropletRegistry, logger *steno.Logger) dea.StagingTask {
 				return staging_task
 			}
 
 			BeforeEach(func() {
 				resmgr.ConstrainedResource = "memory"
-				stagingRegistry = stg.NewStagingTaskRegistry(newFakeStagingTask)
+				stagingRegistry = stg.NewStagingTaskRegistry(&config, nil, newFakeStagingTask)
 			})
 
 			It("does not register staging task", func() {
@@ -481,7 +482,7 @@ var _ = Describe("Staging", func() {
 
 		Describe("when an error occurs", func() {
 			BeforeEach(func() {
-				stagingRegistry = stg.NewStagingTaskRegistry(panicNewStagingTask)
+				stagingRegistry = stg.NewStagingTaskRegistry(&config, nil, panicNewStagingTask)
 			})
 
 			It("catches the error since this is the top level", func() {

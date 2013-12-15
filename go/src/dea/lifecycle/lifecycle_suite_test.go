@@ -1,4 +1,4 @@
-package dea
+package lifecycle
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestDea(t *testing.T) {
+func TestLifecycle(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dea Suite")
+	RunSpecs(t, "Lifecycle Suite")
 }

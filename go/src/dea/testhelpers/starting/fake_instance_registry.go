@@ -1,35 +1,31 @@
 package starting
 
 import (
+	"dea"
 	cfg "dea/config"
-	dstarting "dea/starting"
 )
 
-func NewFakeInstanceRegistry() dstarting.InstanceRegistry {
+func NewFakeInstanceRegistry() *FakeInstanceRegistry {
 	return &FakeInstanceRegistry{
-		instances: make([]*dstarting.Instance, 0, 1),
+		instances: make([]dea.Instance, 0, 1),
 	}
 }
 
 type FakeInstanceRegistry struct {
-	instances []*dstarting.Instance
+	instances []dea.Instance
 }
 
-func (fir *FakeInstanceRegistry) Instances() []*dstarting.Instance {
+func (fir *FakeInstanceRegistry) Instances() []dea.Instance {
 	return fir.instances
 }
-func (fir *FakeInstanceRegistry) InstancesForApplication(app_id string) map[string]*dstarting.Instance {
+func (fir *FakeInstanceRegistry) InstancesForApplication(app_id string) map[string]dea.Instance {
 	return nil
 }
-func (fir *FakeInstanceRegistry) Register(instance *dstarting.Instance) {
-	p := FakePromises{}
-	instance.InstancePromises = &p
-	instance.Task.TaskPromises = &p
-	instance.StatCollector = &FakeStatCollector{}
+func (fir *FakeInstanceRegistry) Register(instance dea.Instance) {
 	fir.instances = append(fir.instances, instance)
 }
 
-func (fir *FakeInstanceRegistry) Unregister(instance *dstarting.Instance) {
+func (fir *FakeInstanceRegistry) Unregister(instance dea.Instance) {
 	is := fir.instances
 	for i, v := range is {
 		if v == instance {
@@ -38,9 +34,9 @@ func (fir *FakeInstanceRegistry) Unregister(instance *dstarting.Instance) {
 	}
 }
 
-func (fir *FakeInstanceRegistry) ChangeInstanceId(instance *dstarting.Instance) {
+func (fir *FakeInstanceRegistry) ChangeInstanceId(instance dea.Instance) {
 }
-func (fir *FakeInstanceRegistry) LookupInstance(instanceId string) *dstarting.Instance {
+func (fir *FakeInstanceRegistry) LookupInstance(instanceId string) dea.Instance {
 	return nil
 }
 func (fir *FakeInstanceRegistry) StartReapers() {
@@ -60,5 +56,5 @@ func (fir *FakeInstanceRegistry) ReservedDisk() cfg.Disk {
 func (fir *FakeInstanceRegistry) ToHash() map[string]map[string]interface{} {
 	return nil
 }
-func (fir *FakeInstanceRegistry) Instances_filtered_by_message(data map[string]interface{}, f func(*dstarting.Instance)) {
+func (fir *FakeInstanceRegistry) Instances_filtered_by_message(data map[string]interface{}, f func(dea.Instance)) {
 }

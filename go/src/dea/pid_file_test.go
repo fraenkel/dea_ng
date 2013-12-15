@@ -1,7 +1,6 @@
-package dea_test
+package dea
 
 import (
-	. "dea"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -1,10 +1,11 @@
 package starting
 
 import (
+	"dea"
 	cfg "dea/config"
-	cnr "dea/container"
 	"dea/health_check"
 	thelpers "dea/testhelpers"
+	tcnr "dea/testhelpers/container"
 	tdroplet "dea/testhelpers/droplet"
 	tlogger "dea/testhelpers/logger"
 	"encoding/json"
@@ -233,48 +234,48 @@ var _ = Describe("Instance", func() {
 		It("should set state_timestamp when invoked", func() {
 			old_timestamp := instance.StateTimestamp()
 			time.Sleep(1 * time.Millisecond)
-			instance.SetState(STATE_RUNNING)
+			instance.SetState(dea.STATE_RUNNING)
 			Expect(instance.StateTimestamp().After(old_timestamp)).To(BeTrue())
 		})
 	})
 
 	Describe("IsConsumingMemory", func() {
-		memory := func(state State, outcome bool) {
+		memory := func(state dea.State, outcome bool) {
 			instance.SetState(state)
 			Expect(instance.IsConsumingMemory()).To(Equal(outcome))
 		}
 
 		It("consuming memory", func() {
-			memory(STATE_BORN, true)
-			memory(STATE_STARTING, true)
-			memory(STATE_RUNNING, true)
-			memory(STATE_STOPPING, true)
+			memory(dea.STATE_BORN, true)
+			memory(dea.STATE_STARTING, true)
+			memory(dea.STATE_RUNNING, true)
+			memory(dea.STATE_STOPPING, true)
 		})
 		It("not consuming memory", func() {
-			memory(STATE_STOPPED, false)
-			memory(STATE_CRASHED, false)
-			memory(STATE_DELETED, false)
-			memory(STATE_RESUMING, false)
+			memory(dea.STATE_STOPPED, false)
+			memory(dea.STATE_CRASHED, false)
+			memory(dea.STATE_DELETED, false)
+			memory(dea.STATE_RESUMING, false)
 		})
 	})
 
 	Describe("IsConsumingDisk", func() {
-		disk := func(state State, outcome bool) {
+		disk := func(state dea.State, outcome bool) {
 			instance.SetState(state)
 			Expect(instance.IsConsumingDisk()).To(Equal(outcome))
 		}
 
 		It("consuming disk", func() {
-			disk(STATE_BORN, true)
-			disk(STATE_STARTING, true)
-			disk(STATE_RUNNING, true)
-			disk(STATE_STOPPING, true)
-			disk(STATE_CRASHED, true)
+			disk(dea.STATE_BORN, true)
+			disk(dea.STATE_STARTING, true)
+			disk(dea.STATE_RUNNING, true)
+			disk(dea.STATE_STOPPING, true)
+			disk(dea.STATE_CRASHED, true)
 		})
 		It("not consuming disk", func() {
-			disk(STATE_STOPPED, false)
-			disk(STATE_DELETED, false)
-			disk(STATE_RESUMING, false)
+			disk(dea.STATE_STOPPED, false)
+			disk(dea.STATE_DELETED, false)
+			disk(dea.STATE_RESUMING, false)
 		})
 	})
 
@@ -287,38 +288,38 @@ var _ = Describe("Instance", func() {
 		})
 
 		Context("when paused", func() {
-			startOn := func(state State) {
+			startOn := func(state dea.State) {
 				Expect(collector.started).To(BeFalse())
 				instance.SetState(state)
 				Expect(collector.started).To(BeFalse())
-				instance.SetState(STATE_RUNNING)
+				instance.SetState(dea.STATE_RUNNING)
 				Expect(collector.started).To(BeTrue())
 			}
 
 			It("starts when moving from resuming", func() {
-				startOn(STATE_RESUMING)
+				startOn(dea.STATE_RESUMING)
 			})
 
 			It("starts when moving from starting", func() {
-				startOn(STATE_STARTING)
+				startOn(dea.STATE_STARTING)
 			})
 		})
 
 		Context("when running", func() {
-			stopOn := func(state State) {
+			stopOn := func(state dea.State) {
 				Expect(collector.stopped).To(BeFalse())
-				instance.SetState(STATE_RUNNING)
+				instance.SetState(dea.STATE_RUNNING)
 				Expect(collector.stopped).To(BeFalse())
 				instance.SetState(state)
 				Expect(collector.stopped).To(BeTrue())
 			}
 
 			It("stops when moving to stopping", func() {
-				stopOn(STATE_STOPPING)
+				stopOn(dea.STATE_STOPPING)
 			})
 
 			It("stops when moving to crashed", func() {
-				stopOn(STATE_CRASHED)
+				stopOn(dea.STATE_CRASHED)
 			})
 		})
 	})
@@ -333,22 +334,22 @@ var _ = Describe("Instance", func() {
 
 		It("returns the used_memory_in_bytes stat in the attributes_and_stats hash", func() {
 			collector.stats.UsedMemory = 28 * cfg.Mebi
-			Expect(instance.attributes_and_stats()["used_memory_in_bytes"]).To(Equal(28 * cfg.Mebi))
+			Expect(instance.Attributes_and_stats()["used_memory_in_bytes"]).To(Equal(28 * cfg.Mebi))
 		})
 
 		It("returns the used_disk_in_bytes stat in the attributes_and_stats hash", func() {
 			collector.stats.UsedDisk = cfg.Disk(40)
-			Expect(instance.attributes_and_stats()["used_disk_in_bytes"]).To(Equal(cfg.Disk(40)))
+			Expect(instance.Attributes_and_stats()["used_disk_in_bytes"]).To(Equal(cfg.Disk(40)))
 		})
 
 		It("returns the computed_pcpu stat in the attributes_and_stats hash", func() {
 			collector.stats.ComputedPCPU = 0.123
-			Expect(instance.attributes_and_stats()["computed_pcpu"]).To(Equal(float32(0.123)))
+			Expect(instance.Attributes_and_stats()["computed_pcpu"]).To(Equal(float32(0.123)))
 		})
 	})
 
 	Describe("promise_health_check unit test", func() {
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 
 		container_path := "fake/container/path"
 
@@ -357,7 +358,7 @@ var _ = Describe("Instance", func() {
 		})
 
 		JustBeforeEach(func() {
-			container = cnr.MockContainer{MHandle: "fake handle"}
+			container = tcnr.FakeContainer{FHandle: "fake handle"}
 			instance.Container = &container
 		})
 
@@ -366,8 +367,8 @@ var _ = Describe("Instance", func() {
 		})
 
 		It("updates the path and host ip", func() {
-			container.MUpdatePathAndIpPath = container_path
-			container.MUpdatePathAndIpHostIp = "fancy ip"
+			container.FUpdatePathAndIpPath = container_path
+			container.FUpdatePathAndIpHostIp = "fancy ip"
 
 			b, err := instance.Promise_health_check()
 			Expect(err).To(BeNil())
@@ -378,7 +379,7 @@ var _ = Describe("Instance", func() {
 	})
 
 	Describe("promise_health_check", func() {
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 
 		JustBeforeEach(func() {
 			instance.Container = &container
@@ -400,7 +401,7 @@ var _ = Describe("Instance", func() {
 
 			BeforeEach(func() {
 				tmpdir, _ = ioutil.TempDir("", "instance")
-				container.MUpdatePathAndIpPath = tmpdir
+				container.FUpdatePathAndIpPath = tmpdir
 			})
 
 			JustBeforeEach(func() {
@@ -520,7 +521,7 @@ var _ = Describe("Instance", func() {
 
 		Context("when failing to check the health", func() {
 			BeforeEach(func() {
-				container.MUpdatePathAndIpError = errors.New("error")
+				container.FUpdatePathAndIpError = errors.New("error")
 			})
 
 			It("returns the error", func() {
@@ -533,14 +534,14 @@ var _ = Describe("Instance", func() {
 				logger := &tlogger.FakeL{}
 				instance.Logger.L = logger
 				instance.Promise_health_check()
-				Expect(logger.Logs["error"]).To(Equal("droplet.health-check.container-info-failed: error"))
+				Expect(logger.Logs["error"][0]).To(Equal("droplet.health-check.container-info-failed: error"))
 			})
 		})
 	})
 
 	Describe("start transition", func() {
 		var tmpdir string
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 		var fakepromises *fakePromises
 
 		BeforeEach(func() {
@@ -552,7 +553,7 @@ var _ = Describe("Instance", func() {
 		})
 
 		JustBeforeEach(func() {
-			container = cnr.MockContainer{}
+			container = tcnr.FakeContainer{}
 			instance.Container = &container
 			fakepromises.realPromises = instance.InstancePromises
 			instance.InstancePromises = fakepromises
@@ -565,11 +566,14 @@ var _ = Describe("Instance", func() {
 
 		startInstance := func() error {
 			var err error
-			Expect(func() {
-				instance.Start(func(e error) {
-					err = e
-				})
-			}).ToNot(Panic())
+			started := false
+
+			instance.Start(func(e error) error {
+				err = e
+				started = true
+				return nil
+			})
+			Eventually(func() bool { return started }).Should(BeTrue())
 			return err
 		}
 
@@ -579,12 +583,12 @@ var _ = Describe("Instance", func() {
 			})
 
 			It("passes when BORN", func() {
-				Expect(instance.State()).To(Equal(STATE_BORN))
+				Expect(instance.State()).To(Equal(dea.STATE_BORN))
 				err := startInstance()
 				Expect(err).To(BeNil())
 			})
 
-			failStart := func(s State) {
+			failStart := func(s dea.State) {
 				It("fails when "+string(s), func() {
 					instance.state = s
 					err := startInstance()
@@ -592,13 +596,13 @@ var _ = Describe("Instance", func() {
 				})
 			}
 
-			failStart(STATE_STARTING)
-			failStart(STATE_RUNNING)
-			failStart(STATE_STOPPING)
-			failStart(STATE_STOPPED)
-			failStart(STATE_CRASHED)
-			failStart(STATE_DELETED)
-			failStart(STATE_RESUMING)
+			failStart(dea.STATE_STARTING)
+			failStart(dea.STATE_RUNNING)
+			failStart(dea.STATE_STOPPING)
+			failStart(dea.STATE_STOPPED)
+			failStart(dea.STATE_CRASHED)
+			failStart(dea.STATE_DELETED)
+			failStart(dea.STATE_RESUMING)
 		})
 
 		Describe("downloading droplet", func() {
@@ -640,22 +644,22 @@ var _ = Describe("Instance", func() {
 				startInstance()
 				Expect(instance.ExitDescription()).To(Equal(""))
 
-				Expect(container.MCreateBindMounts).To(Equal(expected_bind_mounts))
-				Expect(container.MCreateDiskLimit).To(Equal(uint64(instance.DiskLimit())))
-				Expect(container.MCreateMemoryLimit).To(Equal(uint64(instance.MemoryLimit())))
-				Expect(container.MCreateNetwork).To(Equal(true))
+				Expect(container.FCreateBindMounts).To(Equal(expected_bind_mounts))
+				Expect(container.FCreateDiskLimit).To(Equal(uint64(instance.DiskLimit())))
+				Expect(container.FCreateMemoryLimit).To(Equal(uint64(instance.MemoryLimit())))
+				Expect(container.FCreateNetwork).To(Equal(true))
 			})
 
 			It("fails when the call fails", func() {
 				msg := "promise warden call error for container creation"
-				container.MCreateError = errors.New(msg)
+				container.FCreateError = errors.New(msg)
 
 				err := startInstance()
 				Expect(err.Error()).To(Equal(msg))
 			})
 
 			It("saves the created container's handle on attributes", func() {
-				container.MCreateHandle = "some-handle"
+				container.FCreateHandle = "some-handle"
 				err := startInstance()
 				Expect(err).To(BeNil())
 				Expect(instance.Container.Handle()).To(Equal("some-handle"))
@@ -670,12 +674,12 @@ var _ = Describe("Instance", func() {
 				err := startInstance()
 				Expect(err).To(BeNil())
 				Expect(instance.ExitDescription()).To(Equal(""))
-				Expect(container.MRunScript).To(ContainSubstring("tar zxf"))
+				Expect(container.FRunScript).To(ContainSubstring("tar zxf"))
 			})
 
 			It("can fail by run failing", func() {
 				msg := "droplet extraction failure"
-				container.MRunScriptError = errors.New(msg)
+				container.FRunScriptError = errors.New(msg)
 				err := startInstance()
 				Expect(err.Error()).To(Equal(msg))
 			})
@@ -689,24 +693,24 @@ var _ = Describe("Instance", func() {
 				err := startInstance()
 				Expect(err).To(BeNil())
 				Expect(instance.ExitDescription()).To(Equal(""))
-				Expect(container.MRunScript).To(ContainSubstring("mkdir -p home/vcap/app"))
+				Expect(container.FRunScript).To(ContainSubstring("mkdir -p home/vcap/app"))
 			})
 			It("should chown the app dir", func() {
 				err := startInstance()
 				Expect(err).To(BeNil())
 				Expect(instance.ExitDescription()).To(Equal(""))
-				Expect(container.MRunScript).To(ContainSubstring("chown vcap:vcap home/vcap/app"))
+				Expect(container.FRunScript).To(ContainSubstring("chown vcap:vcap home/vcap/app"))
 			})
 			It("should symlink the app dir", func() {
 				err := startInstance()
 				Expect(err).To(BeNil())
 				Expect(instance.ExitDescription()).To(Equal(""))
-				Expect(container.MRunScript).To(ContainSubstring("ln -s home/vcap/app /app"))
+				Expect(container.FRunScript).To(ContainSubstring("ln -s home/vcap/app /app"))
 			})
 
 			It("can fail by run failing", func() {
 				msg := "environment setup failure"
-				container.MRunScriptError = errors.New(msg)
+				container.FRunScriptError = errors.New(msg)
 				err := startInstance()
 				Expect(err).ToNot(BeNil())
 				Expect(err.Error()).To(Equal(msg))
@@ -730,7 +734,7 @@ var _ = Describe("Instance", func() {
 				ioutil.WriteFile(before_script, []byte("before start"), 0755)
 				err := startInstance()
 				Expect(err).To(BeNil())
-				Expect(container.MRunScript).To(ContainSubstring("before start"))
+				Expect(container.FRunScript).To(ContainSubstring("before start"))
 			})
 			It("executes the after start hook", func() {
 				after_script := path.Join(tmpdir, "hooks", "after_start")
@@ -738,18 +742,18 @@ var _ = Describe("Instance", func() {
 				ioutil.WriteFile(after_script, []byte("after start"), 0755)
 				err := startInstance()
 				Expect(err).To(BeNil())
-				Expect(container.MRunScript).To(ContainSubstring("after start"))
+				Expect(container.FRunScript).To(ContainSubstring("after start"))
 			})
 		})
 		Describe("promise_start", func() {
 			BeforeEach(func() {
-				container.MSpawnJobId = 37
+				container.FSpawnJobId = 37
 				fakepromises.startInvoke = true
 			})
 
 			It("raises errors when the request fails", func() {
 				msg := "can't start the application"
-				container.MSpawnError = errors.New(msg)
+				container.FSpawnError = errors.New(msg)
 
 				err := instance.Promise_start()
 				Expect(err.Error()).To(Equal(msg))
@@ -763,9 +767,9 @@ var _ = Describe("Instance", func() {
 					script := "fake_start_command.sh"
 					instance.stagedInfo = map[string]interface{}{"start_command": script}
 					instance.Promise_start()
-					Expect(container.MSpawnScript).To(ContainSubstring(script))
-					Expect(container.MSpawnFileDescriptorLimit).To(Equal(instance.FileDescriptorLimit()))
-					Expect(container.MSpawnNProc).To(Equal(uint64(NPROC_LIMIT)))
+					Expect(container.FSpawnScript).To(ContainSubstring(script))
+					Expect(container.FSpawnFileDescriptorLimit).To(Equal(instance.FileDescriptorLimit()))
+					Expect(container.FSpawnNProc).To(Equal(uint64(NPROC_LIMIT)))
 				})
 			})
 
@@ -778,16 +782,16 @@ var _ = Describe("Instance", func() {
 				It("and the buildpack does not provide a command", func() {
 					instance.stagedInfo = map[string]interface{}{"start_command": ""}
 					instance.Promise_start()
-					Expect(container.MSpawnScript).To(ContainSubstring(custom_command))
-					Expect(container.MSpawnFileDescriptorLimit).To(Equal(instance.FileDescriptorLimit()))
-					Expect(container.MSpawnNProc).To(Equal(uint64(NPROC_LIMIT)))
+					Expect(container.FSpawnScript).To(ContainSubstring(custom_command))
+					Expect(container.FSpawnFileDescriptorLimit).To(Equal(instance.FileDescriptorLimit()))
+					Expect(container.FSpawnNProc).To(Equal(uint64(NPROC_LIMIT)))
 				})
 				It("and the buildpack provides one", func() {
 					instance.stagedInfo = map[string]interface{}{"start_command": "foo"}
 					instance.Promise_start()
-					Expect(container.MSpawnScript).To(ContainSubstring(custom_command))
-					Expect(container.MSpawnFileDescriptorLimit).To(Equal(instance.FileDescriptorLimit()))
-					Expect(container.MSpawnNProc).To(Equal(uint64(NPROC_LIMIT)))
+					Expect(container.FSpawnScript).To(ContainSubstring(custom_command))
+					Expect(container.FSpawnFileDescriptorLimit).To(Equal(instance.FileDescriptorLimit()))
+					Expect(container.FSpawnNProc).To(Equal(uint64(NPROC_LIMIT)))
 				})
 			})
 
@@ -807,8 +811,8 @@ var _ = Describe("Instance", func() {
 				err := startInstance()
 				Expect(err).To(BeNil())
 				Expect(instance.ExitDescription()).To(Equal(""))
-				Expect(fakepromises.stateFrom).To(Equal([]State{STATE_STARTING}))
-				Expect(fakepromises.stateTo).To(Equal(STATE_RUNNING))
+				Expect(fakepromises.stateFrom).To(Equal([]dea.State{dea.STATE_STARTING}))
+				Expect(fakepromises.stateTo).To(Equal(dea.STATE_RUNNING))
 			})
 
 			It("fails if the instance is unhealthy", func() {
@@ -821,41 +825,11 @@ var _ = Describe("Instance", func() {
 			})
 		})
 
-		Context("when link fails", func() {
-			JustBeforeEach(func() {
-				fakepromises.linkInvoke = true
-				status := uint32(255)
-				info := warden.InfoResponse{
-					Events: []string{"out of memory"},
-				}
-				rsp := warden.LinkResponse{
-					ExitStatus: &status,
-					Info:       &info,
-				}
-				container.MLinkResponse = &rsp
-			})
-
-			It("sets exit description based on link response", func() {
-				startInstance()
-				Expect(instance.ExitDescription()).To(Equal("out of memory"))
-			})
-		})
-
-		Context("when an arbitrary error occurs", func() {
-			JustBeforeEach(func() {
-				fakepromises.linkPanic = true
-			})
-
-			It("sets a generic exit description", func() {
-				startInstance()
-				Expect(instance.ExitDescription()).To(Equal("failed to start"))
-			})
-		})
 	})
 
 	Describe("stop transition", func() {
 		var tmpdir string
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 		var fakepromises *fakePromises
 
 		BeforeEach(func() {
@@ -867,7 +841,7 @@ var _ = Describe("Instance", func() {
 		})
 
 		JustBeforeEach(func() {
-			container = cnr.MockContainer{}
+			container = tcnr.FakeContainer{}
 			instance.Container = &container
 			fakepromises.realPromises = instance.InstancePromises
 			instance.InstancePromises = fakepromises
@@ -880,9 +854,14 @@ var _ = Describe("Instance", func() {
 
 		stopInstance := func() error {
 			var err error
-			Expect(func() {
-				err = instance.Stop()
-			}).ToNot(Panic())
+			stopped := false
+			instance.Stop(func(e error) error {
+				stopped = true
+				err = e
+				return nil
+			})
+			Eventually(func() bool { return stopped }).Should(BeTrue())
+
 			return err
 		}
 
@@ -892,18 +871,18 @@ var _ = Describe("Instance", func() {
 			})
 
 			It("passes when RUNNING", func() {
-				instance.state = STATE_RUNNING
+				instance.state = dea.STATE_RUNNING
 				err := stopInstance()
 				Expect(err).To(BeNil())
 			})
 
 			It("passes when STARTING", func() {
-				instance.state = STATE_STARTING
+				instance.state = dea.STATE_STARTING
 				err := stopInstance()
 				Expect(err).To(BeNil())
 			})
 
-			failStart := func(s State) {
+			failStart := func(s dea.State) {
 				It("fails when "+string(s), func() {
 					instance.state = s
 					err := stopInstance()
@@ -911,12 +890,12 @@ var _ = Describe("Instance", func() {
 				})
 			}
 
-			failStart(STATE_BORN)
-			failStart(STATE_STOPPING)
-			failStart(STATE_STOPPED)
-			failStart(STATE_CRASHED)
-			failStart(STATE_DELETED)
-			failStart(STATE_RESUMING)
+			failStart(dea.STATE_BORN)
+			failStart(dea.STATE_STOPPING)
+			failStart(dea.STATE_STOPPED)
+			failStart(dea.STATE_CRASHED)
+			failStart(dea.STATE_DELETED)
+			failStart(dea.STATE_RESUMING)
 		})
 
 		Describe("hook scripts", func() {
@@ -942,7 +921,7 @@ var _ = Describe("Instance", func() {
 				ioutil.WriteFile(before_script, []byte("before stop"), 0755)
 				err := stopInstance()
 				Expect(err).To(BeNil())
-				Expect(container.MRunScript).To(ContainSubstring("before stop"))
+				Expect(container.FRunScript).To(ContainSubstring("before stop"))
 			})
 			It("executes the after stop hook", func() {
 				after_script := path.Join(tmpdir, "hooks", "after_stop")
@@ -950,7 +929,7 @@ var _ = Describe("Instance", func() {
 				ioutil.WriteFile(after_script, []byte("after stop"), 0755)
 				err := stopInstance()
 				Expect(err).To(BeNil())
-				Expect(container.MRunScript).To(ContainSubstring("after stop"))
+				Expect(container.FRunScript).To(ContainSubstring("after stop"))
 			})
 
 			It("exports the variables in the hook files", func() {
@@ -959,44 +938,42 @@ var _ = Describe("Instance", func() {
 				ioutil.WriteFile(after_script, []byte("after stop"), 0755)
 				err := stopInstance()
 				Expect(err).To(BeNil())
-				Expect(container.MRunScript).To(ContainSubstring(`export A="B"`))
+				Expect(container.FRunScript).To(ContainSubstring(`export A="B"`))
 			})
 		})
 	})
 
 	Describe("promise_link", func() {
 		status := uint32(42)
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
+		var infoResponse warden.InfoResponse
+		var linkResponse warden.LinkResponse
 
-		JustBeforeEach(func() {
-			container = cnr.MockContainer{MHandle: "handle"}
-			instance.Container = &container
-
-			info := warden.InfoResponse{
+		BeforeEach(func() {
+			infoResponse = warden.InfoResponse{
 				Events: []string{},
 			}
 
-			rsp := warden.LinkResponse{
+			linkResponse = warden.LinkResponse{
 				ExitStatus: &status,
-				Info:       &info,
+				Info:       &infoResponse,
 			}
+		})
 
-			container.MLinkResponse = &rsp
+		JustBeforeEach(func() {
+			container = tcnr.FakeContainer{FHandle: "handle"}
+			instance.Container = &container
+
+			container.FLinkResponse = &linkResponse
 		})
 
 		Describe("when the LinkRequest fails", func() {
 			It("propagates the exception", func() {
-				container.MLinkError = errors.New("Runtime error")
+				container.FLinkError = errors.New("Runtime error")
 				ip := instance.InstancePromises.(*instancePromises)
-				_, err := ip.promise_link()
+				_, err := ip.Promise_link()
 				Expect(err).ToNot(BeNil())
 				Expect(err.Error()).To(Equal("Runtime error"))
-			})
-
-			It("causes the promise to fail, for the resolver of the promise (sanity check)", func() {
-				container.MLinkError = errors.New("Runtime error")
-				instance.Link()
-				Expect(instance.ExitStatus()).To(Equal(int64(-1)))
 			})
 		})
 
@@ -1006,25 +983,45 @@ var _ = Describe("Instance", func() {
 				instance.warden_job_id = 1
 
 				ip := instance.InstancePromises.(*instancePromises)
-				rsp, err := ip.promise_link()
+				rsp, err := ip.Promise_link()
 				Expect(err).To(BeNil())
 				Expect(rsp.GetExitStatus()).To(Equal(status))
-				Expect(container.MLinkJobId).To(Equal(uint32(1)))
+				Expect(container.FLinkJobId).To(Equal(uint32(1)))
 			})
 		})
 	})
 
 	Describe("Link", func() {
 		status := uint32(42)
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 		var fakepromises *fakePromises
-		var info *warden.InfoResponse
+
+		var infoResponse *warden.InfoResponse
+		var linkResponse *warden.LinkResponse
+
+		it_links := func() error {
+			var err error
+			linked := false
+			instance.Link(func(e error) error {
+				err = e
+				linked = true
+				return e
+			})
+			Eventually(func() bool { return linked }).Should(BeTrue())
+			return err
+		}
 
 		BeforeEach(func() {
-			container = cnr.MockContainer{MHandle: "handle"}
+			container = tcnr.FakeContainer{FHandle: "handle"}
 			fakepromises = &fakePromises{healthcheckResponse: true, linkInvoke: true}
-			info = &warden.InfoResponse{
+
+			infoResponse = &warden.InfoResponse{
 				Events: []string{},
+			}
+
+			linkResponse = &warden.LinkResponse{
+				ExitStatus: &status,
+				Info:       infoResponse,
 			}
 
 		})
@@ -1036,54 +1033,49 @@ var _ = Describe("Instance", func() {
 			fakepromises.realPromises = instance.InstancePromises
 			instance.InstancePromises = fakepromises
 
-			rsp := warden.LinkResponse{
-				ExitStatus: &status,
-				Info:       info,
-			}
+			container.FLinkResponse = linkResponse
 
-			container.MLinkResponse = &rsp
-
-			instance.state = STATE_RUNNING
+			instance.state = dea.STATE_RUNNING
 		})
 
 		It("is triggered link when transitioning from RESUMING", func() {
-			instance.state = STATE_RESUMING
+			instance.state = dea.STATE_RESUMING
 			instance.setup_link()
 
-			instance.SetState(STATE_RUNNING)
-			Expect(fakepromises.linkInvoked).To(BeTrue())
+			instance.SetState(dea.STATE_RUNNING)
+			Eventually(func() bool { return fakepromises.linkInvoked }).Should(BeTrue())
 		})
 
 		Describe("when promise_link succeeds", func() {
 			It("sets the exit status on the instance", func() {
-				instance.Link()
+				it_links()
 				Expect(instance.ExitStatus()).To(Equal(int64(status)))
 			})
 
 			Context("when the container_info has an event", func() {
 				BeforeEach(func() {
-					info.Events = []string{"some weird thing happened"}
+					infoResponse.Events = []string{"some weird thing happened"}
 				})
 
 				It("sets the exit_description to the text of the event", func() {
-					instance.Link()
+					it_links()
 					Expect(instance.ExitDescription()).To(Equal("some weird thing happened"))
 				})
 			})
 
 			Context("when the info_response is missing", func() {
 				BeforeEach(func() {
-					info = nil
+					linkResponse.Info = nil
 				})
 				It("sets the exit_description to 'cannot be determined'", func() {
-					instance.Link()
+					it_links()
 					Expect(instance.ExitDescription()).To(Equal("cannot be determined"))
 				})
 			})
 
 			Context("when there is an info_response no usable information", func() {
 				It("sets the exit_description to 'app instance exited'", func() {
-					instance.Link()
+					it_links()
 					Expect(instance.ExitDescription()).To(Equal("app instance exited"))
 				})
 			})
@@ -1091,53 +1083,88 @@ var _ = Describe("Instance", func() {
 		})
 
 		Describe("when the promise_link fails", func() {
-			BeforeEach(func() {
-				container.MLinkError = errors.New("error")
+			Context("when link errors", func() {
+				BeforeEach(func() {
+					container.FLinkError = errors.New("error")
+				})
+
+				It("sets exit status of the instance to -1", func() {
+					it_links()
+					Expect(instance.ExitStatus()).To(BeNumerically("==", -1))
+				})
+
+				It("sets the exit_description to 'unknonw'", func() {
+					it_links()
+					Expect(instance.ExitDescription()).To(Equal("unknown"))
+				})
 			})
 
-			It("sets exit status of the instance to -1", func() {
-				instance.Link()
-				Expect(instance.ExitStatus()).To(BeNumerically("==", -1))
+			Context("when link fails", func() {
+				JustBeforeEach(func() {
+					fakepromises.linkInvoke = true
+					status := uint32(255)
+					info := warden.InfoResponse{
+						Events: []string{"out of memory"},
+					}
+					rsp := warden.LinkResponse{
+						ExitStatus: &status,
+						Info:       &info,
+					}
+					container.FLinkResponse = &rsp
+				})
+
+				It("sets exit description based on link response", func() {
+					it_links()
+					Expect(instance.ExitDescription()).To(Equal("out of memory"))
+				})
 			})
 
-			It("sets the exit_description to 'unknonw'", func() {
-				instance.Link()
-				Expect(instance.ExitDescription()).To(Equal("unknown"))
+			Context("when an arbitrary error occurs", func() {
+				JustBeforeEach(func() {
+					fakepromises.linkPanic = true
+				})
+
+				It("sets a generic exit description", func() {
+					it_links()
+					Expect(instance.ExitDescription()).To(Equal("unknown"))
+				})
 			})
+
 		})
 
 		Describe("state transitions", func() {
 			It("changes to CRASHED when it was STARTING", func() {
-				instance.state = STATE_STARTING
-				instance.Link()
-				Expect(instance.state).To(Equal(STATE_CRASHED))
+				instance.state = dea.STATE_STARTING
+				it_links()
+				Expect(instance.state).To(Equal(dea.STATE_CRASHED))
 			})
 
 			It("changes to CRASHED when it was RUNNING", func() {
-				instance.state = STATE_RUNNING
-				instance.Link()
-				Expect(instance.state).To(Equal(STATE_CRASHED))
+				instance.state = dea.STATE_RUNNING
+				it_links()
+				Expect(instance.state).To(Equal(dea.STATE_CRASHED))
 			})
 
 			It("doesn't changed when it was STOPPING", func() {
-				instance.state = STATE_STOPPING
-				instance.Link()
-				Expect(instance.state).To(Equal(STATE_STOPPING))
+				instance.state = dea.STATE_STOPPING
+				it_links()
+				Expect(instance.state).To(Equal(dea.STATE_STOPPING))
 			})
 
 			It("doesn't changed when it was STOPPED", func() {
-				instance.state = STATE_STOPPED
-				instance.Link()
-				Expect(instance.state).To(Equal(STATE_STOPPED))
+				instance.state = dea.STATE_STOPPED
+				it_links()
+				Expect(instance.state).To(Equal(dea.STATE_STOPPED))
 			})
 		})
+
 	})
 
 	Describe("destroy", func() {
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 
 		BeforeEach(func() {
-			container = cnr.MockContainer{MHandle: "handle"}
+			container = tcnr.FakeContainer{FHandle: "handle"}
 		})
 
 		JustBeforeEach(func() {
@@ -1146,8 +1173,13 @@ var _ = Describe("Instance", func() {
 
 		Describe("promise_destroy", func() {
 			It("executes a DestroyRequest", func() {
-				Expect(func() { instance.Destroy() }).ToNot(Panic())
-				Expect(container.MDestroyInvoked).To(BeTrue())
+				destroyed := false
+				instance.Destroy(func(e error) error {
+					destroyed = true
+					return nil
+				})
+				Eventually(func() bool { return destroyed }).Should(BeTrue())
+				Expect(container.FDestroyInvoked).To(BeTrue())
 			})
 		})
 	})
@@ -1186,14 +1218,14 @@ var _ = Describe("Instance", func() {
 	})
 
 	Describe("crash handler", func() {
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 		var fakepromises *fakePromises
 		var tmpdir string
 
 		BeforeEach(func() {
 			tmpdir, _ = ioutil.TempDir("", "instance")
 			config.CrashesPath = tmpdir
-			container = cnr.MockContainer{MHandle: "fake handle"}
+			container = tcnr.FakeContainer{FHandle: "fake handle"}
 			fakepromises = &fakePromises{healthcheckResponse: true, crashHandlerInvoke: true}
 		})
 
@@ -1210,19 +1242,19 @@ var _ = Describe("Instance", func() {
 			instance.Task.TaskPromises = fakepromises
 
 			instance.setup_crash_handler()
-			instance.state = STATE_RUNNING
+			instance.state = dea.STATE_RUNNING
 		})
 
 		It("is triggered link when transitioning from RESUMING", func() {
-			instance.state = STATE_RESUMING
-			instance.SetState(STATE_CRASHED)
-			Expect(fakepromises.crashHandlerInvoked).To(BeTrue())
+			instance.state = dea.STATE_RESUMING
+			instance.SetState(dea.STATE_CRASHED)
+			Eventually(func() bool { return fakepromises.crashHandlerInvoked }).Should(BeTrue())
 		})
 
 		It("is triggered link when transitioning from RUNNING", func() {
-			instance.state = STATE_RUNNING
-			instance.SetState(STATE_CRASHED)
-			Expect(fakepromises.crashHandlerInvoked).To(BeTrue())
+			instance.state = dea.STATE_RUNNING
+			instance.SetState(dea.STATE_CRASHED)
+			Eventually(func() bool { return fakepromises.crashHandlerInvoked }).Should(BeTrue())
 		})
 
 		Describe("when triggered", func() {
@@ -1230,19 +1262,28 @@ var _ = Describe("Instance", func() {
 				attributes["warden_handle"] = "handle"
 			})
 
+			crash_handler := func() {
+				crashed := false
+				instance.crash_handler(func(e error) error {
+					crashed = true
+					return e
+				})
+				Eventually(func() bool { return crashed }).Should(BeTrue())
+			}
+
 			It("should invoke promise_copy_out", func() {
-				instance.crash_handler()
+				crash_handler()
 				Expect(fakepromises.copyOutInvoked).To(BeTrue())
 			})
 
 			It("should invoke promise_destroy", func() {
-				instance.crash_handler()
+				crash_handler()
 				Expect(fakepromises.destroyInvoked).To(BeTrue())
 			})
 
 			It("should close warden connections", func() {
-				instance.crash_handler()
-				Expect(container.MCloseAllConnectionsInvoked).To(BeTrue())
+				crash_handler()
+				Expect(container.FCloseAllConnectionsInvoked).To(BeTrue())
 			})
 		})
 
@@ -1253,21 +1294,21 @@ var _ = Describe("Instance", func() {
 
 			It("should copy the contents of a directory", func() {
 				instance.Promise_copy_out()
-				Expect(container.MCopyOutSrc).To(Equal("/home/vcap/"))
-				Expect(container.MCopyOutDest).To(ContainSubstring(tmpdir))
+				Expect(container.FCopyOutSrc).To(Equal("/home/vcap/"))
+				Expect(container.FCopyOutDest).To(ContainSubstring(tmpdir))
 			})
 		})
 	})
 
 	Describe("staged_info", func() {
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 		var fakepromises *fakePromises
 		var tmpdir string
 
 		BeforeEach(func() {
 			tmpdir, _ = ioutil.TempDir("", "instance")
 			config.CrashesPath = tmpdir
-			container = cnr.MockContainer{MHandle: "fake handle"}
+			container = tcnr.FakeContainer{FHandle: "fake handle"}
 			fakepromises = &fakePromises{healthcheckResponse: true, crashHandlerInvoke: true}
 		})
 
@@ -1285,7 +1326,7 @@ var _ = Describe("Instance", func() {
 
 		Context("when the files does exist", func() {
 			BeforeEach(func() {
-				container.MCopyOutCallback = func(dest string) {
+				container.FCopyOutCallback = func(dest string) {
 					manifest := map[string]interface{}{"a": 1}
 					bytes, _ := goyaml.Marshal(manifest)
 					os.MkdirAll(dest, 0755)
@@ -1295,7 +1336,7 @@ var _ = Describe("Instance", func() {
 
 			It("sends copying out request", func() {
 				instance.staged_info()
-				Expect(container.MCopyOutSrc).To(Equal("/home/vcap/staging_info.yml"))
+				Expect(container.FCopyOutSrc).To(Equal("/home/vcap/staging_info.yml"))
 			})
 
 			It("reads the file from the copy out", func() {
@@ -1306,7 +1347,7 @@ var _ = Describe("Instance", func() {
 			It("should only be called once", func() {
 				instance.staged_info()
 				instance.staged_info()
-				Expect(container.MCopyOutCount).To(Equal(1))
+				Expect(container.FCopyOutCount).To(Equal(1))
 			})
 
 		})
@@ -1329,7 +1370,7 @@ var _ = Describe("Instance", func() {
 type fakeCollector struct {
 	started bool
 	stopped bool
-	stats   Stats
+	stats   dea.Stats
 }
 
 func (f *fakeCollector) Start() bool {
@@ -1339,7 +1380,7 @@ func (f *fakeCollector) Start() bool {
 func (f *fakeCollector) Stop() {
 	f.stopped = true
 }
-func (f *fakeCollector) GetStats() Stats {
+func (f *fakeCollector) GetStats() dea.Stats {
 	return f.stats
 }
 func (f *fakeCollector) Retrieve_stats(now time.Time) {
@@ -1362,8 +1403,8 @@ type fakePromises struct {
 	healthcheckResponse bool
 	healthcheckError    error
 
-	stateFrom []State
-	stateTo   State
+	stateFrom []dea.State
+	stateTo   dea.State
 
 	linkInvoked         bool
 	crashHandlerInvoked bool
@@ -1408,7 +1449,7 @@ func (f *fakePromises) Promise_exec_hook_script(key string) error {
 
 	return nil
 }
-func (f *fakePromises) Promise_state(from []State, to State) error {
+func (f *fakePromises) Promise_state(from []dea.State, to dea.State) error {
 	f.stateFrom = from
 	f.stateTo = to
 
@@ -1429,15 +1470,23 @@ func (f *fakePromises) Promise_setup_environment() error {
 	}
 	return nil
 }
-func (f *fakePromises) Link() {
+func (f *fakePromises) Link(callback func(error) error) {
+	if f.linkInvoke {
+		f.realPromises.Link(callback)
+	}
+}
+
+func (f *fakePromises) Promise_link() (*warden.LinkResponse, error) {
 	f.linkInvoked = true
 	if f.linkPanic {
 		panic("Link Panic")
 	}
 
 	if f.linkInvoke {
-		f.realPromises.Link()
+		return f.realPromises.Promise_link()
 	}
+
+	return nil, nil
 }
 func (f *fakePromises) Promise_read_instance_manifest(container_path string) (map[string]interface{}, error) {
 	return nil, nil
@@ -1449,6 +1498,7 @@ func (f *fakePromises) Promise_health_check() (bool, error) {
 func (f *fakePromises) Promise_stop() error {
 	return nil
 }
-func (f *fakePromises) Promise_destroy() {
+func (f *fakePromises) Promise_destroy() error {
 	f.destroyInvoked = true
+	return nil
 }

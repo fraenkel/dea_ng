@@ -4,9 +4,12 @@ import (
 	"dea"
 	"dea/protocol"
 	steno "github.com/cloudfoundry/gosteno"
-	"os"
 	"sync"
 )
+
+type Terminator interface {
+	Terminate()
+}
 
 type ShutdownHandler interface {
 	Shutdown(goodbyeMsg *protocol.GoodbyeMessage)
@@ -19,14 +22,15 @@ type shutdownHandler struct {
 	stagingTaskRegistry dea.StagingTaskRegistry
 	dropletRegistry     dea.DropletRegistry
 	directoryServer     dea.DirectoryServerV2
-	nats                *dea.Nats
-	pidFile             *dea.PidFile
-	logger              *steno.Logger
+	nats                dea.Nats
+	Terminator
+	pidFile *dea.PidFile
+	logger  *steno.Logger
 }
 
 func NewShutdownHandler(responders []dea.Responder, iRegistry dea.InstanceRegistry, stagingRegistry dea.StagingTaskRegistry,
-	dropletRegistry dea.DropletRegistry, dirServer dea.DirectoryServerV2, nats *dea.Nats,
-	pidFile *dea.PidFile, logger *steno.Logger) ShutdownHandler {
+	dropletRegistry dea.DropletRegistry, dirServer dea.DirectoryServerV2, nats dea.Nats, terminator Terminator,
+	pidFile *dea.PidFile, logger *steno.Logger) *shutdownHandler {
 	return &shutdownHandler{
 		responders:          responders,
 		instanceRegistry:    iRegistry,
@@ -34,6 +38,7 @@ func NewShutdownHandler(responders []dea.Responder, iRegistry dea.InstanceRegist
 		dropletRegistry:     dropletRegistry,
 		directoryServer:     dirServer,
 		nats:                nats,
+		Terminator:          terminator,
 		pidFile:             pidFile,
 		logger:              logger,
 	}
@@ -48,7 +53,7 @@ func (s *shutdownHandler) Shutdown(goodbyeMsg *protocol.GoodbyeMessage) {
 
 	s.removeDroplets()
 
-	sendGoodbyeMessage(goodbyeMsg, s.nats.NatsClient, s.logger)
+	sendGoodbyeMessage(goodbyeMsg, s.nats.Client(), s.logger)
 	stopResponders(s.responders)
 
 	s.nats.Unsubscribe()
@@ -125,5 +130,7 @@ func (s *shutdownHandler) tasks() map[dea.Task]struct{} {
 func (s *shutdownHandler) terminate() {
 	s.logger.Infof("All instances and staging tasks stopped, exiting.")
 	s.pidFile.Release()
-	os.Exit(0)
+	if s.Terminator != nil {
+		s.Terminator.Terminate()
+	}
 }

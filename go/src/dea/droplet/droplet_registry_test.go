@@ -1,6 +1,7 @@
 package droplet
 
 import (
+	"dea"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
@@ -15,7 +16,7 @@ var _ = Describe("DropletRegistry", func() {
 		defer os.RemoveAll(tmpDir)
 
 		registry := NewDropletRegistry(tmpDir)
-		var d Droplet = registry.Get("abcdef")
+		var d dea.Droplet = registry.Get("abcdef")
 		Expect(d).NotTo(BeNil())
 	})
 

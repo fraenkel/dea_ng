@@ -15,6 +15,7 @@ var signalsOfInterest = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIG
 
 type SignalHandler interface {
 	Setup()
+	Stop()
 }
 
 type signalHandler struct {
@@ -83,7 +84,7 @@ func (sh *signalHandler) shutdown() {
 	sh.shutdownHandler.Shutdown(sh.goodbyeMsg())
 }
 
-func (sh *signalHandler) ignoreSignals() {
+func (sh *signalHandler) Stop() {
 	signal.Stop(sh.signalChannel)
 }
 

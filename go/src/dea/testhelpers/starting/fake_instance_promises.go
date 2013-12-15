@@ -1,6 +1,8 @@
 package starting
 
-import dstarting "dea/starting"
+import (
+	"dea"
+)
 
 type FakePromises struct {
 	DestroyCallback func()
@@ -24,7 +26,7 @@ func (f *FakePromises) Promise_droplet() error {
 func (f *FakePromises) Promise_exec_hook_script(key string) error {
 	return nil
 }
-func (f *FakePromises) Promise_state(from []dstarting.State, to dstarting.State) error {
+func (f *FakePromises) Promise_state(from []dea.State, to dea.State) error {
 	return nil
 }
 func (f *FakePromises) Promise_extract_droplet() error {
@@ -45,8 +47,9 @@ func (f *FakePromises) Promise_health_check() (bool, error) {
 func (f *FakePromises) Promise_stop() error {
 	return nil
 }
-func (f *FakePromises) Promise_destroy() {
+func (f *FakePromises) Promise_destroy() error {
 	if f.DestroyCallback != nil {
 		f.DestroyCallback()
 	}
+	return nil
 }

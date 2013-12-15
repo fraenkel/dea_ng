@@ -3,6 +3,7 @@ package router_client_test
 import (
 	"dea"
 	"dea/config"
+	"dea/nats"
 	. "dea/router_client"
 	"dea/starting"
 	"dea/testhelpers"
@@ -15,14 +16,14 @@ import (
 var _ = Describe("RouterClient", func() {
 
 	var fakeNats *fakeyagnats.FakeYagnats
-	var client RouterClient
+	var client dea.RouterClient
 	var instance *starting.Instance
 
 	uuid := "dea-efd-123"
 	local_ip := "127.0.0.7"
 
 	host := "127.5.5.8"
-	port := uint16(1234)
+	port := uint32(1234)
 	uri := "guid234.cf-apps.io"
 
 	application_id := "5678"
@@ -31,7 +32,7 @@ var _ = Describe("RouterClient", func() {
 	application_uri := "my-super-app.cf-app.com"
 
 	BeforeEach(func() {
-		nats, _ := dea.NewNats([]string{"nats://user:password@myexample.com:4222"})
+		nats, _ := nats.NewNats([]string{"nats://user:password@myexample.com:4222"})
 		fakeNats = fakeyagnats.New()
 		nats.NatsClient = fakeNats
 

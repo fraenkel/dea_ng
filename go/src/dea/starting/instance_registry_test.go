@@ -1,6 +1,7 @@
 package starting
 
 import (
+	"dea"
 	cfg "dea/config"
 	"dea/droplet"
 	"dea/loggregator"
@@ -19,7 +20,7 @@ import (
 
 var _ = Describe("InstanceRegistry", func() {
 	var config cfg.Config
-	var dropletRegistry droplet.DropletRegistry
+	var dropletRegistry dea.DropletRegistry
 	var instance_registry *instanceRegistry
 
 	var attributes map[string]interface{}
@@ -104,7 +105,7 @@ var _ = Describe("InstanceRegistry", func() {
 		It("should ensure the instance cannot be looked up by application id", func() {
 			instance_registry.Unregister(instance)
 			instances := instance_registry.InstancesForApplication(instance.ApplicationId())
-			Expect(instances).To(HaveLen(0))
+			Expect(instances).To(BeNil())
 		})
 
 		It("should log to the loggregator", func() {
@@ -126,7 +127,7 @@ var _ = Describe("InstanceRegistry", func() {
 		It("should return all registered instances for the supplied application id", func() {
 			instances := instance_registry.InstancesForApplication(instance.ApplicationId())
 			Expect(instances).To(HaveLen(2))
-			Expect(instances).To(Equal(map[string]*Instance{
+			Expect(instances).To(Equal(map[string]dea.Instance{
 				instance.Id():  instance,
 				instance1.Id(): instance1,
 			}))
@@ -166,12 +167,12 @@ var _ = Describe("InstanceRegistry", func() {
 		})
 	})
 
-	is_reaped := func(instance *Instance) bool {
+	is_reaped := func(instance dea.Instance) bool {
 		crash_path := path.Join(config.CrashesPath, instance.Id())
 		return !utils.File_Exists(crash_path)
 	}
 
-	register_crashed_instance := func(registry InstanceRegistry, options map[string]interface{}) *Instance {
+	register_crashed_instance := func(registry dea.InstanceRegistry, options map[string]interface{}) *Instance {
 		attrs := thelpers.Valid_instance_attributes(false)
 		if options != nil {
 			for k, v := range options {
@@ -181,7 +182,7 @@ var _ = Describe("InstanceRegistry", func() {
 
 		instance = NewInstance(attrs, &config, dropletRegistry, "127.0.0.1")
 
-		instance.SetState(STATE_CRASHED)
+		instance.SetState(dea.STATE_CRASHED)
 
 		crash_path := path.Join(config.CrashesPath, instance.Id())
 
@@ -216,14 +217,14 @@ var _ = Describe("InstanceRegistry", func() {
 			})
 		})
 		JustBeforeEach(func() {
-			instance.SetState(STATE_RUNNING)
+			instance.SetState(dea.STATE_RUNNING)
 			instance_registry.Register(instance)
 			instance_registry.Register(instance1)
 		})
 
-		filtered_instances := func(message map[string]interface{}) []*Instance {
-			instances := make([]*Instance, 0, 2)
-			instance_registry.Instances_filtered_by_message(message, func(i *Instance) {
+		filtered_instances := func(message map[string]interface{}) []dea.Instance {
+			instances := make([]dea.Instance, 0, 2)
+			instance_registry.Instances_filtered_by_message(message, func(i dea.Instance) {
 				instances = append(instances, i)
 			})
 
@@ -238,37 +239,37 @@ var _ = Describe("InstanceRegistry", func() {
 
 		Context("when the app id matches some instances", func() {
 			It("returns matching instances of the app", func() {
-				Expect(filtered_instances(map[string]interface{}{"droplet": "1"})).To(Equal([]*Instance{instance, instance1}))
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1"})).To(Equal([]dea.Instance{instance, instance1}))
 			})
 		})
 
 		Context("when filtered by version", func() {
 			It("returns matching instances of the app", func() {
-				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "version": "abc"})).To(Equal([]*Instance{instance}))
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "version": "abc"})).To(Equal([]dea.Instance{instance}))
 			})
 		})
 
 		Context("when filtered by instances", func() {
 			It("returns matching instances of the app", func() {
-				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "instances": []string{"id2"}})).To(Equal([]*Instance{instance1}))
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "instances": []string{"id2"}})).To(Equal([]dea.Instance{instance1}))
 			})
 		})
 
 		Context("when filtered by instance_ids", func() {
 			It("returns matching instances of the app", func() {
-				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "instance_ids": []string{"id2"}})).To(Equal([]*Instance{instance1}))
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "instance_ids": []string{"id2"}})).To(Equal([]dea.Instance{instance1}))
 			})
 		})
 
 		Context("when filtered by indices", func() {
 			It("returns matching instances of the app", func() {
-				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "indices": []int{0}})).To(Equal([]*Instance{instance}))
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "indices": []int{0}})).To(Equal([]dea.Instance{instance}))
 			})
 		})
 
 		Context("when filtered by state", func() {
 			It("returns matching instances of the app", func() {
-				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "states": []string{"RUNNING", "STARTING"}})).To(Equal([]*Instance{instance}))
+				Expect(filtered_instances(map[string]interface{}{"droplet": "1", "states": []string{"RUNNING", "STARTING"}})).To(Equal([]dea.Instance{instance}))
 			})
 		})
 
@@ -279,7 +280,7 @@ var _ = Describe("InstanceRegistry", func() {
 					"instances": []string{"id1"},
 					"indices":   []int{0, 1},
 					"states":    []string{"RUNNING", "BORN"},
-				})).To(Equal([]*Instance{instance}))
+				})).To(Equal([]dea.Instance{instance}))
 			})
 		})
 

@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	thelpers "dea/testhelpers"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
@@ -15,7 +16,7 @@ import (
 var _ = Describe("AdminBuildpackDownloader", func() {
 	var downloader AdminBuildpackDownloader
 	var destination string
-	var buildpacks []StagingBuildpack
+	var buildpacks []dea.StagingBuildpack
 	var httpServer *httptest.Server
 
 	BeforeEach(func() {
@@ -37,7 +38,7 @@ var _ = Describe("AdminBuildpackDownloader", func() {
 	Context("with single buildpack", func() {
 		BeforeEach(func() {
 			url1, _ := url.Parse(httpServer.URL + "/buildpacks/uri/abcdef")
-			buildpacks = []StagingBuildpack{StagingBuildpack{Url: url1, Key: "abcdef"}}
+			buildpacks = []dea.StagingBuildpack{{Url: url1, Key: "abcdef"}}
 		})
 
 		It("downloads the buildpack and unzip it", func() {
@@ -67,9 +68,9 @@ var _ = Describe("AdminBuildpackDownloader", func() {
 		BeforeEach(func() {
 			url1, _ := url.Parse(httpServer.URL + "/buildpacks/uri/abcdef")
 			url2, _ := url.Parse(httpServer.URL + "/buildpacks/uri/ijgh")
-			buildpacks = []StagingBuildpack{
-				StagingBuildpack{Url: url1, Key: "abcdef"},
-				StagingBuildpack{Url: url2, Key: "ijgh"},
+			buildpacks = []dea.StagingBuildpack{
+				{Url: url1, Key: "abcdef"},
+				{Url: url2, Key: "ijgh"},
 			}
 		})
 

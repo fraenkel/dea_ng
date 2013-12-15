@@ -1,4 +1,4 @@
-package dea
+package snapshot_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestDea(t *testing.T) {
+func TestSnapshot(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dea Suite")
+	RunSpecs(t, "Snapshot Suite")
 }

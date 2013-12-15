@@ -2,6 +2,7 @@ package droplet
 
 import (
 	"crypto/sha1"
+	"dea"
 	"dea/utils"
 	"encoding/hex"
 	. "github.com/onsi/ginkgo"
@@ -15,7 +16,7 @@ import (
 
 var _ = Describe("Droplet", func() {
 	var tmpdir string
-	var droplet Droplet
+	var droplet dea.Droplet
 	var sha1Hash string
 	payload := []byte("droplet")
 

@@ -134,7 +134,7 @@ func NewConfig(loader ConfigLoader) (Config, error) {
 		Status:                        StatusConfig{},
 		Resources:                     ResourcesConfig{},
 		CrashLifetime:                 60 * 60,
-		EvacuationBailOut:             900,
+		EvacuationBailOut:             10 * 60,
 		BindMounts:                    []map[string]string{},
 		CrashBlockUsageRatioThreshold: 0.8,
 		CrashInodeUsageRatioThreshold: 0.8,

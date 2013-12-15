@@ -1,7 +1,7 @@
-package dea_test
+package nats
 
 import (
-	. "dea"
+	"dea"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	. "github.com/onsi/ginkgo"
@@ -11,7 +11,7 @@ import (
 var _ = Describe("Nats", func() {
 	var nats *Nats
 	var fakeNats *fakeyagnats.FakeYagnats
-	var natsHandler NatsHandler
+	var natsHandler dea.NatsHandler
 
 	subjects := []string{"healthmanager.start", "router.start", "dea.status", "dea.UUID.start",
 		"dea.stop", "dea.update", "dea.find.droplet"}
@@ -42,11 +42,11 @@ var _ = Describe("Nats", func() {
 		})
 	})
 
-	Describe("Stop", func() {
+	Describe("Unsubscribe", func() {
 		Context("subscription teardown", func() {
 
 			It("should unsubscribe from everything when stop is called", func() {
-				nats.Stop()
+				nats.Unsubscribe()
 				Expect(len(fakeNats.Unsubscriptions)).To(Equal(len(subjects)))
 
 				for _, s := range subjects {

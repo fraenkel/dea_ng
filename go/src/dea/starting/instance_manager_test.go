@@ -1,8 +1,8 @@
 package starting_test
 
 import (
-	. "dea/boot"
-	"dea/starting"
+	"dea"
+	. "dea/starting"
 	thelpers "dea/testhelpers"
 	tboot "dea/testhelpers/boot"
 	tlog "dea/testhelpers/logger"
@@ -20,7 +20,7 @@ var _ = Describe("InstanceManager", func() {
 	Describe("creating an instance", func() {
 		var fakerm trm.FakeResourceManager
 		var fakeboot tboot.FakeBootstrap
-		var instanceManager InstanceManager
+		var instanceManager dea.InstanceManager
 		var fakesink *tlog.FakeSink
 		var fakerouter trtr.FakeRouterClient
 		var fakesnap tboot.FakeSnapshot
@@ -57,7 +57,7 @@ var _ = Describe("InstanceManager", func() {
 				It("marks app as crashed", func() {
 					instanceManager.CreateInstance(thelpers.Valid_instance_attributes(false))
 					i := fakeboot.SendExitMessageInstance
-					Expect(i.State()).To(Equal(starting.STATE_CRASHED))
+					Expect(i.State()).To(Equal(dea.STATE_CRASHED))
 					Expect(i.ExitDescription()).To(ContainSubstring("memory"))
 				})
 
@@ -89,7 +89,7 @@ var _ = Describe("InstanceManager", func() {
 			})
 
 			Describe("state transitions", func() {
-				var instance *starting.Instance
+				var instance dea.Instance
 				JustBeforeEach(func() {
 					instance = instanceManager.CreateInstance(thelpers.Valid_instance_attributes(false))
 				})
@@ -98,7 +98,7 @@ var _ = Describe("InstanceManager", func() {
 					Context("and it transitions to crashed", func() {
 
 						It("sends exited message with reason: crashed", func() {
-							instance.SetState(starting.STATE_CRASHED)
+							instance.SetState(dea.STATE_CRASHED)
 							Expect(fakeboot.SendExitMessageInstance).To(Equal(instance))
 							Expect(fakeboot.SendExitMessageReason).To(Equal(EXIT_REASON_CRASHED))
 						})
@@ -107,12 +107,12 @@ var _ = Describe("InstanceManager", func() {
 
 				Context("when the app is starting", func() {
 					JustBeforeEach(func() {
-						instance.SetState(starting.STATE_STARTING)
+						instance.SetState(dea.STATE_STARTING)
 					})
 
 					Context("and it transitions to running", func() {
 						JustBeforeEach(func() {
-							instance.SetState(starting.STATE_RUNNING)
+							instance.SetState(dea.STATE_RUNNING)
 						})
 
 						It("sends heartbeat", func() {
@@ -130,7 +130,7 @@ var _ = Describe("InstanceManager", func() {
 
 					Context("and it transitions to crashed", func() {
 						It("sends exited message with reason: crashed", func() {
-							instance.SetState(starting.STATE_CRASHED)
+							instance.SetState(dea.STATE_CRASHED)
 							Expect(fakeboot.SendExitMessageInstance).To(Equal(instance))
 							Expect(fakeboot.SendExitMessageReason).To(Equal(EXIT_REASON_CRASHED))
 						})
@@ -138,19 +138,19 @@ var _ = Describe("InstanceManager", func() {
 
 					Context("and it transitions to stopping", func() {
 						It("sends instance stop message", func() {
-							instance.SetState(starting.STATE_STOPPING)
+							instance.SetState(dea.STATE_STOPPING)
 							Expect(fakeboot.SendInstanceStopMessageInstance).To(Equal(instance))
 						})
 					})
 				})
 				Context("when the app is running", func() {
 					JustBeforeEach(func() {
-						instance.SetState(starting.STATE_RUNNING)
+						instance.SetState(dea.STATE_RUNNING)
 					})
 
 					Context("and it transitions to crashed", func() {
 						JustBeforeEach(func() {
-							instance.SetState(starting.STATE_CRASHED)
+							instance.SetState(dea.STATE_CRASHED)
 						})
 
 						It("sends exited message with reason: crashed", func() {
@@ -170,7 +170,7 @@ var _ = Describe("InstanceManager", func() {
 
 					Context("and it transitions to stopping", func() {
 						JustBeforeEach(func() {
-							instance.SetState(starting.STATE_STOPPING)
+							instance.SetState(dea.STATE_STOPPING)
 						})
 
 						It("unregisters with the router", func() {
@@ -188,7 +188,7 @@ var _ = Describe("InstanceManager", func() {
 
 					Context("and it transitions to stopping", func() {
 						It("sends instance stop message", func() {
-							instance.SetState(starting.STATE_STOPPING)
+							instance.SetState(dea.STATE_STOPPING)
 							Expect(fakeboot.SendInstanceStopMessageInstance).To(Equal(instance))
 						})
 					})
@@ -202,16 +202,16 @@ var _ = Describe("InstanceManager", func() {
 						hoist := destroyed
 
 						hoist.Add(1)
-						p := instance.Task.TaskPromises.(*tstarting.FakePromises)
+						p := instance.(*Instance).Task.TaskPromises.(*tstarting.FakePromises)
 						p.DestroyCallback = func() {
 							hoist.Done()
 						}
-						instance.SetState(starting.STATE_STOPPING)
+						instance.SetState(dea.STATE_STOPPING)
 					})
 
 					Context("and it transitions to stopped", func() {
 						JustBeforeEach(func() {
-							instance.SetState(starting.STATE_STOPPED)
+							instance.SetState(dea.STATE_STOPPED)
 						})
 
 						It("unregisters from the instance registry", func() {

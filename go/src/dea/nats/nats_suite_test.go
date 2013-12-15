@@ -1,4 +1,4 @@
-package dea
+package nats
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestDea(t *testing.T) {
+func TestNats(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dea Suite")
+	RunSpecs(t, "Nats Suite")
 }

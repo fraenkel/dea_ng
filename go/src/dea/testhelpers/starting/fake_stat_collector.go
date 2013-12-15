@@ -1,12 +1,12 @@
 package starting
 
 import (
-	"dea/starting"
+	"dea"
 	"time"
 )
 
 type FakeStatCollector struct {
-	Stats starting.Stats
+	Stats dea.Stats
 }
 
 func (fsc *FakeStatCollector) Start() bool {
@@ -14,7 +14,7 @@ func (fsc *FakeStatCollector) Start() bool {
 }
 func (fsc *FakeStatCollector) Stop() {
 }
-func (fsc *FakeStatCollector) GetStats() starting.Stats {
+func (fsc *FakeStatCollector) GetStats() dea.Stats {
 	return fsc.Stats
 }
 func (fsc *FakeStatCollector) Retrieve_stats(now time.Time) {

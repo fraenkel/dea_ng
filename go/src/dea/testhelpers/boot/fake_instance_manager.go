@@ -1,14 +1,16 @@
 package boot
 
-import "dea/starting"
+import (
+	"dea"
+)
 
 type FakeInstanceManager struct {
-	CreateCallback     func(attributes map[string]interface{}) *starting.Instance
+	CreateCallback     func(attributes map[string]interface{}) dea.Instance
 	StartAppInvoked    bool
 	StartAppAttributes map[string]interface{}
 }
 
-func (fim *FakeInstanceManager) CreateInstance(attributes map[string]interface{}) *starting.Instance {
+func (fim *FakeInstanceManager) CreateInstance(attributes map[string]interface{}) dea.Instance {
 	if fim.CreateCallback != nil {
 		return fim.CreateCallback(attributes)
 	}

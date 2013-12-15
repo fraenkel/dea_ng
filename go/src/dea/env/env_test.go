@@ -1,6 +1,7 @@
 package env_test
 
 import (
+	"dea"
 	cfg "dea/config"
 	. "dea/env"
 	"dea/staging"
@@ -187,7 +188,7 @@ var _ = Describe("Env", func() {
 
 			stgMsg := staging.NewStagingMessage(staging_message)
 			staging_task := staging.NewStagingTask(config, stgMsg,
-				[]staging.StagingBuildpack{}, nil, nil)
+				[]dea.StagingBuildpack{}, nil, nil)
 			subject = NewEnv(staging.NewStagingEnv(staging_task))
 		})
 

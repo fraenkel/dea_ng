@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	cfg "dea/config"
 	"dea/testhelpers"
 	. "github.com/onsi/ginkgo"
@@ -13,8 +14,8 @@ import (
 var _ = Describe("StagingTaskRegistry", func() {
 	var config cfg.Config
 
-	var task1 StagingTask
-	var task2 StagingTask
+	var task1 dea.StagingTask
+	var task2 dea.StagingTask
 	var task1Attrs map[string]interface{}
 	var task2Attrs map[string]interface{}
 
@@ -34,9 +35,9 @@ var _ = Describe("StagingTaskRegistry", func() {
 	})
 
 	JustBeforeEach(func() {
-		stagingRegistry = NewStagingTaskRegistry(NewStagingTask)
-		task1 = stagingRegistry.NewStagingTask(&config, NewStagingMessage(task1Attrs), nil, nil)
-		task2 = stagingRegistry.NewStagingTask(&config, NewStagingMessage(task2Attrs), nil, nil)
+		stagingRegistry = NewStagingTaskRegistry(&config, nil, NewStagingTask)
+		task1 = stagingRegistry.NewStagingTask(NewStagingMessage(task1Attrs), nil)
+		task2 = stagingRegistry.NewStagingTask(NewStagingMessage(task2Attrs), nil)
 	})
 
 	Describe("Register", func() {
@@ -78,7 +79,7 @@ var _ = Describe("StagingTaskRegistry", func() {
 			stagingRegistry.Register(task2)
 
 			tasks := stagingRegistry.Tasks()
-			Expect(tasks).To(Equal([]StagingTask{task1, task2}))
+			Expect(tasks).To(Equal([]dea.StagingTask{task1, task2}))
 		})
 	})
 
@@ -122,13 +123,13 @@ var _ = Describe("StagingTaskRegistry", func() {
 			})
 		})
 		Context("when multiple tasks registered", func() {
-			var buildpacks []StagingBuildpack
+			var buildpacks []dea.StagingBuildpack
 			BeforeEach(func() {
 				u, _ := url.Parse("http://www.example.com")
-				buildpacks = []StagingBuildpack{
-					StagingBuildpack{Url: u, Key: "bp1"},
-					StagingBuildpack{Url: u, Key: "bp2"},
-					StagingBuildpack{Url: u, Key: "bp3"},
+				buildpacks = []dea.StagingBuildpack{
+					{Url: u, Key: "bp1"},
+					{Url: u, Key: "bp2"},
+					{Url: u, Key: "bp3"},
 				}
 				task1Attrs["admin_buildpacks"] = []map[string]interface{}{
 					{"url": u.String(), "key": buildpacks[0].Key},

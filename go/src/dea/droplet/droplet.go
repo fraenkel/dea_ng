@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-const DROPLET_BASENAME = "droplet.tgz"
-
 type dribble struct {
 	baseDir string
 	sha1    string
@@ -47,7 +45,7 @@ func (d *dribble) Dir() string {
 }
 
 func (d *dribble) Path() string {
-	return path.Join(d.Dir(), DROPLET_BASENAME)
+	return path.Join(d.Dir(), dea.DROPLET_BASENAME)
 }
 
 func (d *dribble) Exists() bool {

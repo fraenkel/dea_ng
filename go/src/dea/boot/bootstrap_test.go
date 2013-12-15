@@ -1,15 +1,16 @@
 package boot
 
 import (
+	"dea"
 	cfg "dea/config"
-	"dea/protocol"
-	"dea/responders"
 	"dea/staging"
 	"dea/starting"
 	thelpers "dea/testhelpers"
 	tboot "dea/testhelpers/boot"
 	tlogger "dea/testhelpers/logger"
 	trm "dea/testhelpers/resource_manager"
+	tresponder "dea/testhelpers/responders"
+	trouter "dea/testhelpers/router_client"
 	tstaging "dea/testhelpers/staging"
 	tstarting "dea/testhelpers/starting"
 	"dea/utils"
@@ -23,14 +24,13 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"syscall"
 	"time"
 )
 
 var _ = Describe("Boot", func() {
 	var config cfg.Config
 	var tmpdir string
-	var boot *bootstrap
+	var boot *Bootstrap
 	var fakenats *fakeyagnats.FakeYagnats
 
 	registerInstance := func(m map[string]interface{}) *starting.Instance {
@@ -66,11 +66,10 @@ var _ = Describe("Boot", func() {
 	}
 
 	BeforeEach(func() {
-		tmpdir, _ = ioutil.TempDir("", "main")
+		tmpdir, _ = ioutil.TempDir("", "bootstrap")
 		config, _ = cfg.NewConfig(func(c *cfg.Config) error {
 			c.BaseDir = tmpdir
 			c.DirectoryServer = cfg.DirServerConfig{
-				V1Port: 12345,
 				V2Port: 23456,
 			}
 			c.Domain = "default"
@@ -80,7 +79,7 @@ var _ = Describe("Boot", func() {
 	})
 
 	JustBeforeEach(func() {
-		boot = newBootstrap(&config)
+		boot = NewBootstrap(&config)
 	})
 
 	AfterEach(func() {
@@ -127,8 +126,6 @@ var _ = Describe("Boot", func() {
 				SharedSecret: "secret",
 			}
 
-			//      LoggregatorEmitter::Emitter.should_receive(:new).with("localhost:5432", "DEA", 0, "secret")
-			//      LoggregatorEmitter::Emitter.should_receive(:new).with("localhost:5432", "STG", 0, "secret")
 			boot.setupLoggregator()
 		})
 
@@ -141,65 +138,6 @@ var _ = Describe("Boot", func() {
 
 			err := boot.setupLoggregator()
 			Expect(err).ToNot(BeNil())
-		})
-	})
-
-	Describe("signal handlers", func() {
-		Context("", func() {
-			var c chan os.Signal
-			JustBeforeEach(func() {
-				c = make(chan os.Signal, 1)
-				boot.signalHandler = &fakeSignalHandler{c}
-				boot.setupSignalHandlers()
-			})
-
-			AfterEach(func() {
-				boot.ignoreSignals()
-			})
-
-			test_signal := func(s syscall.Signal) {
-				It("should trap "+s.String(), func() {
-					syscall.Kill(syscall.Getpid(), s)
-					rs := <-c
-					Expect(rs).To(Equal(s))
-				})
-			}
-
-			test_signal(syscall.SIGTERM)
-			test_signal(syscall.SIGINT)
-			test_signal(syscall.SIGTERM)
-			test_signal(syscall.SIGQUIT)
-			test_signal(syscall.SIGUSR1)
-			test_signal(syscall.SIGUSR2)
-		})
-
-		Describe("handling USR1", func() {
-			JustBeforeEach(func() {
-				boot.setupRegistries()
-				setupNats()
-
-				boot.component = &common.VcapComponent{UUID: "bogus"}
-
-				boot.setupSignalHandlers()
-			})
-
-			AfterEach(func() {
-				boot.ignoreSignals()
-			})
-
-			It("sends dea.shutdown", func() {
-				syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
-				time.Sleep(100 * time.Millisecond)
-				Expect(fakenats.PublishedMessages["dea.shutdown"]).To(HaveLen(1))
-			})
-
-			It("stops any responder", func() {
-				fakeresponder := &fakeResponder{}
-				boot.responders = []responders.Responder{fakeresponder}
-				syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
-				time.Sleep(100 * time.Millisecond)
-				Expect(fakeresponder.stopCalled).To(BeTrue())
-			})
 		})
 	})
 
@@ -240,145 +178,8 @@ var _ = Describe("Boot", func() {
 		})
 	})
 
-	Describe("shutdown", func() {
-		JustBeforeEach(func() {
-			boot.Terminator = &fakeTerminator{nested: boot}
-			boot.setupLogger()
-			boot.setupRegistries()
-			setupNats()
-			setupDirectoryServers()
-			boot.component = &common.VcapComponent{UUID: "bogus"}
-			boot.setupRouterClient()
-		})
-
-		It("sends a dea shutdown message", func() {
-			boot.Shutdown()
-			Expect(fakenats.PublishedMessages["dea.shutdown"]).To(HaveLen(1))
-		})
-
-		Context("when instances are registered", func() {
-			JustBeforeEach(func() {
-				instance := registerInstance(nil)
-				instance.SetState(starting.STATE_RUNNING)
-				boot.instanceRegistry.Register(instance)
-			})
-
-			It("stops registered instances", func() {
-				boot.Shutdown()
-				instances := boot.instanceRegistry.Instances()
-				Expect(instances).To(HaveLen(1))
-				for _, i := range instances {
-					Expect(i.State()).To(Equal(starting.STATE_STOPPED))
-				}
-			})
-		})
-
-		Context("when staging tasks are registered", func() {
-			var task *tstaging.FakeStagingTask
-
-			JustBeforeEach(func() {
-				task = registerStagingTask()
-			})
-
-			It("stops registered instances", func() {
-				boot.Shutdown()
-				Expect(task.Stopped).To(BeTrue())
-			})
-		})
-
-		It("should stop and flush nats", func() {
-			boot.Shutdown()
-
-			Expect(fakenats.PublishedMessages["dea.shutdown"]).To(HaveLen(1))
-			Expect(fakenats.PublishedMessages["router.unregister"]).To(HaveLen(1))
-			msg := fakenats.PublishedMessages["router.unregister"][0]
-			data := make(map[string]interface{})
-			json.Unmarshal(msg.Payload, &data)
-			Expect(data["host"]).To(Equal(boot.localIp))
-			Expect(data["port"]).To(Equal(float64(config.DirectoryServer.V2Port)))
-			Expect(data["uris"]).To(HaveLen(1))
-			uris := data["uris"].([]interface{})
-			Expect(uris[0]).To(ContainSubstring(config.Domain))
-		})
-	})
-
-	Describe("evacuation", func() {
-		var faketerminator *fakeTerminator
-
-		JustBeforeEach(func() {
-			faketerminator = &fakeTerminator{nested: boot}
-			boot.Terminator = faketerminator
-
-			boot.setupLogger()
-			boot.setupRegistries()
-			setupDirectoryServers()
-
-			setupNats()
-
-			boot.component = &common.VcapComponent{UUID: "bogus"}
-			boot.setupRouterClient()
-		})
-
-		It("sends a dea evacuation message", func() {
-			boot.evacuate()
-			Expect(fakenats.PublishedMessages["dea.shutdown"]).To(HaveLen(1))
-		})
-
-		It("should send an exited message for each instance", func() {
-			instance := registerInstance(nil)
-			instance.SetState(starting.STATE_RUNNING)
-			boot.instanceRegistry.Register(instance)
-
-			boot.evacuate()
-			Expect(fakenats.PublishedMessages["droplet.exited"]).To(HaveLen(1))
-			data := make(map[string]interface{})
-			json.Unmarshal(fakenats.PublishedMessages["droplet.exited"][0].Payload, &data)
-			Expect(data["instance"]).To(Equal(instance.Id()))
-		})
-
-		It("should call shutdown after some time", func() {
-			c := make(chan time.Time, 1)
-			boot.config.EvacuationDelay = 200 * time.Millisecond
-			faketerminator.shutdownCallback = func() {
-				c <- time.Now()
-				close(c)
-			}
-
-			start := time.Now()
-			boot.evacuate()
-
-			called := <-c
-			Expect(called.Sub(start)).To(BeNumerically("~", boot.config.EvacuationDelay, 10*time.Millisecond))
-		})
-	})
-
-	Describe("send_shutdown_message", func() {
-		It("publishes a dea.shutdown message on NATS", func() {
-			setupNats()
-
-			boot.component = &common.VcapComponent{UUID: "bogus"}
-			boot.localIp = "1.2.3.4"
-			boot.setupRegistries()
-			instance := registerInstance(nil)
-
-			boot.sendShutdownMessage()
-			data := make(map[string]interface{})
-			json.Unmarshal(fakenats.PublishedMessages["dea.shutdown"][0].Payload, &data)
-			expected := map[string]interface{}{
-				"id":              boot.component.UUID,
-				"ip":              boot.localIp,
-				"version":         protocol.VERSION,
-				"app_id_to_count": map[string]interface{}{instance.ApplicationId(): float64(1)},
-			}
-			Expect(data).To(Equal(expected))
-		})
-	})
-
 	Describe("reap_unreferenced_droplets", func() {
 		JustBeforeEach(func() {
-			faketerminator := &fakeTerminator{nested: boot}
-			boot.Terminator = faketerminator
-
 			boot.setupLogger()
 			boot.setupRegistries()
 
@@ -435,8 +236,7 @@ var _ = Describe("Boot", func() {
 		It("adds stacks to varz", func() {
 			setupNats()
 
-			timer := boot.setupComponent()
-			timer.Stop()
+			boot.setupComponent()
 
 			m := boot.component.Varz.UniqueVarz.(map[string]interface{})
 			Expect(m["stacks"]).To(Equal([]string{"Linux"}))
@@ -450,8 +250,7 @@ var _ = Describe("Boot", func() {
 			fakerm = &trm.FakeResourceManager{}
 			boot.resource_manager = fakerm
 
-			timer := boot.setupComponent()
-			timer.Stop()
+			boot.setupComponent()
 		})
 
 		Describe("can_stage", func() {
@@ -533,13 +332,13 @@ var _ = Describe("Boot", func() {
 					Expect(is).To(HaveKey(instance1.ApplicationId()))
 					appInstances := is[instance1.ApplicationId()]
 					i := appInstances[instance1.Id()].(map[string]interface{})
-					Expect(i["state"]).To(Equal(starting.STATE_BORN))
+					Expect(i["state"]).To(Equal(dea.STATE_BORN))
 					Expect(i["state_timestamp"]).To(Equal(instance1.StateTimestamp().UnixNano()))
 				})
 
 				It("uses the values from stat_collector", func() {
 					instance1.StatCollector = &tstarting.FakeStatCollector{
-						Stats: starting.Stats{
+						Stats: dea.Stats{
 							UsedMemory:   28 * cfg.Kibi,
 							UsedDisk:     40,
 							ComputedPCPU: 0.123,
@@ -587,8 +386,7 @@ var _ = Describe("Boot", func() {
 	Describe("start_nats", func() {
 		JustBeforeEach(func() {
 			setupNats()
-			timer := boot.setupComponent()
-			timer.Stop()
+			boot.setupComponent()
 		})
 
 		It("starts nats", func() {
@@ -640,8 +438,8 @@ var _ = Describe("Boot", func() {
 		})
 
 		It("invokes LocatorResponder's Advertise", func() {
-			fakeresponder := &FakeResponder{}
-			boot.responders = []responders.Responder{fakeresponder}
+			fakeresponder := &tresponder.FakeResponder{}
+			boot.responders = []dea.Responder{fakeresponder}
 
 			boot.start_finish()
 			Expect(fakeresponder.Advertised).To(BeTrue())
@@ -652,7 +450,7 @@ var _ = Describe("Boot", func() {
 			JustBeforeEach(func() {
 				boot.setupLogger()
 				i := registerInstance(nil)
-				i.SetState(starting.STATE_RUNNING)
+				i.SetState(dea.STATE_RUNNING)
 				registerInstance(nil)
 			})
 
@@ -661,27 +459,6 @@ var _ = Describe("Boot", func() {
 				Expect(fakenats.PublishedMessages["dea.heartbeat"]).To(HaveLen(1))
 			})
 		})
-	})
-
-	Describe("evacuate", func() {
-		JustBeforeEach(func() {
-			boot.Terminator = &fakeTerminator{nested: boot}
-			boot.setupRegistries()
-			boot.setupLogger()
-			setupDirectoryServers()
-			boot.component = &common.VcapComponent{UUID: "bogus"}
-			setupNats()
-			boot.setupRouterClient()
-		})
-
-		It("stops dea advertising/locating", func() {
-			fakeresponder := &FakeResponder{}
-			boot.responders = []responders.Responder{fakeresponder}
-
-			boot.evacuate()
-			Expect(fakeresponder.Stopped).To(BeTrue())
-		})
-
 	})
 
 	Describe("handle_dea_directed_start", func() {
@@ -716,12 +493,12 @@ var _ = Describe("Boot", func() {
 			boot.snapshot = &fakesnap
 			boot.resource_manager = &trm.FakeResourceManager{}
 			boot.instanceRegistry = &tstarting.FakeInstanceRegistry{}
+			boot.routerClient = &trouter.FakeRouterClient{}
 
 			boot.setupLogger()
 			setupNats()
 			setupDirectoryServers()
-			timer := boot.setupComponent()
-			timer.Stop()
+			boot.setupComponent()
 		})
 
 		Describe("snapshot", func() {
@@ -738,38 +515,7 @@ type fakeSignalHandler struct {
 	c chan os.Signal
 }
 
-func (sh *fakeSignalHandler) handleSignal(s os.Signal) {
-	sh.c <- s
-}
-
-type fakeResponder struct {
-	stopCalled bool
-}
-
-func (fr *fakeResponder) Start() {
-}
-func (fr *fakeResponder) Stop() {
-	fr.stopCalled = true
-}
-
-type fakeTerminator struct {
-	nested    Terminator
-	terminate bool
-
-	shutdownCallback func()
-}
-
-func (ft *fakeTerminator) Shutdown() {
-	if ft.shutdownCallback != nil {
-		ft.shutdownCallback()
-	}
-
-	ft.nested.Shutdown()
-}
-func (ft *fakeTerminator) Terminate() {
-	if ft.terminate {
-		ft.nested.Terminate()
-	}
+func (sh *fakeSignalHandler) Setup() {
 }
 
 type fakePromises struct {
@@ -778,19 +524,6 @@ type fakePromises struct {
 func (fp *fakePromises) Promise_stop() error {
 	return nil
 }
-func (fp *fakePromises) Promise_destroy() {
-}
-
-type FakeResponder struct {
-	Stopped    bool
-	Advertised bool
-}
-
-func (fr *FakeResponder) Start() {
-}
-func (fr *FakeResponder) Stop() {
-	fr.Stopped = true
-}
-func (fr *FakeResponder) Advertise() {
-	fr.Advertised = true
+func (fp *fakePromises) Promise_destroy() error {
+	return nil
 }

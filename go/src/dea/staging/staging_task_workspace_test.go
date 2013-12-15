@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	thelpers "dea/testhelpers"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
@@ -16,7 +17,7 @@ var _ = Describe("StagingTaskWorkspace", func() {
 	var basedir string
 	var admin_buildpacks_dir string
 	var system_buildpacks_dir string
-	var stagingMsg StagingMessage
+	var stagingMsg *StagingMessage
 	var subject StagingTaskWorkspace
 	var admin_buildpacks []map[string]interface{}
 
@@ -25,7 +26,7 @@ var _ = Describe("StagingTaskWorkspace", func() {
 		"b": 2,
 	}
 
-	buildpacks_in_use := []StagingBuildpack{}
+	buildpacks_in_use := []dea.StagingBuildpack{}
 
 	BeforeEach(func() {
 		basedir, _ = ioutil.TempDir("", "staging_task_workspace")

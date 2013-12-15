@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	thelpers "dea/testhelpers"
 	"dea/utils"
 	. "github.com/onsi/ginkgo"
@@ -17,8 +18,8 @@ var _ = Describe("BuildpackManager", func() {
 	var basedir string
 	var admin_buildpacks_dir string
 	var system_buildpacks_dir string
-	var admin_buildpacks []StagingBuildpack
-	var buildpacks_in_use []StagingBuildpack
+	var admin_buildpacks []dea.StagingBuildpack
+	var buildpacks_in_use []dea.StagingBuildpack
 	var manager BuildpackManager
 
 	BeforeEach(func() {
@@ -43,8 +44,8 @@ var _ = Describe("BuildpackManager", func() {
 			httpServer = thelpers.NewFileServer()
 
 			url1, _ := url.Parse(httpServer.URL + "/buildpacks/uri/abcdef")
-			admin_buildpacks = []StagingBuildpack{StagingBuildpack{Url: url1, Key: "abcdef"}}
-			buildpacks_in_use = []StagingBuildpack{}
+			admin_buildpacks = []dea.StagingBuildpack{{Url: url1, Key: "abcdef"}}
+			buildpacks_in_use = []dea.StagingBuildpack{}
 		})
 
 		AfterEach(func() {
@@ -69,8 +70,8 @@ var _ = Describe("BuildpackManager", func() {
 			create_populated_directory(file_to_keep)
 
 			url1, _ := url.Parse("http://example.com/buildpacks/uri/abcdef")
-			admin_buildpacks = []StagingBuildpack{StagingBuildpack{Url: url1, Key: "abcdef"}}
-			buildpacks_in_use = []StagingBuildpack{}
+			admin_buildpacks = []dea.StagingBuildpack{{Url: url1, Key: "abcdef"}}
+			buildpacks_in_use = []dea.StagingBuildpack{}
 
 		})
 
@@ -87,7 +88,7 @@ var _ = Describe("BuildpackManager", func() {
 			var file_in_use string
 			BeforeEach(func() {
 				uri, _ := url.Parse("http://www.google.com")
-				buildpacks_in_use = []StagingBuildpack{{uri, "efghi"}}
+				buildpacks_in_use = []dea.StagingBuildpack{{uri, "efghi"}}
 
 				file_in_use = path.Join(admin_buildpacks_dir, "efghi")
 				create_populated_directory(file_in_use)
@@ -139,9 +140,9 @@ var _ = Describe("BuildpackManager", func() {
 
 				url1, _ := url.Parse("http://example.com/buildpacks/uri/admin")
 				url2, _ := url.Parse("http://example.com/buildpacks/uri/cant_find_admin")
-				admin_buildpacks = []StagingBuildpack{
-					StagingBuildpack{Url: url1, Key: "admin"},
-					StagingBuildpack{Url: url2, Key: "cant_find_admin"},
+				admin_buildpacks = []dea.StagingBuildpack{
+					{Url: url1, Key: "admin"},
+					{Url: url2, Key: "cant_find_admin"},
 				}
 
 				admin_buildpack = path.Join(admin_buildpacks_dir, "admin")

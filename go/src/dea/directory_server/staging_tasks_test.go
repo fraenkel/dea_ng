@@ -1,8 +1,8 @@
 package directory_server
 
 import (
+	"dea"
 	cfg "dea/config"
-	"dea/droplet"
 	"dea/staging"
 	"dea/testhelpers"
 	tstaging "dea/testhelpers/staging"
@@ -31,12 +31,12 @@ var _ = Describe("StagingTasks", func() {
 		c, _ := cfg.LoadConfig(cfgPath)
 		config = &c
 
-		stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+		stagingTaskRegistry = staging.NewStagingTaskRegistry(config, nil, staging.NewStagingTask)
 		stagingTask = &tstaging.FakeStagingTask{StagingMsg: staging.NewStagingMessage(testhelpers.Valid_staging_attributes())}
 	})
 
 	JustBeforeEach(func() {
-		server, _ = NewDirectoryServerV2("127.0.0.1", "example.org", config.DirectoryServer)
+		server, _ = NewDirectoryServerV2("127.0.0.1", "example.org", nil, config.DirectoryServer)
 		server.Configure_endpoints(nil, stagingTaskRegistry)
 		server.stagingtasks.max_age_secs = 1
 	})
@@ -149,7 +149,7 @@ func stagingtaskRequest(server *DirectoryServerV2, task_id string, file_path str
 }
 
 func staging_task_file_path(server *DirectoryServerV2, task_id string, file_path string, options map[string]interface{}) string {
-	urlPath := server.Staging_task_url(task_id, file_path)
+	urlPath := server.UrlForStagingTask(task_id, file_path)
 	if options["hmac"] != nil {
 		u, _ := url.Parse(urlPath)
 		params := u.Query()
@@ -160,6 +160,6 @@ func staging_task_file_path(server *DirectoryServerV2, task_id string, file_path
 	return urlPath
 }
 
-func NewMockStagingTask(*cfg.Config, staging.StagingMessage, []staging.StagingBuildpack, droplet.DropletRegistry, *steno.Logger) staging.StagingTask {
+func NewMockStagingTask(*cfg.Config, staging.StagingMessage, []dea.StagingBuildpack, dea.DropletRegistry, *steno.Logger) dea.StagingTask {
 	return &tstaging.FakeStagingTask{}
 }

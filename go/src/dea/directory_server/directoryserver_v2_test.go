@@ -1,10 +1,12 @@
 package directory_server
 
 import (
+	"dea"
 	cfg "dea/config"
 	"dea/staging"
 	"dea/starting"
 	"dea/testhelpers"
+	trouter "dea/testhelpers/router_client"
 	"dea/utils"
 	"encoding/hex"
 	. "github.com/onsi/ginkgo"
@@ -19,10 +21,10 @@ import (
 var _ = Describe("DirectoryserverV2", func() {
 	var config *cfg.Config
 	var server *DirectoryServerV2
-	var instanceRegistry starting.InstanceRegistry
-	var instance *starting.Instance
+	var instanceRegistry dea.InstanceRegistry
+	var instance dea.Instance
 	var stagingTaskRegistry *staging.StagingTaskRegistry
-	var stagingTask staging.StagingTask
+	var stagingTask dea.StagingTask
 
 	BeforeEach(func() {
 		_, file, _, _ := runtime.Caller(0)
@@ -39,9 +41,9 @@ var _ = Describe("DirectoryserverV2", func() {
 
 		instanceRegistry.Register(instance)
 
-		stagingTaskRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+		stagingTaskRegistry = staging.NewStagingTaskRegistry(config, nil, staging.NewStagingTask)
 		stagingTask = staging.NewStagingTask(config, staging.NewStagingMessage(testhelpers.Valid_staging_attributes()),
-			[]staging.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
+			[]dea.StagingBuildpack{}, nil, utils.Logger("staging_tasks_test_logger", nil))
 
 	})
 
@@ -50,7 +52,8 @@ var _ = Describe("DirectoryserverV2", func() {
 	})
 
 	JustBeforeEach(func() {
-		server, _ = NewDirectoryServerV2("127.0.0.1", "example.org", config.DirectoryServer)
+		router := trouter.FakeRouterClient{}
+		server, _ = NewDirectoryServerV2("127.0.0.1", "example.org", &router, config.DirectoryServer)
 	})
 
 	Describe("configure_endpoints", func() {
@@ -86,7 +89,7 @@ var _ = Describe("DirectoryserverV2", func() {
 			})
 
 			It("can handle instance paths requests", func() {
-				u := server.Instance_file_url_for("instance-id", "some-file-path")
+				u := server.UrlForInstance("instance-id", "some-file-path")
 
 				err := server.Start()
 				Expect(err).To(BeNil())
@@ -99,7 +102,7 @@ var _ = Describe("DirectoryserverV2", func() {
 			})
 
 			It("can handle staging tasks requests", func() {
-				u := server.Staging_task_url("task-id", "some-file-path")
+				u := server.UrlForStagingTask("task-id", "some-file-path")
 
 				err := server.Start()
 				Expect(err).To(BeNil())
@@ -147,7 +150,7 @@ var _ = Describe("DirectoryserverV2", func() {
 			})
 		})
 
-		Describe("instance_file_url_for", func() {
+		Describe("UrlForInstance", func() {
 			var instancefileURL string
 			iInputs := &hmacInputs{}
 			var timestamp string
@@ -158,7 +161,7 @@ var _ = Describe("DirectoryserverV2", func() {
 				server.hmacHelper = fakeHMAC
 				server.protocol = "FAKEPROTOCOL"
 
-				instancefileURL = server.Instance_file_url_for("instance-id", "/path-to-file")
+				instancefileURL = server.UrlForInstance("instance-id", "/path-to-file")
 				u, _ := url.Parse(instancefileURL)
 				timestamp = u.Query().Get("timestamp")
 
@@ -179,7 +182,7 @@ var _ = Describe("DirectoryserverV2", func() {
 			})
 		})
 
-		Describe("staging_task_url_for", func() {
+		Describe("UrlForStagingTask", func() {
 			var stagingtaskURL string
 			iInputs := &hmacInputs{}
 			var timestamp string
@@ -190,7 +193,7 @@ var _ = Describe("DirectoryserverV2", func() {
 				server.hmacHelper = fakeHMAC
 				server.protocol = "FAKEPROTOCOL"
 
-				stagingtaskURL = server.Staging_task_url("task-id", "/path-to-file")
+				stagingtaskURL = server.UrlForStagingTask("task-id", "/path-to-file")
 				u, _ := url.Parse(stagingtaskURL)
 				timestamp = u.Query().Get("timestamp")
 

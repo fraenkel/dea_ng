@@ -29,12 +29,12 @@ var _ = Describe("Loggregator", func() {
 			It("does not emit if there is no loggregator", func() {
 				SetEmitter(nil)
 				Emit("my_app_id", "important log message")
-				Expect(emitter.Messages).To(HaveLen(0))
+				Expect(emitter.Messages).To(BeNil())
 			})
 
 			It("does not emit if there is no application id", func() {
 				Emit("", "important log message")
-				Expect(emitter.Messages).To(HaveLen(0))
+				Expect(emitter.Messages).To(BeNil())
 			})
 		})
 
@@ -48,12 +48,12 @@ var _ = Describe("Loggregator", func() {
 			It("does not emit if there is no loggregator", func() {
 				SetEmitter(nil)
 				EmitError("my_app_id", "important log message")
-				Expect(emitter.ErrorMessages).To(HaveLen(0))
+				Expect(emitter.ErrorMessages).To(BeNil())
 			})
 
 			It("does not emit if there is no application id", func() {
 				EmitError("", "important log message")
-				Expect(emitter.ErrorMessages).To(HaveLen(0))
+				Expect(emitter.ErrorMessages).To(BeNil())
 			})
 		})
 	})
@@ -69,12 +69,12 @@ var _ = Describe("Loggregator", func() {
 			It("does not emit if there is no loggregator", func() {
 				SetStagingEmitter(nil)
 				StagingEmit("my_app_id", "important log message")
-				Expect(staging_emitter.Messages).To(HaveLen(0))
+				Expect(staging_emitter.Messages).To(BeNil())
 			})
 
 			It("does not emit if there is no application id", func() {
 				StagingEmit("", "important log message")
-				Expect(staging_emitter.Messages).To(HaveLen(0))
+				Expect(staging_emitter.Messages).To(BeNil())
 			})
 		})
 
@@ -88,12 +88,12 @@ var _ = Describe("Loggregator", func() {
 			It("does not emit if there is no loggregator", func() {
 				SetStagingEmitter(nil)
 				StagingEmitError("my_app_id", "important log message")
-				Expect(staging_emitter.ErrorMessages).To(HaveLen(0))
+				Expect(staging_emitter.ErrorMessages).To(BeNil())
 			})
 
 			It("does not emit if there is no application id", func() {
 				StagingEmitError("", "important log message")
-				Expect(staging_emitter.ErrorMessages).To(HaveLen(0))
+				Expect(staging_emitter.ErrorMessages).To(BeNil())
 			})
 		})
 	})

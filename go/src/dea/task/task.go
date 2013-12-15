@@ -42,7 +42,7 @@ func (t *Task) Destroy(callback func(error) error) {
 		return t.Promise_destroy()
 	}
 
-	t.ResolveAndLog(destroy_promise, "task.destroy", func(e error) error {
+	go t.ResolveAndLog(destroy_promise, "task.destroy", func(e error) error {
 		if callback != nil {
 			return callback(e)
 		}
@@ -59,27 +59,24 @@ func (t *Task) Copy_out_request(source_path, destination_path string) error {
 	return err
 }
 
-func (t *Task) ResolveAndLog(p utils.Promise, name string, callback func(error) error) {
+func (t *Task) ResolveAndLog(p utils.Promise, name string, callback func(error) error) error {
 	start := time.Now()
-	utils.Async_promise(p, func(err error) error {
-		if callback != nil {
-			err = callback(err)
-		}
 
-		duration := time.Now().Sub(start)
-		if err != nil {
-			t.Logger.Warnd(map[string]interface{}{
-				"error":    err,
-				"duration": duration,
-			}, name+".failed")
-		} else {
-			t.Logger.Infod(map[string]interface{}{
-				"duration": duration,
-			}, name+".completed")
-		}
+	err := utils.Exec_promise(p, callback)
 
-		return nil
-	})
+	duration := time.Now().Sub(start)
+	if err != nil {
+		t.Logger.Warnd(map[string]interface{}{
+			"error":    err,
+			"duration": duration,
+		}, name+".failed")
+	} else {
+		t.Logger.Infod(map[string]interface{}{
+			"duration": duration,
+		}, name+".completed")
+	}
+
+	return err
 }
 
 func (p *taskPromises) Promise_stop() error {

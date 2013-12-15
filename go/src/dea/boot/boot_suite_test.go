@@ -1,4 +1,4 @@
-package boot_test
+package boot
 
 import (
 	. "github.com/onsi/ginkgo"

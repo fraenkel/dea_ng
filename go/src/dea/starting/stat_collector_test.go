@@ -1,8 +1,9 @@
 package starting
 
 import (
+	"dea"
 	cfg "dea/config"
-	cnr "dea/container"
+	tcnr "dea/testhelpers/container"
 	"errors"
 	"github.com/cloudfoundry/gordon"
 	. "github.com/onsi/ginkgo"
@@ -11,9 +12,9 @@ import (
 )
 
 var _ = Describe("StatCollector", func() {
-	var container cnr.MockContainer
+	var container tcnr.FakeContainer
 	var infoResponse warden.InfoResponse
-	var collector StatCollector
+	var collector dea.StatCollector
 
 	BeforeEach(func() {
 		state := "state"
@@ -35,8 +36,8 @@ var _ = Describe("StatCollector", func() {
 			},
 		}
 
-		container = cnr.MockContainer{}
-		container.MInfoResponse = &infoResponse
+		container = tcnr.FakeContainer{}
+		container.FInfoResponse = &infoResponse
 	})
 
 	AfterEach(func() {
@@ -71,7 +72,7 @@ var _ = Describe("StatCollector", func() {
 				collector.Start()
 				time.Sleep(100 * time.Millisecond)
 
-				Expect(len(collector.GetStats().Cpu_samples)).To(Equal(2))
+				Expect(len(collector.GetStats().CpuSamples)).To(Equal(2))
 			})
 		})
 
@@ -92,7 +93,7 @@ var _ = Describe("StatCollector", func() {
 				collector.Stop()
 				time.Sleep(50 * time.Millisecond)
 
-				Expect(len(collector.GetStats().Cpu_samples)).To(Equal(1))
+				Expect(len(collector.GetStats().CpuSamples)).To(Equal(1))
 			})
 		})
 
@@ -125,7 +126,7 @@ var _ = Describe("StatCollector", func() {
 
 		Context("when retrieving info fails", func() {
 			BeforeEach(func() {
-				container.MInfoError = errors.New("error")
+				container.FInfoError = errors.New("error")
 			})
 
 			It("does not propagate the error", func() {
@@ -150,7 +151,7 @@ var _ = Describe("StatCollector", func() {
 				now := time.Now()
 				collector.Retrieve_stats(now)
 				usage := uint64(10000000000)
-				container.MInfoResponse.CpuStat.Usage = &usage
+				container.FInfoResponse.CpuStat.Usage = &usage
 				collector.Retrieve_stats(now.Add(statCollector_INTERVAL))
 
 				Expect(collector.GetStats().ComputedPCPU).To(Equal(float32((usage - 5000000) / uint64(statCollector_INTERVAL))))

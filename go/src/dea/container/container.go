@@ -1,17 +1,13 @@
 package container
 
 import (
+	"dea"
 	"dea/utils"
 	"errors"
 	"fmt"
 	"github.com/cloudfoundry/gordon"
 	"runtime"
 	"strconv"
-)
-
-const (
-	HOST_PORT      = "host_port"
-	CONTAINER_PORT = "container_port"
 )
 
 var logger = utils.Logger("sContainer", nil)
@@ -63,10 +59,10 @@ func (c *sContainer) Setup(handle string, hostPort, containerPort uint32) {
 	c.handle = handle
 
 	if hostPort != 0 {
-		c.networkPorts[HOST_PORT] = hostPort
+		c.networkPorts[dea.HOST_PORT] = hostPort
 	}
 	if containerPort != 0 {
-		c.networkPorts[CONTAINER_PORT] = containerPort
+		c.networkPorts[dea.CONTAINER_PORT] = containerPort
 	}
 }
 
@@ -231,8 +227,8 @@ func (c *sContainer) setup_network() error {
 		return err
 	}
 
-	c.networkPorts[HOST_PORT] = netResponse.GetHostPort()
-	c.networkPorts[CONTAINER_PORT] = netResponse.GetContainerPort()
+	c.networkPorts[dea.HOST_PORT] = netResponse.GetHostPort()
+	c.networkPorts[dea.CONTAINER_PORT] = netResponse.GetContainerPort()
 
 	return nil
 }

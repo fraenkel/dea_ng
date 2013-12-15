@@ -26,6 +26,7 @@ type InstancePromises interface {
 	Promise_extract_droplet() error
 	Promise_setup_environment() error
 	Link(callback func(error) error)
+	Promise_link() (*warden.LinkResponse, error)
 	Promise_read_instance_manifest(container_path string) (map[string]interface{}, error)
 	Promise_health_check() (bool, error)
 }
@@ -191,11 +192,16 @@ func (ip *instancePromises) Promise_setup_environment() error {
 }
 
 func (ip *instancePromises) Link(callback func(error) error) {
-	//utils.Async_Promise -- can't pass back the response
-	go func() {
-		response, err := ip.promise_link()
+	var response *warden.LinkResponse
+	i := ip.instance
 
-		i := ip.instance
+	wrapped := func() error {
+		var err error
+		response, err = i.Promise_link()
+		return err
+	}
+
+	utils.Async_promise(wrapped, func(err error) error {
 		if err != nil {
 			i.Logger.Warnd(map[string]interface{}{"error": err},
 				"droplet.warden.link.failed")
@@ -232,10 +238,12 @@ func (ip *instancePromises) Link(callback func(error) error) {
 		if err != nil {
 			i.Logger.Errorf("Error occurred during async promise: %s", err.Error())
 		}
-	}()
+
+		return err
+	})
 }
 
-func (ip *instancePromises) promise_link() (*warden.LinkResponse, error) {
+func (ip *instancePromises) Promise_link() (*warden.LinkResponse, error) {
 	i := ip.instance
 	rsp, err := i.Container.Link(i.warden_job_id)
 	if err == nil {

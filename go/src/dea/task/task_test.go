@@ -1,8 +1,8 @@
 package task_test
 
 import (
-	cnr "dea/container"
 	. "dea/task"
+	tcnr "dea/testhelpers/container"
 	"errors"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,9 +22,9 @@ var _ = Describe("Task", func() {
 	})
 
 	Describe("Promise_stop", func() {
-		var container cnr.MockContainer
+		var container tcnr.FakeContainer
 		JustBeforeEach(func() {
-			container = cnr.MockContainer{}
+			container = tcnr.FakeContainer{}
 			container.Setup("handle", 0, 0)
 			task.Container = &container
 		})
@@ -32,11 +32,11 @@ var _ = Describe("Task", func() {
 		It("executes a StopRequest", func() {
 			err := task.Promise_stop()
 			Expect(err).To(BeNil())
-			Expect(container.MStopHandle).To(Equal("handle"))
+			Expect(container.FStopHandle).To(Equal("handle"))
 		})
 
 		It("raises error when the StopRequest fails", func() {
-			container.MStopError = errors.New("error")
+			container.FStopError = errors.New("error")
 
 			err := task.Promise_stop()
 			Expect(err).ToNot(BeNil())

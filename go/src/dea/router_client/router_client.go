@@ -13,12 +13,12 @@ var rcLogger = utils.Logger("RouterClient", nil)
 
 type routerClient struct {
 	config   *config.Config
-	nats     *dea.Nats
+	nats     dea.Nats
 	uuid     string
 	local_ip string
 }
 
-func NewRouterClient(config *config.Config, nats *dea.Nats, uuid, local_ip string) dea.RouterClient {
+func NewRouterClient(config *config.Config, nats dea.Nats, uuid, local_ip string) dea.RouterClient {
 	return &routerClient{config, nats, uuid, local_ip}
 }
 
@@ -90,5 +90,5 @@ func (r *routerClient) publish(subject string, message interface{}) error {
 		return err
 	}
 
-	return r.nats.NatsClient.Publish(subject, bytes)
+	return r.nats.Client().Publish(subject, bytes)
 }

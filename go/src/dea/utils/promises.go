@@ -10,29 +10,33 @@ type Promise func() error
 
 var promiseLogger = Logger("Promise", nil)
 
+func Exec_promise(p Promise, callback func(error) error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch r.(type) {
+			case error:
+				err = r.(error)
+			default:
+				err = toError(r)
+			}
+		}
+
+		if callback != nil {
+			err = callback(err)
+		}
+	}()
+
+	err = p()
+	return
+}
+
 func Async_promise(p Promise, callback func(error) error) {
 	go func() {
-		var err error
+		err := Exec_promise(p, callback)
+		if err != nil {
+			promiseLogger.Errorf("Error occurred during promise: %s", err.Error())
+		}
 
-		defer func() {
-			if r := recover(); r != nil {
-				switch r.(type) {
-				case error:
-					err = r.(error)
-				default:
-					err = toError(r)
-				}
-			}
-
-			if callback != nil {
-				err = callback(err)
-				if err != nil {
-					promiseLogger.Errorf("Error occurred during async promise: %s", err.Error())
-				}
-			}
-		}()
-
-		err = p()
 	}()
 }
 

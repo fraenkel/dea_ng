@@ -25,7 +25,7 @@ type evacuationHandler struct {
 	logger              *steno.Logger
 }
 
-func NewEvacuationHandler(evacBailOut time.Duration, responders []dea.Responder, iRegistry dea.InstanceRegistry, natsClient yagnats.NATSClient, logger *steno.Logger) EvacuationHandler {
+func NewEvacuationHandler(evacBailOut time.Duration, responders []dea.Responder, iRegistry dea.InstanceRegistry, natsClient yagnats.NATSClient, logger *steno.Logger) *evacuationHandler {
 	return &evacuationHandler{
 		evacuationBailOut: evacBailOut,
 		responders:        responders,
@@ -97,7 +97,7 @@ func (e *evacuationHandler) transitionInstancesToEvacuating() {
 }
 
 func (e *evacuationHandler) canDeaShutdown() bool {
-	if !e.endTime.Before(time.Now()) {
+	if time.Now().After(e.endTime) {
 		return true
 	}
 

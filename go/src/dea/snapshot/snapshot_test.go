@@ -1,8 +1,9 @@
 package snapshot_test
 
 import (
+	"dea"
 	cfg "dea/config"
-	"dea/droplet"
+
 	. "dea/snapshot"
 	"dea/staging"
 	"dea/starting"
@@ -22,15 +23,15 @@ import (
 
 var _ = Describe("Snapshot", func() {
 	var config cfg.Config
-	var snapshot Snapshot
-	var ir starting.InstanceRegistry
-	var str *staging.StagingTaskRegistry
-	var dropletRegistry droplet.DropletRegistry
-	var im InstanceManager
+	var snapshot dea.Snapshot
+	var ir dea.InstanceRegistry
+	var str dea.StagingTaskRegistry
+	var dropletRegistry dea.DropletRegistry
+	var im dea.InstanceManager
 	var baseDir string
-	var instances []*starting.Instance
+	var instances []dea.Instance
 
-	registerInstance := func(state starting.State) *starting.Instance {
+	registerInstance := func(state dea.State) dea.Instance {
 		attributes := thelpers.Valid_instance_attributes(true)
 		instance := starting.NewInstance(attributes, &config, dropletRegistry, "127.0.0.1")
 		instance.SetState(state)
@@ -54,13 +55,13 @@ var _ = Describe("Snapshot", func() {
 		os.MkdirAll(path.Join(baseDir, "tmp"), 0755)
 		os.MkdirAll(path.Join(baseDir, "db"), 0755)
 
-		str = staging.NewStagingTaskRegistry(nil)
+		str = staging.NewStagingTaskRegistry(&config, nil, nil)
 
 		registerStagingTask()
 		registerStagingTask()
 
 		ir = tstarting.NewFakeInstanceRegistry()
-		instances = make([]*starting.Instance, 0, len(starting.STATES))
+		instances = make([]dea.Instance, 0, len(starting.STATES))
 		for _, s := range starting.STATES {
 			instances = append(instances, registerInstance(s))
 		}
@@ -185,21 +186,21 @@ var _ = Describe("Snapshot", func() {
 		})
 
 		It("should load a snapshot", func() {
-			instances = make([]*starting.Instance, 0, 2)
+			instances = make([]dea.Instance, 0, 2)
 			resume := 0
 			born := 0
 			start := 0
 
-			fakeim.CreateCallback = func(attributes map[string]interface{}) *starting.Instance {
+			fakeim.CreateCallback = func(attributes map[string]interface{}) dea.Instance {
 				Expect(attributes).ToNot(HaveKey("state"))
 				i := starting.NewInstance(attributes, &config, dropletRegistry, "127.0.0.1")
-				i.On(starting.Transition{starting.STATE_BORN, starting.STATE_RESUMING}, func() {
+				i.On(starting.Transition{dea.STATE_BORN, dea.STATE_RESUMING}, func() {
 					resume++
 				})
-				i.On(starting.Transition{starting.STATE_RESUMING, starting.STATE_BORN}, func() {
+				i.On(starting.Transition{dea.STATE_RESUMING, dea.STATE_BORN}, func() {
 					born++
 				})
-				i.On(starting.Transition{starting.STATE_RESUMING, starting.STATE_STARTING}, func() {
+				i.On(starting.Transition{dea.STATE_RESUMING, dea.STATE_STARTING}, func() {
 					start++
 				})
 

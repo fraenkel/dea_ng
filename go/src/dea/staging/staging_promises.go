@@ -188,7 +188,8 @@ func (p *stagingPromises) promise_copy_out() error {
 
 func (p *stagingPromises) promise_save_buildpack_cache() error {
 	s := p.staging
-	s.ResolveAndLog(s.promise_pack_buildpack_cache, "staging.buildpack-cache.save", func(err error) error {
+
+	return s.ResolveAndLog(s.promise_pack_buildpack_cache, "staging.buildpack-cache.save", func(err error) error {
 		if err == nil {
 			err = utils.Sequence_promises(
 				s.promise_copy_out_buildpack_cache,
@@ -197,8 +198,6 @@ func (p *stagingPromises) promise_save_buildpack_cache() error {
 
 		return err
 	})
-
-	return nil
 }
 
 func (p *stagingPromises) promise_save_droplet() error {

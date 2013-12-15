@@ -1,6 +1,7 @@
 package resource_manager_test
 
 import (
+	"dea"
 	cfg "dea/config"
 	. "dea/resource_manager"
 	"dea/staging"
@@ -14,9 +15,9 @@ import (
 
 var _ = Describe("ResourceManager", func() {
 	var config cfg.Config
-	var manager ResourceManager
-	var instanceRegistry starting.InstanceRegistry
-	var stagingRegistry *staging.StagingTaskRegistry
+	var manager dea.ResourceManager
+	var instanceRegistry dea.InstanceRegistry
+	var stagingRegistry dea.StagingTaskRegistry
 	var memory_mb uint64
 	var memory_overcommit_factor float64
 	var disk_mb uint64
@@ -30,7 +31,7 @@ var _ = Describe("ResourceManager", func() {
 		return float64(disk_mb) * disk_overcommit_factor
 	}
 
-	createMemDiskInstance := func(mem, disk uint64, state starting.State) *starting.Instance {
+	createMemDiskInstance := func(mem, disk uint64, state dea.State) dea.Instance {
 		attrs := testhelpers.Valid_instance_attributes(false)
 		limits := attrs["limits"].(map[string]interface{})
 		limits["mem"] = mem
@@ -40,16 +41,16 @@ var _ = Describe("ResourceManager", func() {
 		return instance
 	}
 
-	createInstance := func(amt uint64, state starting.State) *starting.Instance {
+	createInstance := func(amt uint64, state dea.State) dea.Instance {
 		return createMemDiskInstance(amt, amt, state)
 	}
 
-	createStagingTask := func() staging.StagingTask {
+	createStagingTask := func() dea.StagingTask {
 		stgAttrs := testhelpers.Valid_staging_attributes()
 		staging_message := staging.NewStagingMessage(stgAttrs)
 
 		staging_task := staging.NewStagingTask(&config, staging_message,
-			[]staging.StagingBuildpack{}, nil, nil)
+			[]dea.StagingBuildpack{}, nil, nil)
 		return staging_task
 	}
 
@@ -65,7 +66,7 @@ var _ = Describe("ResourceManager", func() {
 		config, _ = cfg.NewConfig(nil)
 		config.BaseDir = tmpdir
 		instanceRegistry = starting.NewInstanceRegistry(&config)
-		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+		stagingRegistry = staging.NewStagingTaskRegistry(&config, nil, staging.NewStagingTask)
 	})
 
 	AfterEach(func() {
@@ -91,19 +92,19 @@ var _ = Describe("ResourceManager", func() {
 		Context("when instances are registered", func() {
 
 			BeforeEach(func() {
-				instanceRegistry.Register(createInstance(1, starting.STATE_BORN))
-				instanceRegistry.Register(createInstance(2, starting.STATE_STARTING))
-				instanceRegistry.Register(createInstance(4, starting.STATE_RUNNING))
-				instanceRegistry.Register(createInstance(8, starting.STATE_STOPPING))
-				instanceRegistry.Register(createInstance(16, starting.STATE_STOPPED))
-				instanceRegistry.Register(createInstance(32, starting.STATE_CRASHED))
-				instanceRegistry.Register(createInstance(64, starting.STATE_DELETED))
+				instanceRegistry.Register(createInstance(1, dea.STATE_BORN))
+				instanceRegistry.Register(createInstance(2, dea.STATE_STARTING))
+				instanceRegistry.Register(createInstance(4, dea.STATE_RUNNING))
+				instanceRegistry.Register(createInstance(8, dea.STATE_STOPPING))
+				instanceRegistry.Register(createInstance(16, dea.STATE_STOPPED))
+				instanceRegistry.Register(createInstance(32, dea.STATE_CRASHED))
+				instanceRegistry.Register(createInstance(64, dea.STATE_DELETED))
 
 				stgAttrs := testhelpers.Valid_staging_attributes()
 				staging_message := staging.NewStagingMessage(stgAttrs)
 
 				staging_task := staging.NewStagingTask(&config, staging_message,
-					[]staging.StagingBuildpack{}, nil, nil)
+					[]dea.StagingBuildpack{}, nil, nil)
 
 				stagingRegistry.Register(staging_task)
 			})
@@ -124,13 +125,13 @@ var _ = Describe("ResourceManager", func() {
 		Context("when instances are registered", func() {
 
 			BeforeEach(func() {
-				instanceRegistry.Register(createInstance(1, starting.STATE_BORN))
-				instanceRegistry.Register(createInstance(2, starting.STATE_STARTING))
-				instanceRegistry.Register(createInstance(4, starting.STATE_RUNNING))
-				instanceRegistry.Register(createInstance(8, starting.STATE_STOPPING))
-				instanceRegistry.Register(createInstance(16, starting.STATE_STOPPED))
-				instanceRegistry.Register(createInstance(32, starting.STATE_CRASHED))
-				instanceRegistry.Register(createInstance(64, starting.STATE_DELETED))
+				instanceRegistry.Register(createInstance(1, dea.STATE_BORN))
+				instanceRegistry.Register(createInstance(2, dea.STATE_STARTING))
+				instanceRegistry.Register(createInstance(4, dea.STATE_RUNNING))
+				instanceRegistry.Register(createInstance(8, dea.STATE_STOPPING))
+				instanceRegistry.Register(createInstance(16, dea.STATE_STOPPED))
+				instanceRegistry.Register(createInstance(32, dea.STATE_CRASHED))
+				instanceRegistry.Register(createInstance(64, dea.STATE_DELETED))
 
 				stagingRegistry.Register(createStagingTask())
 			})
@@ -143,7 +144,7 @@ var _ = Describe("ResourceManager", func() {
 	})
 
 	Describe("app_id_to_count", func() {
-		createAppInstance := func(appId string, state starting.State) *starting.Instance {
+		createAppInstance := func(appId string, state dea.State) *starting.Instance {
 			attrs := testhelpers.Valid_instance_attributes(false)
 			attrs["application_id"] = appId
 			instance := starting.NewInstance(attrs, &config, nil, "127.0.0.1")
@@ -152,16 +153,16 @@ var _ = Describe("ResourceManager", func() {
 		}
 
 		BeforeEach(func() {
-			instanceRegistry.Register(createAppInstance("a", starting.STATE_BORN))
-			instanceRegistry.Register(createAppInstance("b", starting.STATE_STARTING))
-			instanceRegistry.Register(createAppInstance("b", starting.STATE_STARTING))
-			instanceRegistry.Register(createAppInstance("c", starting.STATE_RUNNING))
-			instanceRegistry.Register(createAppInstance("c", starting.STATE_RUNNING))
-			instanceRegistry.Register(createAppInstance("c", starting.STATE_RUNNING))
-			instanceRegistry.Register(createAppInstance("d", starting.STATE_STOPPING))
-			instanceRegistry.Register(createAppInstance("e", starting.STATE_STOPPED))
-			instanceRegistry.Register(createAppInstance("f", starting.STATE_CRASHED))
-			instanceRegistry.Register(createAppInstance("g", starting.STATE_DELETED))
+			instanceRegistry.Register(createAppInstance("a", dea.STATE_BORN))
+			instanceRegistry.Register(createAppInstance("b", dea.STATE_STARTING))
+			instanceRegistry.Register(createAppInstance("b", dea.STATE_STARTING))
+			instanceRegistry.Register(createAppInstance("c", dea.STATE_RUNNING))
+			instanceRegistry.Register(createAppInstance("c", dea.STATE_RUNNING))
+			instanceRegistry.Register(createAppInstance("c", dea.STATE_RUNNING))
+			instanceRegistry.Register(createAppInstance("d", dea.STATE_STOPPING))
+			instanceRegistry.Register(createAppInstance("e", dea.STATE_STOPPED))
+			instanceRegistry.Register(createAppInstance("f", dea.STATE_CRASHED))
+			instanceRegistry.Register(createAppInstance("g", dea.STATE_DELETED))
 		})
 
 		It("should return all registered instances regardless of state", func() {
@@ -220,7 +221,7 @@ var _ = Describe("ResourceManager", func() {
 
 	Describe("available_memory_ratio", func() {
 		BeforeEach(func() {
-			instanceRegistry.Register(createInstance(512, starting.STATE_RUNNING))
+			instanceRegistry.Register(createInstance(512, dea.STATE_RUNNING))
 			stagingRegistry.Register(createStagingTask())
 
 		})
@@ -232,7 +233,7 @@ var _ = Describe("ResourceManager", func() {
 
 	Describe("available_disk_ratio", func() {
 		BeforeEach(func() {
-			instanceRegistry.Register(createInstance(512, starting.STATE_RUNNING))
+			instanceRegistry.Register(createInstance(512, dea.STATE_RUNNING))
 			stagingRegistry.Register(createStagingTask())
 		})
 
@@ -247,7 +248,7 @@ var _ = Describe("ResourceManager", func() {
 			var remaining_disk float64
 
 			BeforeEach(func() {
-				instanceRegistry.Register(createMemDiskInstance(512, 1024, starting.STATE_RUNNING))
+				instanceRegistry.Register(createMemDiskInstance(512, 1024, dea.STATE_RUNNING))
 				stagingRegistry.Register(createStagingTask())
 
 				remaining_memory = nominal_memory_capacity() - float64(512+config.Staging.MemoryLimitMB)

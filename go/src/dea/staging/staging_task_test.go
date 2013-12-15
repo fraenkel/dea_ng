@@ -1,12 +1,13 @@
 package staging
 
 import (
+	"dea"
 	cfg "dea/config"
-	"dea/container"
 	"dea/droplet"
 	"dea/loggregator"
 	"dea/task"
 	thelpers "dea/testhelpers"
+	tcnr "dea/testhelpers/container"
 	temitter "dea/testhelpers/emitter"
 	"dea/utils"
 	"errors"
@@ -26,10 +27,10 @@ import (
 var _ = Describe("StagingTask", func() {
 	var fakeEmitter temitter.FakeEmitter
 	var config cfg.Config
-	var buildpacks_in_use []StagingBuildpack
+	var buildpacks_in_use []dea.StagingBuildpack
 	var attributes map[string]interface{}
-	var staging StagingTask
-	var mContainer *container.MockContainer
+	var staging dea.StagingTask
+	var fakeContainer *tcnr.FakeContainer
 	var stgTask *stagingTask
 
 	memory_limit_mb := uint64(256)
@@ -61,13 +62,13 @@ var _ = Describe("StagingTask", func() {
 
 		url1, _ := url.Parse("www.google.com")
 		url2, _ := url.Parse("www.google2.com")
-		buildpacks_in_use = []StagingBuildpack{
+		buildpacks_in_use = []dea.StagingBuildpack{
 			{Key: "buildpack1", Url: url1},
 			{Key: "buildpack2", Url: url2},
 		}
 		attributes = thelpers.Valid_staging_attributes()
 
-		mContainer = &container.MockContainer{}
+		fakeContainer = &tcnr.FakeContainer{}
 	})
 
 	JustBeforeEach(func() {
@@ -77,7 +78,7 @@ var _ = Describe("StagingTask", func() {
 			dropletRegistry, utils.Logger("staging_tasks_test_logger", nil))
 
 		stgTask = staging.(*stagingTask)
-		stgTask.Container = mContainer
+		stgTask.Container = fakeContainer
 	})
 
 	AfterEach(func() {
@@ -87,18 +88,18 @@ var _ = Describe("StagingTask", func() {
 	Describe("promise_stage", func() {
 		It("assembles a shell command and initiates collection of task log", func() {
 			stgTask.promise_stage()
-			Expect(mContainer.MRunScript).To(ContainSubstring(`export FOO="BAR";`))
-			Expect(mContainer.MRunScript).To(ContainSubstring(`export BUILDPACK_CACHE="buildpack_cache_url";`))
-			Expect(mContainer.MRunScript).To(ContainSubstring(`export STAGING_TIMEOUT="900";`))
-			Expect(mContainer.MRunScript).To(ContainSubstring(`export MEMORY_LIMIT="512m";`)) // the user assiged 512 should overwrite the system 256
-			Expect(mContainer.MRunScript).To(ContainSubstring(`export VCAP_SERVICES="`))
+			Expect(fakeContainer.FRunScript).To(ContainSubstring(`export FOO="BAR";`))
+			Expect(fakeContainer.FRunScript).To(ContainSubstring(`export BUILDPACK_CACHE="buildpack_cache_url";`))
+			Expect(fakeContainer.FRunScript).To(ContainSubstring(`export STAGING_TIMEOUT="900";`))
+			Expect(fakeContainer.FRunScript).To(ContainSubstring(`export MEMORY_LIMIT="512m";`)) // the user assiged 512 should overwrite the system 256
+			Expect(fakeContainer.FRunScript).To(ContainSubstring(`export VCAP_SERVICES="`))
 
-			Expect(mContainer.MRunScript).To(MatchRegexp(".*/bin/run .*/plugin_config | tee -a"))
+			Expect(fakeContainer.FRunScript).To(MatchRegexp(".*/bin/run .*/plugin_config | tee -a"))
 		})
 
 		It("logs to the loggregator", func() {
-			mContainer.MRunScriptStdout = "stdout message"
-			mContainer.MRunScriptStderr = "stderr message"
+			fakeContainer.FRunScriptStdout = "stdout message"
+			fakeContainer.FRunScriptStderr = "stderr message"
 
 			stgTask.promise_stage()
 
@@ -117,22 +118,22 @@ var _ = Describe("StagingTask", func() {
 
 			It("copes with spaces", func() {
 				stgTask.promise_stage()
-				Expect(mContainer.MRunScript).To(ContainSubstring(`export PATH="x y z";`))
+				Expect(fakeContainer.FRunScript).To(ContainSubstring(`export PATH="x y z";`))
 			})
 
 			It("copes with quotes", func() {
 				stgTask.promise_stage()
-				Expect(mContainer.MRunScript).To(ContainSubstring(`export FOO="z'y\"d";`))
+				Expect(fakeContainer.FRunScript).To(ContainSubstring(`export FOO="z'y\"d";`))
 			})
 
 			It("copes with blanks", func() {
 				stgTask.promise_stage()
-				Expect(mContainer.MRunScript).To(ContainSubstring(`export BAR="";`))
+				Expect(fakeContainer.FRunScript).To(ContainSubstring(`export BAR="";`))
 			})
 
 			It("copes with equal signs", func() {
 				stgTask.promise_stage()
-				Expect(mContainer.MRunScript).To(ContainSubstring(`export BAZ="foo=baz";`))
+				Expect(fakeContainer.FRunScript).To(ContainSubstring(`export BAZ="foo=baz";`))
 			})
 		})
 
@@ -147,7 +148,7 @@ var _ = Describe("StagingTask", func() {
 
 			Context("when the staging times out past the grace period", func() {
 				It("fails with a Timeout Error", func() {
-					mContainer.MRunScriptFunc = func() {
+					fakeContainer.FRunScriptFunc = func() {
 						time.Sleep(2 * time.Second)
 					}
 
@@ -159,7 +160,7 @@ var _ = Describe("StagingTask", func() {
 
 			Context("when the staging finishes within the grace period", func() {
 				It("does not time out", func() {
-					mContainer.MRunScriptFunc = func() {
+					fakeContainer.FRunScriptFunc = func() {
 						time.Sleep(250 * time.Millisecond)
 					}
 
@@ -214,7 +215,7 @@ detected_buildpack: Ruby/Rack
 		Context("when given path is not nil", func() {
 			Context("when container path is set", func() {
 				BeforeEach(func() {
-					mContainer.MPath = "/container/path"
+					fakeContainer.FPath = "/container/path"
 				})
 
 				It("returns path inside warden container root file system", func() {
@@ -223,7 +224,7 @@ detected_buildpack: Ruby/Rack
 			})
 			Context("when container path is not set", func() {
 				BeforeEach(func() {
-					mContainer.MPath = ""
+					fakeContainer.FPath = ""
 				})
 
 				It("returns nil", func() {
@@ -234,7 +235,7 @@ detected_buildpack: Ruby/Rack
 		Context("when given path is nil", func() {
 			Context("when container path is set", func() {
 				BeforeEach(func() {
-					mContainer.MPath = "/container/path"
+					fakeContainer.FPath = "/container/path"
 				})
 
 				It("returns path inside warden container root file system", func() {
@@ -244,7 +245,7 @@ detected_buildpack: Ruby/Rack
 
 			Context("when container path is not set", func() {
 				BeforeEach(func() {
-					mContainer.MPath = ""
+					fakeContainer.FPath = ""
 				})
 
 				It("returns nil", func() {
@@ -265,14 +266,21 @@ detected_buildpack: Ruby/Rack
 			stgTask.Task.TaskPromises = mockPromises
 		})
 
-		it_calls_callback := func(set_callback func(Callback), options map[string]error) {
-			Describe("after_callback", func() {
+		it_completes := func() {
+			completed := false
+			staging.SetAfter_complete_callback(func(e error) error {
+				completed = true
+				return e
+			})
 
-				Context("when there is no callback registered", func() {
-					It("doesn't not try to call registered callback", func() {
-						staging.Start()
-					})
-				})
+			staging.Start()
+			Eventually(func() bool {
+				return completed
+			}).Should(BeTrue())
+		}
+
+		it_calls_callback := func(set_callback func(dea.Callback), options map[string]error) {
+			Describe("after_callback", func() {
 
 				Context("when there is callback registered", func() {
 					var received_count int
@@ -290,10 +298,14 @@ detected_buildpack: Ruby/Rack
 
 					Context("and staging task succeeds finishing callback", func() {
 						It("calls registered callback without an error", func() {
-							err := staging.Start()
-							Expect(err).To(BeNil())
-							Expect(received_count).To(Equal(1))
+							staging.Start()
+							Eventually(func() int { return received_count }).Should(Equal(1))
 							Expect(received_error).To(BeNil())
+						})
+
+						It("is destroyed", func() {
+							staging.Start()
+							Eventually(func() bool { return mockPromises.destroyed }).Should(BeTrue())
 						})
 					})
 
@@ -303,9 +315,8 @@ detected_buildpack: Ruby/Rack
 						})
 
 						It("calls registered callback with an error", func() {
-							err := staging.Start()
-							Expect(err).ToNot(BeNil())
-							Expect(received_count).To(Equal(1))
+							staging.Start()
+							Eventually(func() int { return received_count }).Should(Equal(1))
 							Expect(received_error).ToNot(BeNil())
 							Expect(received_error.Error()).To(Equal("failing promise"))
 						})
@@ -323,31 +334,17 @@ detected_buildpack: Ruby/Rack
 
 						It("cleans up workspace", func() {
 							staging.Start()
-							Expect(utils.File_Exists(stgTask.workspace.Workspace_dir())).To(BeFalse())
+							Eventually(func() bool { return utils.File_Exists(stgTask.workspace.Workspace_dir()) }).Should(BeFalse())
 						})
 
 						It("calls registered callback exactly once", func() {
 							staging.Start()
-							Expect(received_count).To(Equal(1))
+							Eventually(func() int { return received_count }).Should(Equal(1))
 						})
 
-						Context("and there is no error from staging", func() {
-							It("raises error raised in the callback", func() {
-								err := staging.Start()
-								Expect(err).ToNot(BeNil())
-								Expect(err.Error()).To(Equal("failing callback"))
-							})
-						})
-
-						Context("and there is an error from staging", func() {
-							JustBeforeEach(func() {
-								mockPromises.errs = options
-							})
-
-							It("raises the staging error", func() {
-								err := staging.Start()
-								Expect(err.Error()).To(Equal("failing callback"))
-							})
+						It("is destroyed", func() {
+							staging.Start()
+							Eventually(func() bool { return mockPromises.destroyed }).Should(BeTrue())
 						})
 					})
 				})
@@ -355,41 +352,47 @@ detected_buildpack: Ruby/Rack
 		}
 
 		Context("setup callback", func() {
-			it_calls_callback(func(c Callback) { staging.SetAfter_setup_callback(c) }, map[string]error{"promise_app_download": errors.New("failing promise")})
+			it_calls_callback(func(c dea.Callback) { staging.SetAfter_setup_callback(c) }, map[string]error{"promise_app_download": errors.New("failing promise")})
 		})
 
 		Context("complete callback", func() {
-			it_calls_callback(func(c Callback) { staging.SetAfter_complete_callback(c) }, map[string]error{"promise_stage": errors.New("failing promise")})
+			it_calls_callback(func(c dea.Callback) { staging.SetAfter_complete_callback(c) }, map[string]error{"promise_stage": errors.New("failing promise")})
 		})
 
 		Context("when a script fails", func() {
+			var received_error error
+
 			BeforeEach(func() {
 				mockPromises.errs["promise_stage"] = errors.New("Script Failed")
 			})
 
+			JustBeforeEach(func() {
+				staging.SetAfter_complete_callback(func(err error) error {
+					received_error = err
+					return err
+				})
+			})
+
 			It("still copies out the task log", func() {
 				staging.Start()
-				Expect(mockPromises.invokeCount["promise_task_log"]).To(Equal(1))
+				Eventually(func() int { return mockPromises.invokeCount["promise_task_log"] }).Should(Equal(1))
 			})
 
 			It("propagates the error", func() {
-				err := staging.Start()
-				Expect(err.Error()).To(Equal("Script Failed"))
-			})
-
-			It("returns an error in response", func() {
-				var response error
-				staging.SetAfter_complete_callback(func(e error) error {
-					response = e
-					return nil
-				})
 				staging.Start()
-
-				Expect(response.Error()).To(Equal("Script Failed"))
+				Eventually(func() string {
+					if received_error == nil {
+						return ""
+					}
+					return received_error.Error()
+				}).Should(Equal("Script Failed"))
 			})
 
 			It("does not uploads droplet", func() {
 				staging.Start()
+				Eventually(func() error {
+					return received_error
+				}).ShouldNot(BeNil())
 
 				//should not invoke resolve_staging_upload
 				Expect(mockPromises.invokeCount["promise_app_upload"]).To(Equal(0))
@@ -434,7 +437,8 @@ detected_buildpack: Ruby/Rack
 			})
 
 			It("downloads buildpack cache", func() {
-				staging.Start()
+				it_completes()
+
 				Expect(mockPromises.invokeCount["promise_buildpack_cache_download"]).To(Equal(1))
 			})
 		})
@@ -452,7 +456,7 @@ detected_buildpack: Ruby/Rack
 				"task_log",
 			}
 
-			staging.Start()
+			it_completes()
 
 			for i := 1; i < len(order); i++ {
 				Expect(mockPromises.order["promise_"+order[i-1]]).To(BeNumerically("<", mockPromises.order["promise_"+order[i]]))
@@ -466,7 +470,7 @@ detected_buildpack: Ruby/Rack
 				"Promise_destroy",
 			}
 
-			staging.Start()
+			it_completes()
 
 			for i := 1; i < len(order); i++ {
 				Expect(mockPromises.order[order[i-1]]).To(BeNumerically("<", mockPromises.order[order[i]]))
@@ -481,13 +485,15 @@ detected_buildpack: Ruby/Rack
 			})
 
 			staging.Start()
+			Eventually(func() int {
+				return complete
+			}).ShouldNot(Equal(-1))
 
 			Expect(mockPromises.order["promise_app_upload"]).To(BeNumerically("<", mockPromises.order["promise_save_buildpack_cache"]))
 			Expect(mockPromises.order["promise_save_buildpack_cache"]).To(BeNumerically("<", complete))
 		})
 
 		Context("when the upload fails", func() {
-
 			it_raises_and_returns_an_error := func() {
 				var response error
 				staging.SetAfter_complete_callback(func(e error) error {
@@ -495,11 +501,13 @@ detected_buildpack: Ruby/Rack
 					return nil
 				})
 
-				err := staging.Start()
-
-				Expect(err).ToNot(BeNil())
-				Expect(err.Error()).To(Equal("error"))
-				Expect(response.Error()).To(Equal("error"))
+				staging.Start()
+				Eventually(func() string {
+					if response == nil {
+						return ""
+					}
+					return response.Error()
+				}).Should(Equal("error"))
 			}
 
 			It("copes with uploading errors", func() {
@@ -527,53 +535,51 @@ detected_buildpack: Ruby/Rack
 			stgTask.Task.TaskPromises = mockPromises
 		})
 
+		it_stops := func() {
+			stopped := false
+			staging.Stop(func(e error) error {
+				stopped = true
+				return nil
+			})
+			Eventually(func() bool { return stopped }).Should(BeTrue())
+		}
+
+		It("triggers after stop callback", func() {
+			it_stops()
+		})
+
 		Context("if container exists", func() {
 			BeforeEach(func() {
-				mContainer.MHandle = "maria"
+				fakeContainer.FHandle = "maria"
 			})
 
 			It("sends stop request to warden container", func() {
-				staging.Stop()
+				it_stops()
 
-				Expect(mockPromises.invokeCount["Promise_stop"]).To(Equal(1))
+				Expect(mockPromises.invokeCount["Promise_stop"]).Should(Equal(1))
 			})
 		})
 
 		Context("if container does not exist", func() {
 			BeforeEach(func() {
-				mContainer.MHandle = ""
+				fakeContainer.FHandle = ""
 			})
 
 			It("does NOT send stop request to warden container", func() {
-				staging.Stop()
+				it_stops()
 				Expect(mockPromises.invokeCount["Promise_stop"]).To(Equal(0))
 			})
 		})
 
-		It("triggers after stop callback", func() {
-			invoked := false
-			staging.SetAfter_stop_callback(func(e error) error {
-				invoked = true
-				return e
-			})
-			staging.Stop()
-			Expect(invoked).To(BeTrue())
-		})
-
 		It("unregisters after complete callback", func() {
-			// Emulate staging stop while running staging
-			staging.SetAfter_setup_callback(func(e error) error {
-				staging.Stop()
-				return e
-			})
-			invoked := false
 			staging.SetAfter_complete_callback(func(e error) error {
-				invoked = true
 				return e
 			})
 
-			staging.Start()
-			Expect(invoked).To(BeFalse())
+			it_stops()
+
+			s := staging.(*stagingTask)
+			Expect(s.after_complete_callback).To(BeNil())
 		})
 	})
 
@@ -657,7 +663,7 @@ detected_buildpack: Ruby/Rack
 	Describe("promise_prepare_staging_log", func() {
 		It("assembles a shell command that creates staging_task.log file for tailing it", func() {
 			stgTask.promise_prepare_staging_log()
-			Expect(mContainer.MRunScript).To(Equal("mkdir -p /tmp/staged/logs && touch /tmp/staged/logs/staging_task.log"))
+			Expect(fakeContainer.FRunScript).To(Equal("mkdir -p /tmp/staged/logs && touch /tmp/staged/logs/staging_task.log"))
 		})
 	})
 
@@ -743,12 +749,12 @@ detected_buildpack: Ruby/Rack
 		It("assembles a shell command", func() {
 			stgTask.promise_unpack_app()
 			workspace_dir := stgTask.workspace.Workspace_dir()
-			Expect(mContainer.MRunScript).To(ContainSubstring("unzip -q " + workspace_dir + "/app.zip -d /tmp/unstaged"))
+			Expect(fakeContainer.FRunScript).To(ContainSubstring("unzip -q " + workspace_dir + "/app.zip -d /tmp/unstaged"))
 		})
 
 		It("logs to the loggregator", func() {
-			mContainer.MRunScriptStdout = "stdout message"
-			mContainer.MRunScriptStderr = "stderr message"
+			fakeContainer.FRunScriptStdout = "stdout message"
+			fakeContainer.FRunScriptStderr = "stderr message"
 
 			stgTask.promise_unpack_app()
 
@@ -764,7 +770,7 @@ detected_buildpack: Ruby/Rack
 		Context("when buildpack cache does not exist", func() {
 			It("does not run a warden command", func() {
 				stgTask.promise_unpack_buildpack_cache()
-				Expect(mContainer.MRunScript).To(Equal(""))
+				Expect(fakeContainer.FRunScript).To(Equal(""))
 			})
 		})
 
@@ -777,12 +783,12 @@ detected_buildpack: Ruby/Rack
 			It("assembles a shell command", func() {
 				stgTask.promise_unpack_app()
 				workspace_dir := stgTask.workspace.Workspace_dir()
-				Expect(mContainer.MRunScript).To(ContainSubstring("unzip -q " + workspace_dir + "/app.zip -d /tmp/unstaged"))
+				Expect(fakeContainer.FRunScript).To(ContainSubstring("unzip -q " + workspace_dir + "/app.zip -d /tmp/unstaged"))
 			})
 
 			It("logs to the loggregator", func() {
-				mContainer.MRunScriptStdout = "stdout message"
-				mContainer.MRunScriptStderr = "stderr message"
+				fakeContainer.FRunScriptStdout = "stdout message"
+				fakeContainer.FRunScriptStderr = "stderr message"
 
 				stgTask.promise_unpack_app()
 
@@ -798,7 +804,7 @@ detected_buildpack: Ruby/Rack
 	Describe("promise_pack_app", func() {
 		It("assembles a shell command", func() {
 			stgTask.promise_pack_app()
-			Expect(mContainer.MRunScript).To(ContainSubstring("cd /tmp/staged && COPYFILE_DISABLE=true tar -czf /tmp/droplet.tgz ."))
+			Expect(fakeContainer.FRunScript).To(ContainSubstring("cd /tmp/staged && COPYFILE_DISABLE=true tar -czf /tmp/droplet.tgz ."))
 		})
 	})
 
@@ -917,8 +923,8 @@ detected_buildpack: Ruby/Rack
 	Describe("promise_copy_out", func() {
 		It("should send copying out request", func() {
 			stgTask.promise_copy_out()
-			Expect(mContainer.MCopyOutSrc).To(Equal("/tmp/droplet.tgz"))
-			Expect(mContainer.MCopyOutDest).To(Equal(stgTask.workspace.staged_droplet_dir()))
+			Expect(fakeContainer.FCopyOutSrc).To(Equal("/tmp/droplet.tgz"))
+			Expect(fakeContainer.FCopyOutDest).To(Equal(stgTask.workspace.staged_droplet_dir()))
 		})
 	})
 
@@ -941,24 +947,24 @@ detected_buildpack: Ruby/Rack
 	Describe("promise_copy_out_buildpack_cache", func() {
 		It("should send copying out request", func() {
 			stgTask.promise_copy_out_buildpack_cache()
-			Expect(mContainer.MCopyOutSrc).To(Equal("/tmp/buildpack_cache.tgz"))
-			Expect(mContainer.MCopyOutDest).To(Equal(stgTask.workspace.staged_droplet_dir()))
+			Expect(fakeContainer.FCopyOutSrc).To(Equal("/tmp/buildpack_cache.tgz"))
+			Expect(fakeContainer.FCopyOutDest).To(Equal(stgTask.workspace.staged_droplet_dir()))
 		})
 	})
 
 	Describe("promise_task_log", func() {
 		It("should send copying out request", func() {
 			stgTask.promise_task_log()
-			Expect(mContainer.MCopyOutSrc).To(Equal("/tmp/staged/logs/staging_task.log"))
-			Expect(mContainer.MCopyOutDest).To(Equal(stgTask.workspace.Workspace_dir()))
+			Expect(fakeContainer.FCopyOutSrc).To(Equal("/tmp/staged/logs/staging_task.log"))
+			Expect(fakeContainer.FCopyOutDest).To(Equal(stgTask.workspace.Workspace_dir()))
 		})
 	})
 
 	Describe("promise_staging_info", func() {
 		It("should send copying out request", func() {
 			stgTask.promise_staging_info()
-			Expect(mContainer.MCopyOutSrc).To(Equal("/tmp/staged/staging_info.yml"))
-			Expect(mContainer.MCopyOutDest).To(Equal(stgTask.workspace.Workspace_dir()))
+			Expect(fakeContainer.FCopyOutSrc).To(Equal("/tmp/staged/staging_info.yml"))
+			Expect(fakeContainer.FCopyOutDest).To(Equal(stgTask.workspace.Workspace_dir()))
 		})
 
 	})
@@ -973,6 +979,8 @@ type mockStagingPromises struct {
 	stagingPromises StagingPromises
 	taskPromises    task.TaskPromises
 	invokePromise   map[string]bool
+
+	destroyed bool
 }
 
 func newMockStagingPromises() *mockStagingPromises {
@@ -1076,8 +1084,10 @@ func (m *mockStagingPromises) Promise_stop() error {
 	m.inc()
 	return m.err()
 }
-func (m *mockStagingPromises) Promise_destroy() {
+func (m *mockStagingPromises) Promise_destroy() error {
 	m.inc()
+	m.destroyed = true
+	return nil
 }
 
 func (m *mockStagingPromises) err() error {

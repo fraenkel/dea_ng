@@ -5,7 +5,7 @@ import (
 )
 
 type FakeL struct {
-	Logs map[string]string
+	Logs map[string][]string
 }
 
 func (f *FakeL) Level() steno.LogLevel {
@@ -14,9 +14,15 @@ func (f *FakeL) Level() steno.LogLevel {
 
 func (f *FakeL) Log(x steno.LogLevel, m string, d map[string]interface{}) {
 	if f.Logs == nil {
-		f.Logs = make(map[string]string)
+		f.Logs = make(map[string][]string)
 	}
-	f.Logs[x.Name] = m
+
+	msgs := f.Logs[x.Name]
+	if msgs == nil {
+		msgs = make([]string, 0, 0)
+	}
+
+	f.Logs[x.Name] = append(msgs, m)
 }
 
 func RegisterFakeSink() *FakeSink {

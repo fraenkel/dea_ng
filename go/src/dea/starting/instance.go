@@ -3,7 +3,6 @@ package starting
 import (
 	"dea"
 	"dea/config"
-	"dea/container"
 	"dea/health_check"
 	"dea/task"
 	"dea/utils"
@@ -472,7 +471,7 @@ func (i *Instance) Start(callback func(error) error) {
 		return err
 	}
 
-	i.ResolveAndLog(start_promise, "instance.start", func(err error) error {
+	go i.ResolveAndLog(start_promise, "instance.start", func(err error) error {
 		if err != nil {
 			// An error occured while starting, mark as crashed
 			i.exitDescription = err.Error()
@@ -510,7 +509,7 @@ func (i *Instance) Stop(callback dea.Callback) {
 		return i.Promise_state([]dea.State{dea.STATE_STOPPING}, dea.STATE_STOPPED)
 	}
 
-	i.ResolveAndLog(stopping_promise, "instance.stop", func(err error) error {
+	go i.ResolveAndLog(stopping_promise, "instance.stop", func(err error) error {
 		if callback != nil {
 			return callback(err)
 		}
@@ -552,11 +551,11 @@ func (i *Instance) cancel_health_check() {
 }
 
 func (i Instance) ContainerPort() uint32 {
-	return i.Container.NetworkPort(container.CONTAINER_PORT)
+	return i.Container.NetworkPort(dea.CONTAINER_PORT)
 }
 
 func (i Instance) HostPort() uint32 {
-	return i.Container.NetworkPort(container.HOST_PORT)
+	return i.Container.NetworkPort(dea.HOST_PORT)
 }
 
 func (i *Instance) staged_info() map[string]interface{} {

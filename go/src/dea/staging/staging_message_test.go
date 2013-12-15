@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"dea"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"net/url"
@@ -8,7 +9,7 @@ import (
 
 var _ = Describe("StagingMessage", func() {
 	var admin_buildpacks []map[string]interface{}
-	var subject StagingMessage
+	var stagingMsg *StagingMessage
 
 	start_message := map[string]interface{}{
 		"droplet":        "droplet-id",
@@ -51,19 +52,19 @@ var _ = Describe("StagingMessage", func() {
 
 	JustBeforeEach(func() {
 		staging_message["admin_buildpacks"] = admin_buildpacks
-		subject = NewStagingMessage(staging_message)
+		stagingMsg = NewStagingMessage(staging_message)
 	})
 
 	It("has correct values", func() {
-		Expect(subject.App_id()).To(Equal("some-node-app-id"))
-		Expect(subject.Task_id()).To(Equal("task-id"))
-		Expect(subject.Download_uri().String()).To(Equal("http://localhost/unstaged/rails3_with_db"))
-		Expect(subject.Upload_uri().String()).To(Equal("http://localhost/upload/rails3_with_db"))
-		Expect(subject.Buildpack_cache_upload_uri().String()).To(Equal("http://localhost/buildpack_cache/upload"))
-		Expect(subject.Buildpack_cache_download_uri().String()).To(Equal("http://localhost/buildpack_cache/download"))
-		Expect(subject.AdminBuildpacks()).To(Equal([]StagingBuildpack{}))
-		Expect(subject.Properties()).To(Equal(map[string]interface{}{"some_property": "some_value"}))
-		Expect(subject.AsMap()).To(Equal(staging_message))
+		Expect(stagingMsg.App_id()).To(Equal("some-node-app-id"))
+		Expect(stagingMsg.Task_id()).To(Equal("task-id"))
+		Expect(stagingMsg.Download_uri().String()).To(Equal("http://localhost/unstaged/rails3_with_db"))
+		Expect(stagingMsg.Upload_uri().String()).To(Equal("http://localhost/upload/rails3_with_db"))
+		Expect(stagingMsg.Buildpack_cache_upload_uri().String()).To(Equal("http://localhost/buildpack_cache/upload"))
+		Expect(stagingMsg.Buildpack_cache_download_uri().String()).To(Equal("http://localhost/buildpack_cache/download"))
+		Expect(stagingMsg.AdminBuildpacks()).To(Equal([]dea.StagingBuildpack{}))
+		Expect(stagingMsg.Properties()).To(Equal(map[string]interface{}{"some_property": "some_value"}))
+		Expect(stagingMsg.AsMap()).To(Equal(staging_message))
 	})
 
 	Context("when admin build packs are specified", func() {
@@ -77,9 +78,9 @@ var _ = Describe("StagingMessage", func() {
 		It("has admin buildpacks", func() {
 			url1, _ := url.Parse(admin_buildpacks[0]["url"].(string))
 			url2, _ := url.Parse(admin_buildpacks[1]["url"].(string))
-			Expect(subject.AdminBuildpacks()).To(Equal([]StagingBuildpack{
-				StagingBuildpack{url1, "first"},
-				StagingBuildpack{url2, "second"},
+			Expect(stagingMsg.AdminBuildpacks()).To(Equal([]dea.StagingBuildpack{
+				{url1, "first"},
+				{url2, "second"},
 			}))
 		})
 	})

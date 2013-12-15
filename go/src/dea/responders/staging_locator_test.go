@@ -1,6 +1,7 @@
 package responders
 
 import (
+	"dea"
 	cfg "dea/config"
 	"dea/protocol"
 	resmgr "dea/resource_manager"
@@ -22,16 +23,16 @@ var _ = Describe("StagingLocator", func() {
 	var nats *fakeyagnats.FakeYagnats
 	var config cfg.Config
 	var stagingLocator *StagingLocator
-	var instanceRegistry starting.InstanceRegistry
-	var stagingRegistry *staging.StagingTaskRegistry
+	var instanceRegistry dea.InstanceRegistry
+	var stagingRegistry dea.StagingTaskRegistry
 
-	var resourceManager resmgr.ResourceManager
+	var resourceManager dea.ResourceManager
 
 	BeforeEach(func() {
 		tmpdir, _ := ioutil.TempDir("", "staging_locator")
 		config = cfg.Config{BaseDir: tmpdir}
 		instanceRegistry = starting.NewInstanceRegistry(&config)
-		stagingRegistry = staging.NewStagingTaskRegistry(staging.NewStagingTask)
+		stagingRegistry = staging.NewStagingTaskRegistry(&config, nil, staging.NewStagingTask)
 		resourceManager = resmgr.NewResourceManager(instanceRegistry, stagingRegistry, &config.Resources)
 		nats = fakeyagnats.New()
 	})

@@ -1,7 +1,7 @@
 package droplet
 
 import (
-	d "dea/droplet"
+	"dea"
 	"path"
 )
 
@@ -9,11 +9,11 @@ type FakeDropletRegistry struct {
 	Droplet FakeDroplet
 }
 
-func (fdr *FakeDropletRegistry) Get(sha1 string) d.Droplet {
+func (fdr *FakeDropletRegistry) Get(sha1 string) dea.Droplet {
 	return &fdr.Droplet
 }
 
-func (fdr *FakeDropletRegistry) Remove(sha1 string) d.Droplet {
+func (fdr *FakeDropletRegistry) Remove(sha1 string) dea.Droplet {
 	return &fdr.Droplet
 }
 
@@ -31,9 +31,11 @@ type FakeDroplet struct {
 	DropletExists  bool
 	DownloadError  error
 	LocalCopyError error
+
+	Destroyed bool
 }
 
-func NewFakeDroplet(sha1 string) d.Droplet {
+func NewFakeDroplet(sha1 string) *FakeDroplet {
 	return &FakeDroplet{Sha1: sha1}
 }
 
@@ -44,7 +46,7 @@ func (fd *FakeDroplet) Dir() string {
 	return path.Join(fd.BaseDir, fd.Sha1)
 }
 func (fd *FakeDroplet) Path() string {
-	return path.Join(fd.Dir(), d.DROPLET_BASENAME)
+	return path.Join(fd.Dir(), dea.DROPLET_BASENAME)
 }
 
 func (fd *FakeDroplet) Exists() bool {
@@ -59,4 +61,5 @@ func (fd *FakeDroplet) Local_copy(source string) error {
 	return fd.LocalCopyError
 }
 func (fd *FakeDroplet) Destroy() {
+	fd.Destroyed = true
 }

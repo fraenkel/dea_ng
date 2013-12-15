@@ -7,6 +7,7 @@ import (
 	"dea/droplet"
 	"dea/lifecycle"
 	"dea/loggregator"
+	"dea/nats"
 	"dea/protocol"
 	resmgr "dea/resource_manager"
 	"dea/responders"
@@ -35,7 +36,7 @@ const (
 
 type Bootstrap struct {
 	config              *cfg.Config
-	nats                *dea.Nats
+	nats                *nats.Nats
 	responders          []dea.Responder
 	routerClient        dea.RouterClient
 	pidFile             *dea.PidFile
@@ -99,7 +100,7 @@ func (b *Bootstrap) StagingTaskRegistry() dea.StagingTaskRegistry {
 }
 
 func (b *Bootstrap) Nats() yagnats.NATSClient {
-	return b.nats.NatsClient
+	return b.nats.Client()
 }
 
 func (b *Bootstrap) Setup() error {
@@ -136,7 +137,7 @@ func (b *Bootstrap) Setup() error {
 }
 
 func (b *Bootstrap) setupNats() error {
-	nats, err := dea.NewNats(b.config.NatsServers)
+	nats, err := nats.NewNats(b.config.NatsServers)
 	b.nats = nats
 	return err
 }
@@ -308,7 +309,7 @@ func (b *Bootstrap) SendHeartbeat() {
 			b.logger.Error(err.Error())
 			return
 		}
-		b.nats.NatsClient.Publish("dea.heartbeat", bytes)
+		b.nats.Client().Publish("dea.heartbeat", bytes)
 	}
 }
 
@@ -335,7 +336,7 @@ func (b *Bootstrap) start_finish() {
 		b.logger.Error(err.Error())
 		return
 	}
-	b.nats.NatsClient.Publish("dea.start", bytes)
+	b.nats.Client().Publish("dea.start", bytes)
 
 	for _, r := range b.responders {
 		if lr, ok := r.(dea.LocatorResponder); ok {
@@ -352,12 +353,12 @@ func (b *Bootstrap) start_finish() {
 
 func (b *Bootstrap) setupHandlers() {
 	evac := lifecycle.NewEvacuationHandler(b.config.EvacuationBailOut, b.responders, b.instanceRegistry,
-		b.nats.NatsClient, b.logger)
+		b.nats.Client(), b.logger)
 	shutdown := lifecycle.NewShutdownHandler(b.responders, b.instanceRegistry, b.stagingTaskRegistry, b.dropletRegistry,
-		b.directoryServerV2, b.nats, b.pidFile, b.logger)
+		b.directoryServerV2, b.nats, b, b.pidFile, b.logger)
 
 	b.signalHandler = lifecycle.NewSignalHandler(b.UUID(), b.localIp, b.responders, evac, shutdown,
-		b.instanceRegistry, b.nats.NatsClient, b.logger)
+		b.instanceRegistry, b.nats.Client(), b.logger)
 	b.signalHandler.Setup()
 }
 
@@ -367,7 +368,7 @@ func (b *Bootstrap) setupRouterClient() {
 
 func (b *Bootstrap) startComponent() error {
 	common.StartComponent(b.component)
-	common.Register(b.component, b.nats.NatsClient)
+	common.Register(b.component, b.nats.Client())
 
 	return nil
 }
@@ -378,8 +379,8 @@ func (b *Bootstrap) startNats() {
 	}
 
 	b.responders = []dea.Responder{
-		responders.NewDeaLocator(b.nats.NatsClient, b.component.UUID, b.resource_manager, b.config),
-		responders.NewStagingLocator(b.nats.NatsClient, b.component.UUID, b.resource_manager, b.config),
+		responders.NewDeaLocator(b.nats.Client(), b.component.UUID, b.resource_manager, b.config),
+		responders.NewStagingLocator(b.nats.Client(), b.component.UUID, b.resource_manager, b.config),
 		responders.NewStaging(b, b.component.UUID, b.directoryServerV2),
 	}
 
@@ -472,7 +473,8 @@ func (b *Bootstrap) HandleRouterStart(msg *yagnats.Message) {
 
 func (b *Bootstrap) register_routes() {
 	for _, i := range b.instanceRegistry.Instances() {
-		if i.State() == dea.STATE_RUNNING || len(i.ApplicationUris()) > 0 {
+		state := i.State()
+		if state == dea.STATE_RUNNING || state == dea.STATE_EVACUATING || len(i.ApplicationUris()) > 0 {
 			b.routerClient.RegisterInstance(i, nil)
 		}
 	}
@@ -483,7 +485,7 @@ func (b *Bootstrap) HandleDeaStatus(msg *yagnats.Message) {
 		b.resource_manager.MemoryCapacity(),
 		uint(b.resource_manager.ReservedMemory()), uint(b.resource_manager.UsedMemory()))
 	if bytes, err := json.Marshal(response); err == nil {
-		b.nats.NatsClient.Publish(msg.ReplyTo, bytes)
+		b.nats.Client().Publish(msg.ReplyTo, bytes)
 	} else {
 		b.logger.Errorf("HandleDeaStatus: marshal failed, %s", err.Error())
 	}
@@ -557,7 +559,7 @@ func (b *Bootstrap) HandleDeaFindDroplet(msg *yagnats.Message) {
 		b.instanceRegistry.Instances_filtered_by_message(d, func(i dea.Instance) {
 			response := protocol.NewFindDropletResponse(b.UUID(), b.localIp, i, b.directoryServerV2, d)
 			if bytes, err := json.Marshal(response); err == nil {
-				b.nats.NatsClient.Publish(msg.ReplyTo, bytes)
+				b.nats.Client().Publish(msg.ReplyTo, bytes)
 			} else {
 				b.logger.Errorf("HandleDeaStatus: marshal failed, %s", err.Error())
 			}
@@ -567,6 +569,9 @@ func (b *Bootstrap) HandleDeaFindDroplet(msg *yagnats.Message) {
 
 func (b *Bootstrap) UUID() string {
 	return b.component.UUID
+}
+func (b *Bootstrap) Terminate() {
+	os.Exit(0)
 }
 
 func (b *Bootstrap) periodic_varz_update() {
