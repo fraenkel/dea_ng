@@ -1,10 +1,5 @@
 require "dea/utils/eventmachine_multipart_hack"
-
-class UploadError < StandardError
-  def initialize(msg, http, uri="(unknown)")
-    super("Error uploading: #{uri} (#{msg} status: #{http.response_header.status} - #{http.response})")
-  end
-end
+require "dea/utils/upload_error"
 
 class SyncUpload
   INACTIVITY_TIMEOUT = 300.freeze
@@ -61,4 +56,3 @@ class SyncUpload
     upload_callback.call(http, error)
   end
 end
-

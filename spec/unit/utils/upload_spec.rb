@@ -143,7 +143,6 @@ describe Upload do
           it "should poll for a configured period of time before giving up" do
             subject.upload! do |error|
               expect(@request_timestamps.size).to be <= 4
-              #expect(error.message).to include "Error uploading: #{job_url} Job took too long"
               done
             end
           end
