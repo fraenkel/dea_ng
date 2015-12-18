@@ -6,6 +6,7 @@ set -e -x -u
 (
   cd /warden/warden
   sudo bundle install
+  sudo bundle exec rake setup:bin > /dev/null
   sudo bundle exec rake warden:start[config/test_vm.yml] --trace > /dev/null &
 )
 

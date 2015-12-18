@@ -1,4 +1,4 @@
-FROM ubuntu:15.04
+FROM ubuntu:vivid
 MAINTAINER https://github.com/cloudfoundry/dea_ng
 
 # install build dependencies
@@ -25,6 +25,8 @@ RUN \
     pkg-config \
     autoconf \
     libssl-dev libreadline-dev zlib1g-dev \
+    sudo \
+    vim \
     && \
   apt-get -y autoremove && \
   apt-get clean
@@ -38,11 +40,12 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
-# RUN \
-#   sed -i -e '/Defaults\s\+env_reset/a Defaults\texempt_group=sudo' /etc/sudoers && \
-#   sed -i -e 's/%sudo\s*ALL=(ALL:ALL) ALL/%sudo\tALL=NOPASSWD:ALL/g' /etc/sudoers
+RUN \
+  sed -i -e '/Defaults\s\+env_reset/a Defaults\texempt_group=sudo' /etc/sudoers && \
+  sed -i -e 's/%sudo\s*ALL=(ALL:ALL) ALL/%sudo\tALL=NOPASSWD:ALL/g' /etc/sudoers
 
-RUN useradd -m -p "*" vcap -G sudo
+RUN \
+  useradd -m -p "*" cf -G sudo
 
 # install Go 1.4
 RUN \
@@ -63,4 +66,4 @@ RUN \
   rm -rf /tmp/ruby-build && \
   gem install bundler --no-ri --no-doc
 
-USER vcap
+USER cf

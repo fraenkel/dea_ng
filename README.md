@@ -69,10 +69,14 @@ git clone http://github.com/cloudfoundry/dea_ng
 cd dea_ng
 git submodule update --init
 bundle install
-
 ```
 
 ## Testing
+```bash
+vagrant up
+vagrant ssh
+docker run -ti --privileged -v /var/cf-release:/cf-release dea-ci
+```
 
 The DEA integration tests run against real Warden, directory, and NATS servers, so they must be run
 in a [Vagrant][vagrant] VM. The `bin` directory contains a helper script that runs the entire DEA test suite:
@@ -88,7 +92,7 @@ git clone https://github.com/cloudfoundry/dea_ng
 vagrant --version
 
 # Ensure the guest additions plugin is installed
-# NOTE: On mac, we had to 
+# NOTE: On mac, we had to
 # export NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 
 vagrant plugin install vagrant-vbguest
@@ -102,24 +106,21 @@ They take 5-10 minutes to run, depending on your connection speed.
 To run tests individually, there is a bit of setup:
 
 ```bash
-
-#shell into the VM
-vagrant ssh
-
-# pull the latest warden
-cd /warden
 #start warden
-cd /warden/warden
+cd /cf-release/src/warden/warden
+sudo mkdir -p /tmp/warden/rootfs
+sudo tar -xvf <rootfs> -C /tmp/warden/rootfs
+
 sudo bundle install
+sudo bundle exec rake setup:bin
 sudo bundle exec rake warden:start[config/test_vm.yml] &> /tmp/warden.log &
 
 # start the DEA's dependencies
-cd /vagrant
+cd /cf-release/src/dea_next
 sudo bundle install
 sudo bundle exec foreman start &> /tmp/foreman.log &
 
 #To run the tests (unit, integration or all):
-bundle install
 bundle exec rspec spec/{spec_file_name}
 ```
 
