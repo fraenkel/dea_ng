@@ -1,0 +1,20 @@
+Vagrant.configure("2") do |config|
+  config.vm.provider 'docker' do |d|
+    d.name = 'dea-ci'
+    d.build_dir = "."
+    d.build_args = ['-t', 'dea-ci']
+    d.volumes = ['/var/cf-release:/cf-release']
+    #d.has_ssh = true
+    #d.cmd = ['bash']
+    d.remains_running = false
+
+    d.vagrant_vagrantfile = 'host/Vagrantfile'
+  end
+
+  # The default machine already has support for SSH
+  config.ssh.insert_key = true
+  config.ssh.username = 'vagrant'
+  # config.ssh.password = "tcuser"
+
+  config.vbguest.auto_update = false
+end
