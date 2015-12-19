@@ -112,7 +112,7 @@ sudo mkdir -p /tmp/warden/rootfs
 sudo tar -xvf <rootfs> -C /tmp/warden/rootfs
 
 sudo bundle install
-sudo bundle exec rake setup:bin
+bundle exec rake setup:bin
 sudo bundle exec rake warden:start[config/test_vm.yml] &> /tmp/warden.log &
 
 # start the DEA's dependencies

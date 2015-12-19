@@ -6,6 +6,8 @@ RUN \
   apt-get update && \
   apt-get -y dist-upgrade && \
   apt-get -y install \
+    module-init-tools \
+    aufs-tools \
     build-essential \
     curl \
     git \
