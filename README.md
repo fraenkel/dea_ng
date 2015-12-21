@@ -74,8 +74,13 @@ bundle install
 ## Testing
 ```bash
 vagrant up
+mkdir -p ~/warden/containers
+mkdir -p ~/warden/rootfs
+# use root to avoid uid/gid collision on vcap
+sudo tar -xvf <rootfs> -C ~/warden/rootfs
+
 vagrant ssh
-docker run -ti --privileged -v /var/cf-release:/cf-release dea-ci
+docker run -ti --privileged -v /var/cf-release:/cf-release -v ~/warden:/tmp/warden dea-ci
 ```
 
 The DEA integration tests run against real Warden, directory, and NATS servers, so they must be run
@@ -108,8 +113,6 @@ To run tests individually, there is a bit of setup:
 ```bash
 #start warden
 cd /cf-release/src/warden/warden
-sudo mkdir -p /tmp/warden/rootfs
-sudo tar -xvf <rootfs> -C /tmp/warden/rootfs
 
 sudo bundle install
 bundle exec rake setup:bin

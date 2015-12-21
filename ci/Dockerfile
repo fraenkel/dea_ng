@@ -6,6 +6,7 @@ RUN \
   apt-get update && \
   apt-get -y dist-upgrade && \
   apt-get -y install \
+    net-tools \
     module-init-tools \
     aufs-tools \
     build-essential \

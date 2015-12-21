@@ -12,24 +12,24 @@ Vagrant.configure("2") do |config|
       v.memory = 4096
     end
 
-    default.vm.provision 'shell', inline: <<-SHELL
-      # systemd
-      mkdir -p /etc/systemd/system/docker.service.d
-      cat > /etc/systemd/system/docker.service.d/storage.conf <<-CONF
-        [Service]
-        ExecStart=
-        ExecStart=/usr/bin/docker daemon -H fd:// --storage-driver=devicemapper
-CONF
-SHELL
+#     default.vm.provision 'shell', inline: <<-SHELL
+#       # systemd
+#       mkdir -p /etc/systemd/system/docker.service.d
+#       cat > /etc/systemd/system/docker.service.d/storage.conf <<-CONF
+#         [Service]
+#         ExecStart=
+#         ExecStart=/usr/bin/docker daemon -H fd:// --storage-driver=devicemapper
+# CONF
+# SHELL
 
-    default.vm.provision 'docker'
+    # default.vm.provision 'docker'
 
-    default.vm.provision 'shell', inline: <<-SHELL
-      if source /etc/default/docker; then
-        echo 'DOCKER_OPTS="$DOCKER_OPTS --storage-driver=devicemapper"' >> /etc/default/docker
-        service docker restart
-      fi
-SHELL
+#     default.vm.provision 'shell', inline: <<-SHELL
+#       if source /etc/default/docker; then
+#         echo 'DOCKER_OPTS="$DOCKER_OPTS --storage-driver=devicemapper"' >> /etc/default/docker
+#         service docker restart
+#       fi
+# SHELL
 
     default.vm.provision 'docker' do |d|
       d.build_image '/vagrant', args: '-t dea-ci'
