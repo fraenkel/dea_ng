@@ -74,12 +74,10 @@ bundle install
 ## Testing
 ```bash
 vagrant up
-mkdir -p ~/warden/containers
+vagrant ssh
 mkdir -p ~/warden/rootfs
 # use root to avoid uid/gid collision on vcap
 sudo tar -xvf <rootfs> -C ~/warden/rootfs
-
-vagrant ssh
 docker run -ti --privileged -v /var/cf-release:/cf-release -v ~/warden:/tmp/warden dea-ci
 ```
 

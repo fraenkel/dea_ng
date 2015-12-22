@@ -1,11 +1,14 @@
-FROM ubuntu:vivid
+FROM ubuntu:trusty
 MAINTAINER https://github.com/cloudfoundry/dea_ng
+
+ENV DEBIAN_FRONTEND noninteractive
 
 # install build dependencies
 RUN \
   apt-get update && \
   apt-get -y dist-upgrade && \
   apt-get -y install \
+    linux-generic-lts-vivid \
     net-tools \
     module-init-tools \
     aufs-tools \
@@ -34,14 +37,11 @@ RUN \
   apt-get -y autoremove && \
   apt-get clean
 
-
 RUN \
   locale-gen en_US.UTF-8 && \
   dpkg-reconfigure locales
 
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
 
 RUN \
   sed -i -e '/Defaults\s\+env_reset/a Defaults\texempt_group=sudo' /etc/sudoers && \

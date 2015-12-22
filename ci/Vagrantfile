@@ -1,7 +1,7 @@
 Vagrant.configure("2") do |config|
   config.vm.define "default", autostart: true do |default|
 #    default.vm.box = 'ubuntu/trusty64'
-    default.vm.box = 'ubuntu/vivid64'
+    default.vm.box = 'ubuntu/trusty64'
 
     default.vm.hostname = 'docker-host'
     default.vm.network :forwarded_port, host: 2376, guest: 2376
@@ -11,6 +11,21 @@ Vagrant.configure("2") do |config|
     default.vm.provider 'virtualbox' do |v|
       v.memory = 4096
     end
+
+    default.vm.provision 'shell', inline: <<-SHELL
+      apt-get update && \
+      apt-get -y dist-upgrade && \
+      apt-get -y install \
+        linux-generic-lts-vivid && \
+      apt-get update && \
+      apt-get -y autoremove && \
+      apt-get clean
+
+      # The grub2 configuration is in /etc/default/grub
+      if [ -f /etc/default/grub ]; then
+        sed -i -e 's/^GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/' /etc/default/grub
+      fi
+SHELL
 
 #     default.vm.provision 'shell', inline: <<-SHELL
 #       # systemd
@@ -35,6 +50,10 @@ Vagrant.configure("2") do |config|
       d.build_image '/vagrant', args: '-t dea-ci'
     end
 
+    default.vm.provision 'shell', inline: <<-SHELL
+      shutdown -r now
+SHELL
+
     # The default machine already has support for SSH
     default.ssh.insert_key = false
     default.ssh.username = 'vagrant'
@@ -42,17 +61,4 @@ Vagrant.configure("2") do |config|
 
     default.vbguest.auto_update = false
   end
-
-  # config.vm.define "dea" do |app|
-  #   app.vm.provider 'docker' do |d|
-  #     d.image = 'dea-ci'
-  #     d.create_args = ['--privileged', '-ti']
-  #     d.volumes = ['/var/cf-release:/cf-release']
-  #     #d.has_ssh = true
-  #     d.cmd = ['bash']
-  #     d.remains_running = false
-  #
-  #     d.vagrant_vagrantfile = __FILE__
-  #   end
-  # end
 end
